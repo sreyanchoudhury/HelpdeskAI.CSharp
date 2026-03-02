@@ -2,6 +2,8 @@
 
 An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), and manages support tickets — all streamed in real time to the browser via Server-Sent Events.
 
+<img width="1914" height="915" alt="image" src="https://github.com/user-attachments/assets/4f909edb-04d2-4a9f-84c6-e3fd878c250a" />
+
 ---
 
 ## Table of Contents
