@@ -345,10 +345,14 @@ npm install
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Browser (Next.js @ Port 3000 + CopilotKit)                         │
 │                                                                     │
-│  CopilotKit Provider (agents__unsafe_dev_only → HttpAgent)          │
-│    └─ useCopilotChatHeadless_c()   ← AG-UI message state            │
-│         └─ useAgentStream()        ← app Message[] mapping          │
-│              └─ App / ChatMessage / ToolCallBadge                   │
+│  app/page.tsx                                                       │
+│    └─ CopilotKit Provider (runtimeUrl=/api/copilotkit)              │
+│         ├─ HelpdeskChat (multi-page shell)                          │
+│         │    └─ CopilotChat component (chat page)                   │
+│         │    └─ HelpdeskActions (render actions + suggestions)      │
+│         ├─ Tickets page                                             │
+│         ├─ Knowledge Base page                                      │
+│         └─ Settings page                                            │
 └────────────────────────┬────────────────────────────────────────────┘
                          │  AG-UI  (SSE stream + POST /agent)
                          ▼
@@ -417,11 +421,12 @@ npm install
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `@copilotkit/react-core` | 1.52.0 | `CopilotKit` provider, `useCopilotChatHeadless_c`, `useThreads` |
+| `@copilotkit/react-core` | 1.52.0 | `CopilotKit` provider, `useCopilotReadable`, `useCopilotAction`, `useCopilotChatSuggestions` |
+| `@copilotkit/react-ui` | 1.52.0 | `CopilotChat` component — chat UI, input, streaming |
 | `@ag-ui/client` | 0.0.45 | `HttpAgent` — direct AG-UI HTTP connection |
 | `@ag-ui/core` | 0.0.45 | AG-UI protocol types |
-| `react-markdown` + `remark-gfm` | 9 / 4 | Render agent markdown responses |
-| `uuid` | 10 | Message and thread ID generation |
+| `next` | latest | React App Router, SSR, static generation |
+| `typescript` | latest | Type safety |
 
 ---
 
@@ -432,9 +437,10 @@ npm install
 > **Note:** Redis operations (history load/persist) are **local development only**. When deployed to Azure, these steps are skipped.
 
 ```
-User types message
-  → useAgentStream.sendMessage()
-  → ckSendMessage({ role:'user', content })              [CopilotKit]
+User types message in CopilotChat input
+  → CopilotChat component sends message
+  → /api/copilotkit receives request (Next.js API route)
+  → CopilotKit Runtime forwards to HttpAgent
   → HttpAgent POST /agent  (AG-UI RunAgentInput)         [AG-UI protocol]
   → MapAGUI receives the request
       → AzureAiSearchContextProvider.ProvideAIContextAsync  [RAG → System msg]
@@ -445,9 +451,10 @@ User types message
            → tool results returned → LLM produces final answer
       → SSE: TextMessageStart / TextMessageContent / End     [AG-UI streaming]
       → RedisChatHistoryProvider.StoreChatHistoryAsync       [persist to Redis (local only)]
-  → CopilotKit receives AG-UI events → updates ckMessages state
-  → useAgentStream useMemo maps ckMessages → app Message[]
-  → React re-renders ChatMessage with streaming cursor (▋)
+  → CopilotKit receives AG-UI events → updates CopilotChat state
+  → Messages stream in real-time with animated cursor (▋)
+  → Agent calls render actions (show_ticket_created, show_incident_alert, etc.)
+  → HelpdeskActions renders custom cards (ticket, incident, ticket list)
 ```
 
 ### Session Persistence (Local Development Only)
@@ -1067,7 +1074,7 @@ and the specific Microsoft Authenticator steps from the indexed content.
 
 ---
 
-### � Multi-Step Chaining
+### 🔗 Multi-Step Chaining
 
 The most complete demo. A single message triggers: system check → visual incident card →
 ticket creation → sidebar badge update.

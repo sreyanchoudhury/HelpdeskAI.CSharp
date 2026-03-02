@@ -7,9 +7,10 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 ## What It Does
 
 - **Real-time chat UI** — streams responses from the AI agent as they're generated
-- **Tool call rendering** — displays ticket creation, status updates, KB searches with results
-- **Session management** — persists conversation threads across browser sessions
-- **Responsive design** — mobile-friendly, keyboard accessible
+- **Rich render actions** — displays tickets, incidents, and search results as interactive cards
+- **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
+- **Session management** — maintains conversation history and ticket state
+- **Responsive design** — mobile-friendly, dark theme, keyboard accessible
 
 ---
 
@@ -43,16 +44,16 @@ The frontend and backend are independent. Run the Next.js dev server separately 
 
 ```
 app/
-├── layout.tsx                    # Root layout (CopilotKit provider setup)
-├── page.tsx                     # Main chat page
+├── layout.tsx                    # Root layout (metadata, fonts)
+├── page.tsx                     # Home — CopilotKit provider + HelpdeskChat
 ├── globals.css                  # Global styles
 ├── next.config.ts               # Next.js configuration
 ├── api/
 │   └── copilotkit/
-│       └── route.ts             # CopilotKit Runtime runtime endpoint
+│       └── route.ts             # CopilotKit Runtime endpoint
 components/
-├── HelpdeskChat.tsx             # Main chat UI component
-├── HelpdeskActions.tsx          # Action buttons, quick prompts
+├── HelpdeskChat.tsx             # Main shell: sidebar nav, multi-page layout
+├── HelpdeskActions.tsx          # Render actions: tickets, incidents, suggestions
 ```
 
 ---
@@ -62,16 +63,23 @@ components/
 ```
 Browser
    │
-   ├─ Next.js App Router (app/)
+   ├─ Next.js App Router
    │   │
-   │   ├─ layout.tsx — CopilotKit Provider
-   │   │   │
-   │   └─ page.tsx — HelpdeskChat component
-   │        └─ useCopilotChatHeadless_c() — AG-UI state
-   │            └─ Message streaming + tool rendering
+   │   ├─ app/layout.tsx — Metadata, fonts
+   │   │
+   │   └─ app/page.tsx
+   │       └─ CopilotKit Provider
+   │           └─ HelpdeskChat (multi-page UI)
+   │               ├─ Sidebar navigation
+   │               ├─ Chat page + HelpdeskActions (render actions)
+   │               ├─ Tickets page
+   │               ├─ Knowledge Base page (placeholder)
+   │               └─ Settings page (placeholder)
    │
-   └─ Next.js API Route (app/api/copilotkit/route.ts)
-       └─ CopilotKit Runtime endpoint
+   └─ Next.js API Route
+       └─ app/api/copilotkit/route.ts
+           ├─ CopilotKit Runtime
+           └─ HttpAgent → Backend AG-UI (port 5200)
 ```
 
 ---
@@ -80,47 +88,65 @@ Browser
 
 ### `app/layout.tsx`
 
-Root layout that wraps the entire app:
-- CopilotKit Provider setup
-- Global metadata and styles setup
+Root layout:
+- Document metadata (`HelpdeskAI`)
+- Font imports (DM Mono, Syne)
+- Basic HTML structure
 
 ### `app/page.tsx`
 
-Main chat page component:
-- Imports `HelpdeskChat` component
-- Displays the chat UI
+App entry point:
+- **CopilotKit Provider** — connects to `/api/copilotkit` runtime
+- Specifies `agent="HelpdeskAgent"`
+- Error boundary — suppresses browser extension noise
+- Renders `HelpdeskChat` component
 
 ### `components/HelpdeskChat.tsx`
 
-Core chat component integrating:
-- `useCopilotChatHeadless_c()` — CopilotKit AG-UI state hook
-- Real-time message streaming
-- Tool call rendering
-- **Streaming cursor** — animated block while receiving response
-- Tool call badges embedded when tools are invoked
+Main UI shell:
+- **Sidebar navigation** — 4 pages (Chat, Tickets, Knowledge Base, Settings)
+- **Page router** — switches between pages on nav click
+- **Chat page** — hosts `CopilotChat` component + `HelpdeskActions`
+- **Tickets page** — displays user's created tickets with status badges
+- **Placeholder pages** — KB and Settings (coming soon)
+- **Styling** — CopilotKit CSS variable overrides for dark theme
 
-### `ToolCallBadge.tsx`
+### `components/HelpdeskActions.tsx`
 
-Collapsible badge showing:
-- Tool name (e.g., `search_tickets`, `get_system_status`)
-- Arguments (pretty-printed JSON)
-- Result / status (loading ⟳, success ✓, error ✗)
+Copilot integration layer:
+- **`useCopilotReadable()`** — exposes user context and ticket list to agent
+- **Render actions** — custom components rendered by agent:
+  - `show_ticket_created` — shows ticket confirmation card
+  - `show_incident_alert` — shows incident/outage alerts
+  - `show_my_tickets` — shows ticket search results
+- **Chat suggestions** — `useCopilotChatSuggestions()` for follow-up prompts
 
 ---
 
-## Hooks
+## CopilotKit Integration
 
-### `useCopilotChatHeadless_c()`
+### CopilotChat Component
 
-CopilotKit AG-UI state hook:
+From `@copilotkit/react-ui` — handles message UI, input field, and streaming:
 
 ```typescript
-const {
-  messages,         // Message[] from CopilotKit state
-  isLoading,        // boolean
-  input,            // user input text
-  send,             // (text: string) => void
-} = useCopilotChatHeadless_c();
+<CopilotChat
+  instructions={String}  // System prompt / agent instructions
+  labels={{
+    title: string,       // Header title
+    initial: string,     // Welcome message
+    placeholder: string, // Input placeholder
+  }}
+/>
+```
+
+Provider configuration in `app/page.tsx`:
+```typescript
+<CopilotKit
+  runtimeUrl="/api/copilotkit"  // Next.js API endpoint
+  agent="HelpdeskAgent"           // Agent ID to invoke
+  onError={(event) => {...}}      // Error handler
+>
 ```
 
 ---
@@ -170,17 +196,28 @@ Or let the backend serve it:
 
 ## Styling
 
-**CSS Modules or plain CSS** via `app/globals.css`:
+**Global CSS** via `app/globals.css` + **CopilotKit CSS variables**:
 
 ```css
-/* Global base styles */
+/* app/globals.css */
 body { /* ... */ }
 a { /* ... */ }
 ```
 
+Theme customization in `HelpdeskChat.tsx`:
+```typescript
+const ckTheme: CopilotKitCSSProperties = {
+  "--copilot-kit-primary-color": "#3d5afe",        // Blue
+  "--copilot-kit-background-color": "#0a0b0f",      // Dark
+  // ... (see component for full list)
+};
+```
+
 Key styles:
-- **Chat bubbles** — see component files for CSS module imports
-- **Responsive** — mobile-first design via media queries
+- **Dark theme** — blue primary, dark grays
+- **Sidebar nav** — fixed left panel with page buttons
+- **Card components** — ticket and incident cards with colored left borders
+- **Responsive** — mobile-first, flexbox layout
 
 ---
 
@@ -223,10 +260,11 @@ dotnet run
 **Symptom:** Loading spinner spins forever
 
 **Fix:**
-1. Open DevTools → Network → filter `agent`
-2. Check POST request to agent endpoint
-3. If 502, Agent Host isn't running
-4. If request succeeds, check Console for JS errors
+1. Verify Agent Host is running: `cd ../HelpdeskAI.AgentHost && dotnet run`
+2. Open DevTools → Network → filter copilotkit
+3. Check POST to `/api/copilotkit`
+4. If 502 or connection refused, Agent Host backend is down
+5. If request succeeds, check Console for JS errors
 
 ---
 
@@ -234,5 +272,10 @@ dotnet run
 
 - **Next.js Docs:** https://nextjs.org/docs
 - **React Docs:** https://react.dev
-- **CopilotKit:** https://docs.copilotkit.ai
+- **CopilotKit Docs:** https://docs.copilotkit.ai
+  - CopilotChat component
+  - useCopilotReadable hook
+  - useCopilotAction hook
+  - useCopilotChatSuggestions hook
 - **AG-UI Protocol:** https://aka.ms/ag-ui
+- **Backend Agent:** See `../HelpdeskAI.AgentHost`
