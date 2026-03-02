@@ -1,0 +1,124 @@
+{
+  "value": [
+    {
+      "@search.action": "upload",
+      "id": "KB-0001",
+      "title": "VPN Connection Troubleshooting Guide",
+      "category": "VPN",
+      "tags": ["vpn", "cisco anyconnect", "network", "authentication", "windows"],
+      "content": "VPN Troubleshooting\n\nStep 1 - Reinstall AnyConnect\nUninstall via Add/Remove Programs, download the latest from https://itportal/vpn, right-click and Run as Administrator.\n\nStep 2 - Reset network adapters\nDevice Manager > Network Adapters > right-click every Cisco adapter > Disable, then Enable.\n\nStep 3 - Flush DNS and reset Winsock\nRun in an elevated prompt:\nnetsh int ip reset\nnetsh winsock reset\nipconfig /flushdns\nRestart after each command.\n\nStep 4 - Check credentials\nEnsure your AD password is current (https://password.contoso.com). MFA tokens expire after 30 seconds.\n\nIf still failing: collect DART logs (AnyConnect Help > Collect Logs) and attach to the ticket."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0002",
+      "title": "Outlook Email Sync Issues",
+      "category": "Email",
+      "tags": ["outlook", "email", "sync", "exchange", "ost", "calendar", "office 365"],
+      "content": "Outlook Not Syncing\n\n1. Send/Receive All - Press F9.\n2. Work Offline toggle - Send/Receive tab > toggle Work Offline off.\n3. Rebuild OST - Close Outlook > rename %localappdata%\\Microsoft\\Outlook\\*.ost to .bak > reopen (takes 10-30 min to sync).\n4. New profile - Control Panel > Mail > Show Profiles > Add > set as default.\n5. Test connectivity - Hold Ctrl + right-click tray icon > Test Email AutoConfiguration.\n\nOutlook Shows Disconnected: Run Outlook in Safe Mode: outlook.exe /safe. Repair Office via Control Panel > Programs > Office > Change > Quick Repair."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0003",
+      "title": "System Access Request Process",
+      "category": "Access",
+      "tags": ["access", "sharepoint", "permissions", "request", "active directory", "groups"],
+      "content": "Requesting Access\n\nStandard (2 business days)\nSubmit a ticket with: resource name, access level (Read/Contribute/Owner), business justification, manager email. Your manager receives an approval email. IT provisions via the appropriate AD group.\n\nPrivileged access (admin rights, prod systems) - requires CISO approval.\n\nEmergency (<4 hours) - Call ext. 5000 (after hours: +1-800-IT-HELP).\n\nSelf-service password reset - https://aka.ms/sspr (requires pre-registered MFA).\n\nApplication Access: Manager must submit via ServiceNow with cost center. Emergency Access: Call IT Emergency Line ext. 9999."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0004",
+      "title": "Laptop Hardware Issues Self Service Guide",
+      "category": "Hardware",
+      "tags": ["hardware", "laptop", "battery", "screen", "keyboard", "replacement", "display", "performance"],
+      "content": "Hardware Troubleshooting\n\nSlow Performance: Restart the laptop, check Task Manager for resource-heavy processes, ensure 10GB free disk space.\n\nBattery not charging - run powercfg /batteryreport. Under 40% design capacity = free warranty replacement (< 3 years old). If battery health under 80%, submit hardware replacement ticket.\n\nDisplay Issues - Press Win+P to cycle display modes, update display drivers. Broken screen: Accidental damage is covered if you have IT Insurance. Visit Room 204, Building B with your asset tag.\n\nKeyboard/trackpad - Use an external USB keyboard temporarily. Check Device Manager for yellow exclamation marks.\n\nStorage failure - run wmic diskdrive get status. If not OK, raise a Critical ticket immediately. 48-hour replacement SLA.\n\nLoaners - available from Room 204 for up to 5 business days. Bring employee ID. OneDrive must show green tick before handing in your device."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0005",
+      "title": "Network Connectivity Troubleshooting",
+      "category": "Network",
+      "tags": ["network", "wifi", "ethernet", "proxy", "dns", "slow", "internet", "connectivity"],
+      "content": "Network Troubleshooting\n\nNo Internet Connection: Run ipconfig /release then ipconfig /renew. You should get a 10.x.x.x address. If 169.x.x.x, DHCP is failing. Flush DNS: ipconfig /flushdns. Test with ping 8.8.8.8.\n\nWiFi drops - Forget SSID and reconnect. Prefer CONTOSO-5G (faster, shorter range) over CONTOSO (2.4 GHz). Forget network and reconnect, update WiFi adapter drivers. Connect to CORP-5GHz for better stability. Check status.company.com for outages.\n\nProxy - Settings > Network > Proxy > http://proxy.contoso.com:8080. Set NO_PROXY for dev: localhost,127.0.0.1,*.contoso.com.\n\nDNS - Primary: 10.0.0.10, Secondary: 10.0.0.11. Test: nslookup contoso.com 10.0.0.10."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0006",
+      "title": "Printer Setup and Printing Problems",
+      "category": "Printing",
+      "tags": ["printer", "printing", "driver", "queue", "scan", "stuck", "offline", "network printer"],
+      "content": "Printer Troubleshooting\n\nPrinter shows Offline\nRight-click the printer in Settings > Printers > uncheck 'Use Printer Offline'. If still offline, remove and re-add the printer.\n\nStuck print queue\nOpen Services (services.msc) > stop Print Spooler > delete all files in C:\\Windows\\System32\\spool\\PRINTERS > start Print Spooler again.\n\nInstall a network printer\nGo to Settings > Bluetooth & devices > Printers > Add device. If it does not appear automatically, click 'Add manually' and enter the printer IP from the label on the device (e.g. 10.1.2.45). Use the driver from https://itportal/printers matching the model.\n\nPrint quality issues\nFor laser printers: remove the toner cartridge, gently rock it side to side, reinsert. If streaks persist, raise a ticket with the printer asset tag and floor location.\n\nScanning to email not working\nConfirm the device is on the corporate network (not guest WiFi). Check that your email address is registered on the MFD via https://itportal/mfd. SMTP relay: smtp.contoso.com port 25."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0007",
+      "title": "Password Reset and Account Lockout",
+      "category": "Access",
+      "tags": ["password", "reset", "locked", "account lockout", "active directory", "self service", "sspr", "mfa"],
+      "content": "Password Reset and Unlock\n\nSelf-service reset (fastest)\nGo to https://aka.ms/sspr and follow the prompts. Requires MFA to be pre-registered. Your new password takes effect within 5 minutes across all systems.\n\nAccount locked out\nAfter 5 failed attempts your account locks for 30 minutes automatically. Wait and retry, or use SSPR to unlock immediately without waiting.\n\nPassword requirements\nMinimum 14 characters, at least one uppercase, one number, one symbol. Cannot reuse last 24 passwords. Expires every 180 days; you receive reminder emails at 14, 7 and 1 day before expiry.\n\nForced reset on next login\nIf IT resets your password you will be prompted to change it at next login. You cannot reuse the temporary password.\n\nCannot access SSPR (new device or no MFA registered)\nCall the IT Service Desk on ext. 5000 or +1-800-IT-HELP. Identity verification required: employee ID + manager confirmation.\n\nService account passwords\nMust be reset via a Change Request ticket. Coordinate with the application owner to update all dependent services before resetting."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0008",
+      "title": "Microsoft Teams Troubleshooting",
+      "category": "Collaboration",
+      "tags": ["teams", "microsoft teams", "meeting", "audio", "video", "camera", "chat", "calls", "screen share"],
+      "content": "Microsoft Teams Issues\n\nTeams not loading / blank screen\nQuit Teams fully (right-click tray icon > Quit). Delete the cache: %appdata%\\Microsoft\\Teams (delete all subfolders except 'Downloads'). Relaunch Teams.\n\nAudio problems in meetings\nClick the three dots in the meeting > Device settings. Confirm correct speaker and microphone are selected. Test with the audio test call: search 'Make a test call' in Teams settings.\n\nCamera not working\nCheck Privacy settings: Settings > Privacy > Camera > allow Microsoft Teams. In Device Manager confirm the camera is not disabled. If using an external webcam, try a different USB port.\n\nScreen sharing shows black screen\nGo to System Settings > Privacy & Security > Screen Recording > enable for Teams. On Windows, try sharing a specific window instead of the whole desktop if using a multi-monitor setup.\n\nTeams calls drop or are choppy\nRun the Microsoft 365 Network Connectivity Test at https://connectivity.office.com. Prefer wired ethernet over WiFi for calls. Set Teams to use a relay server: Teams Settings > Calling > disable 'Direct routing'.\n\nMissing from a Team or Channel\nAsk the Team Owner to re-add you. Owners are listed under the Team name > Manage team > Members tab."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0009",
+      "title": "Multi-Factor Authentication (MFA) Setup and Issues",
+      "category": "Security",
+      "tags": ["mfa", "multi-factor", "authenticator", "2fa", "phone", "verification", "microsoft authenticator", "token"],
+      "content": "MFA Setup and Troubleshooting\n\nSet up MFA for the first time\nGo to https://aka.ms/mfasetup. Sign in with your corporate account. Click 'Add method' and choose Microsoft Authenticator (recommended) or phone number. Follow the QR code scan steps in the Authenticator app.\n\nGot a new phone\nDo not delete the old authenticator before setting up the new device. Go to https://aka.ms/mfasetup > add the new phone as a second method > verify it works > then remove the old phone entry.\n\nMFA prompt not arriving\nCheck signal and data connection. In the Authenticator app tap 'Refresh'. If using SMS, ensure the registered number is correct at https://aka.ms/mfasetup. Alternatively approve via the app notification rather than SMS.\n\nLocked out with no MFA access (e.g. lost phone)\nCall IT Service Desk on ext. 5000 with your employee ID and manager's name. IT can issue a one-time bypass code (valid 10 minutes). You must re-register MFA immediately after logging in.\n\nMFA fatigue / unexpected prompts\nIf you receive MFA requests you did not initiate, deny them immediately and call the Security team on ext. 5911. This may indicate a credential compromise."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0010",
+      "title": "OneDrive and SharePoint Sync Issues",
+      "category": "Storage",
+      "tags": ["onedrive", "sharepoint", "sync", "cloud storage", "files", "backup", "folder", "shared drive"],
+      "content": "OneDrive / SharePoint Sync\n\nOneDrive stuck syncing or shows errors\nClick the OneDrive tray icon > Settings > Account > Unlink this PC. Sign back in with your corporate account. OneDrive will re-sync (existing local files are kept).\n\nFiles show as red X\nRight-click the file > OneDrive > Always keep on this device. If path length exceeds 260 characters, shorten the folder names or move the file to a shorter path. OneDrive does not support file names containing: \\ / : * ? \" < > |\n\nSharePoint library not syncing\nIn SharePoint online, open the library > Sync button. Each library must be synced individually. Maximum 300,000 files per library is supported.\n\nStorage quota exceeded\nCheck your usage at https://portal.office.com/account > Storage. Archive old files to the Departmental Archive SharePoint site. Request a quota increase via IT portal (manager approval needed for > 1 TB).\n\nKnown Folder Move (Desktop/Documents/Pictures backup)\nEnsure Known Folder Move is enabled: OneDrive settings > Backup > Manage backup. This protects your files if your laptop is replaced or reimaged.\n\nAccess denied on a SharePoint site\nRequest access via the 'Request access' link on the site, or ask the Site Owner to grant you permission. Site Owners are listed under Site Settings > Site permissions."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0011",
+      "title": "Software Installation and Licence Requests",
+      "category": "Software",
+      "tags": ["software", "install", "licence", "application", "request", "portal", "admin rights", "approved software"],
+      "content": "Software Installation\n\nInstalling approved software\nAll approved software is available in the IT Self-Service Portal at https://itportal/software. Search for the application and click Install. No admin rights required. Installation typically completes within 15 minutes.\n\nRequesting software not in the portal\nRaise a Software Request ticket with: application name, version, vendor website, business justification, cost estimate, manager approval. Security review takes 5 business days. Legal/procurement review required for paid software.\n\nAdmin rights for installation\nAdmin rights are not granted to end users by default. Submit a Temporary Admin Rights request for a 4-hour window. An IT engineer will shadow the session remotely.\n\nOffice / Microsoft 365 apps\nAvailable via https://portal.office.com > Install apps. You can install on up to 5 devices. If activation fails, sign out of all Office apps, run the Office Sign-in Reset tool from the portal, and sign back in.\n\nSoftware crashes or won't launch\nRun a Quick Repair first: Control Panel > Programs > right-click the app > Repair. If that fails, uninstall and reinstall from the portal. Check Windows Event Viewer > Application log for error codes to include in your ticket."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0012",
+      "title": "Windows Update and Patch Management",
+      "category": "Windows",
+      "tags": ["windows update", "patch", "update", "wsus", "restart", "blue screen", "bsod", "rollback"],
+      "content": "Windows Update\n\nUpdates not installing\nOpen Settings > Windows Update > Check for updates. If updates download but fail to install, run: sfc /scannow in an elevated prompt, then DISM /Online /Cleanup-Image /RestoreHealth. Restart and try again.\n\nComputer stuck on 'Installing updates' at shutdown\nWait at least 30 minutes before force-powering off. If still stuck, hold the power button for 10 seconds, power on, and Windows will roll back the failed update automatically.\n\nUpdate caused a problem (blue screen / app broken)\nBoot into Safe Mode (hold Shift + Restart > Troubleshoot > Startup Settings > Safe Mode). Go to Settings > Windows Update > View update history > Uninstall updates. Remove the most recently installed update.\n\nManaged update schedule\nCorporate laptops receive patches via WSUS on the second Tuesday of each month (Patch Tuesday + 7 days). You will receive a notification with a 72-hour deferral window. Do not defer Critical security patches.\n\nForce a policy refresh\nIf your machine has not received updates for over 30 days, run: gpupdate /force in an elevated prompt, then wuauclt /detectnow. Contact IT if updates are still not appearing after 24 hours."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0013",
+      "title": "Remote Desktop and VDI Access",
+      "category": "Remote Access",
+      "tags": ["remote desktop", "rdp", "vdi", "citrix", "avd", "azure virtual desktop", "remote work", "terminal server"],
+      "content": "Remote Desktop Access\n\nConnecting via Remote Desktop (RDP)\nOpen Remote Desktop Connection (mstsc.exe). Enter the hostname or IP of the target machine (must be on corporate network or VPN). Use CONTOSO\\yourusername as the username. The target machine must have 'Allow remote connections' enabled and you must be in the Remote Desktop Users group.\n\nRDP connection refused\nConfirm VPN is connected first. Check that the target machine is powered on (IT portal > My Devices shows last seen time). Firewall rule for RDP (TCP 3389) must be open - raise a firewall request ticket if needed.\n\nAzure Virtual Desktop (AVD)\nAccess via https://aka.ms/avd or install the Windows App from the Microsoft Store. Sign in with your corporate account. Published desktops and apps are assigned by your manager via an access request.\n\nCitrix session disconnects frequently\nIn Citrix Workspace app, go to Advanced Settings > Session reliability and increase the reconnect time to 180 seconds. Prefer a wired connection. Citrix HDX protocol requires at least 2 Mbps stable bandwidth.\n\nCannot print from remote session\nEnsure 'Printers' is checked under Local Resources in the RDP client before connecting. For AVD, install the Universal Print driver from the IT portal on your local machine."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0014",
+      "title": "Antivirus, Malware and Security Incidents",
+      "category": "Security",
+      "tags": ["antivirus", "malware", "virus", "ransomware", "phishing", "security", "defender", "incident", "suspicious"],
+      "content": "Security Incidents and Antivirus\n\nSuspected malware or ransomware\nIMMEDIATELY disconnect the machine from the network (unplug ethernet and disable WiFi). Do not power off. Call the Security team on ext. 5911 (24/7). Do not attempt to clean the infection yourself. Preserve all files and logs.\n\nPhishing email received\nDo not click any links or open attachments. Use the 'Report Phishing' button in Outlook (Home ribbon) to forward to the security team automatically. Delete the email from your inbox and Deleted Items.\n\nAntivirus alert / quarantine\nMicrosoft Defender quarantine notifications are normal when a threat is blocked. Go to Windows Security > Protection history to review. If a legitimate file is quarantined, raise a ticket with the file path and application name for whitelisting.\n\nDefender is disabled or showing red\nOpen Windows Security (search in Start menu). Click each protection area and turn it on. If Defender is greyed out, it may be managed by group policy. Run: Get-MpComputerStatus in PowerShell and include the output in your ticket.\n\nSuspicious account activity (unexpected logins or MFA prompts)\nChange your password immediately at https://aka.ms/sspr. Call the Security team on ext. 5911. Review your recent sign-in activity at https://mysignins.microsoft.com. Do not wait - account compromises escalate quickly."
+    },
+    {
+      "@search.action": "upload",
+      "id": "KB-0015",
+      "title": "New Employee IT Onboarding Checklist",
+      "category": "Onboarding",
+      "tags": ["onboarding", "new employee", "setup", "first day", "equipment", "account", "checklist", "new starter"],
+      "content": "New Employee IT Setup\n\nBefore day one (completed by your manager)\nSubmit a New Starter request in ServiceNow at least 5 business days before the start date. Include: full name, job title, department, cost centre, start date, required software, and whether a laptop or desktop is needed.\n\nDay one — what IT will have ready\n- Corporate laptop, pre-imaged with Windows 11 and standard software\n- Active Directory account and email address (firstname.lastname@contoso.com)\n- Microsoft 365 licence assigned\n- Badge access to the building and your floor\n\nDay one steps for the new employee\n1. Collect equipment from Room 204, Building B (bring offer letter or employee ID).\n2. Power on the laptop and complete the Windows Hello setup (PIN + fingerprint recommended).\n3. Sign in to Microsoft 365 at https://portal.office.com and register MFA at https://aka.ms/mfasetup.\n4. Connect to CONTOSO-CORP WiFi using your corporate credentials.\n5. Open the IT Self-Service Portal at https://itportal and install any additional software you need.\n\nFirst week\n- Check with your manager for system-specific access requests (shared mailboxes, SharePoint sites, business applications).\n- Complete the mandatory Cyber Security Awareness training in the Learning Portal within 5 business days.\n\nIT contacts\nService Desk: ext. 5000 | it-help@contoso.com | https://itportal"
+    }
+  ]
+}

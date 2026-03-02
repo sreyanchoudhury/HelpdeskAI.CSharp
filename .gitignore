@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+appsettings.Development.json
+node_modules/
+dist/
+.env
+.env.local
+*.pfx
+.DS_Store
+.next/

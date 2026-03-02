@@ -1,0 +1,135 @@
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #0a0b0f;
+  --bg-2:        #0f1117;
+  --bg-3:        #151820;
+  --border:      #ffffff12;
+  --text:        #e8eaf0;
+  --text-2:      #9098b0;
+  --text-3:      #5a6280;
+  --accent:      #3d5afe;
+  --accent-dim:  #3d5afe22;
+  --accent-glow: #3d5afe44;
+  --font-ui:     system-ui, -apple-system, sans-serif;
+  --font-mono:   'Fira Code', 'Cascadia Code', monospace;
+  --radius:      10px;
+}
+
+html, body, #__next { height: 100%; }
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── Shell ───────────────────────────────────────────────────────────────── */
+.hd-shell { display: flex; height: 100vh; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.hd-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  gap: 8px;
+}
+
+.hd-logo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 8px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.hd-logo-text { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; }
+
+.hd-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+
+.hd-nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  font-size: 13px; font-weight: 500; font-family: var(--font-ui);
+  color: var(--text-3);
+  cursor: pointer; transition: all 0.15s;
+  background: none; border: 1px solid transparent;
+  text-align: left; width: 100%;
+}
+.hd-nav-item:hover { background: var(--bg-3); color: var(--text-2); }
+.hd-nav-item--active {
+  background: var(--accent-dim); color: var(--accent);
+  border-color: var(--accent-glow);
+}
+
+.hd-sidebar-footer { padding-top: 16px; border-top: 1px solid var(--border); }
+.hd-powered { font-size: 10px; font-family: var(--font-mono); color: var(--text-3); }
+
+/* ── Main ────────────────────────────────────────────────────────────────── */
+.hd-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* Critical: constrain height so children can fill remaining space */
+  height: 100vh;
+  overflow: hidden;
+}
+
+.hd-header {
+  flex-shrink: 0;
+  display: flex; align-items: center;
+  padding: 24px 32px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.hd-title   { font-size: 20px; font-weight: 700; letter-spacing: -0.03em; }
+.hd-subtitle { font-size: 12px; color: var(--text-3); margin-top: 2px; font-family: var(--font-mono); }
+
+/* ── CopilotChat wrapper ─────────────────────────────────────────────────── */
+/* Must be flex:1 with min-height:0 — the two keys to making a flex child
+   scroll instead of growing infinitely and pushing the input off screen. */
+.hd-chat-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Make CopilotChat's root element fill the wrapper */
+.hd-chat-wrapper > div {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Force the messages scroll area to take up space */
+.hd-chat-wrapper > div > div:first-child {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Remove default CopilotKit shadow/border — we provide our own layout */
+.hd-chat-wrapper [class] {
+  box-shadow: none !important;
+}
+
+/* Ensure input textarea text is visible (dark text-on-dark-bg issue) */
+.hd-chat-wrapper textarea,
+.hd-chat-wrapper input[type="text"] {
+  color: var(--text) !important;
+  caret-color: var(--accent) !important;
+}
+
+/* Hide the "Powered by CopilotKit" branding bar at the bottom */
+.hd-chat-wrapper > div > div:last-child:has(a[href*="copilotkit"]),
+.hd-chat-wrapper a[href*="copilotkit"] {
+  display: none !important;
+}
