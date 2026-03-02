@@ -90,8 +90,7 @@ This runs an Azure deployment preview without provisioning any resources.
 | File | Purpose |
 |------|---------|
 | `main.bicep` | Bicep infrastructure template (82 lines) |
-| `deploy.ps1` | PowerShell deployment orchestration script (Windows/Linux) |
-| `deploy.sh` | Bash alternative for macOS / Linux |
+| `deploy.ps1` | PowerShell deployment orchestration script |
 | `seed-data.json` | Knowledge base articles (5 sample IT KB documents) |
 | `setup-search.ps1` | Standalone KB index setup (if you need to re-create the index) |
 

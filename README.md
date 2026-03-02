@@ -555,13 +555,7 @@ cd infra
 .\deploy.ps1 -ResourceGroupName "rg-helpdeskai" -Location "eastus"
 ```
 
-**Linux / macOS (Bash)**
-
-```bash
-cd infra
-chmod +x deploy.sh
-./deploy.sh --resource-group "rg-helpdeskai" --location "eastus"
-```
+> **Note:** Windows PowerShell 7+ is required. Download from https://github.com/PowerShell/PowerShell/releases if on Windows. macOS/Linux users can run PowerShell as well, or manually follow the Bicep deployment steps in [infra/README.md](infra/README.md#manual-deployment).
 
 The script takes **10–15 minutes**. It will:
 1. Create the resource group and provision all Azure resources via Bicep
