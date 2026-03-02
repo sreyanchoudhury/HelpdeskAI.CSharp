@@ -8,14 +8,14 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ### Getting Started
 1. [Architecture](#architecture) — System design and component overview
-2. [Quick Start](#quick-start) — Deploy in 5 minutes or run locally
-   - [Deploy to Azure](#1-deploy-to-azure-recommended)
-   - [Run Locally](#2-run-locally-no-azure)
+2. [Quick Start](#quick-start) — Get running in 5–10 minutes
+   - [Provision Azure Resources](#1-provision-azure-resources-recommended)
+   - [Manual Setup](#2-manual-azure-setup)
 3. [Prerequisites](#prerequisites) — Required tools and accounts
 
 ### Deployment & Setup
-4. [Option A — Deploy to Azure](#option-a--deploy-to-azure-recommended) — Full cloud setup
-5. [Option B — Run Locally](#option-b--run-locally) — Local development with Azure services
+4. [Option A — Provision + Run Locally](#option-a--provision-azure-resources--run-locally-recommended) — Automated setup (recommended)
+5. [Option B — Manual Setup](#option-b--run-locally-with-manual-azure-configuration) — Manual configuration
 6. [Prerequisites (Detailed)](#prerequisites) — Tool versions and Azure requirements
 
 ### Development
@@ -49,8 +49,8 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 ```
 ┌──────────────────────────────────────────────────────┐
 │  Browser (React 19 + CopilotKit)                     │
-│  - HelpdeskChat.tsx (headless UI)                    │
-│  - useAgentStream hook (state management)            │
+│  - HelpdeskChat.tsx (sidebar + multi-page UI)        │
+│  - HelpdeskActions.tsx (render actions + context)    │
 └────────────────┬─────────────────────────────────────┘
                  │ AG-UI (POST /agent + SSE stream)
                  ▼
@@ -82,7 +82,7 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ## Quick Start
 
-### 1. Deploy to Azure (Recommended)
+### 1. Provision Azure Resources (Recommended)
 
 ```bash
 cd infra
@@ -91,7 +91,7 @@ cd infra
 
 This provisions Azure OpenAI + AI Search and generates `appsettings.Development.json`.
 
-Then run locally:
+Then run services locally:
 ```bash
 # Terminal 1
 cd src/HelpdeskAI.McpServer && dotnet run
@@ -105,7 +105,7 @@ cd src/HelpdeskAI.Frontend && npm install && npm run dev
 
 Open http://localhost:3000
 
-### 2. Run Locally (No Azure)
+### 2. Manual Azure Setup
 
 Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
 ```json
@@ -132,7 +132,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
 }
 ```
 
-Then run the services (same as above).
+Then run services (same as above).
 
 ---
 
@@ -156,7 +156,7 @@ Then run the services (same as above).
 
 ---
 
-## Option A — Deploy to Azure (Recommended)
+## Option A — Provision Azure Resources + Run Locally (Recommended)
 
 See [infra/README.md](infra/README.md) for full deployment guide.
 
@@ -173,28 +173,6 @@ This provisions:
 - Generated `appsettings.Development.json` with credentials
 
 Takes 5-10 minutes. Then run the three services locally (see **Quick Start**).
-
----
-
-## Option B — Run Locally
-
-See [src/HelpdeskAI.AgentHost/README.md](src/HelpdeskAI.AgentHost/README.md) for full guide.
-
-**TL;DR:**
-
-1. **Manually create** `src/HelpdeskAI.AgentHost/appsettings.Development.json` with your Azure OpenAI credentials
-2. **Skip Azure AI Search** (leave `Endpoint` and `ApiKey` empty) — RAG context won't be available, but the agent still works
-3. **Start services:**
-   ```bash
-   # Terminal 1
-   cd src/HelpdeskAI.McpServer && dotnet run
-   
-   # Terminal 2
-   cd src/HelpdeskAI.AgentHost && dotnet run
-   
-   # Terminal 3
-   cd src/HelpdeskAI.Frontend && npm install && npm run dev
-   ```
 
 ---
 
@@ -434,17 +412,17 @@ npm install
 
 ### Message Flow (one turn)
 
-> **Note:** Redis operations (history load/persist) are **local development only**. When deployed to Azure, these steps are skipped.
+> **Note:** Redis operations (history load/persist) are **local development only**. Your conversation history is NOT persisted across browser refreshes.
 
 ```
 User types message in CopilotChat input
   → CopilotChat component sends message
   → /api/copilotkit receives request (Next.js API route)
-  → CopilotKit Runtime forwards to HttpAgent
-  → HttpAgent POST /agent  (AG-UI RunAgentInput)         [AG-UI protocol]
+  → CopilotKit Runtime forwards to backend
+  → Backend POST /agent  (AG-UI RunAgentInput)         [AG-UI protocol]
   → MapAGUI receives the request
-      → AzureAiSearchContextProvider.ProvideAIContextAsync  [RAG → System msg]
-      → RedisChatHistoryProvider.ProvideChatHistoryAsync    [load history (local only)]
+      → AzureAiSearchContextProvider.ProvideAIContextAsync  [RAG → System msg (if configured)]
+      → RedisChatHistoryProvider.ProvideChatHistoryAsync    [load history from Redis (local only)]
       → IChatClient (FunctionInvocation middleware)         [call Azure OpenAI]
            Azure OpenAI may call tools:
            → McpToolsProvider routes to HelpdeskAI.McpServer  [MCP / HTTP]
@@ -459,12 +437,10 @@ User types message in CopilotChat input
 
 ### Session Persistence (Local Development Only)
 
-> **Azure deployment**: Session state is in-memory only. Refresh the browser page clears conversation history.
-
-`RedisChatHistoryProvider` uses `ProviderSessionState<T>` to carry the Redis key
-(`helpdesk:thread:<uuid>`) through the AG-UI `StateSnapshotEvent` /
-`StateDeltaEvent` protocol. Thread IDs are round-tripped automatically — no
-cookies or custom middleware needed. Sessions survive service restarts.
+`RedisChatHistoryProvider` stores conversation history in Redis at `helpdesk:thread:<uuid>`. 
+- **Persisted during session:** History survives service restarts
+- **Lost on refresh:** Clearing the browser (or if Redis isn't running) loses history
+- Thread IDs are carried through the AG-UI protocol automatically
 
 ### Conversation Summarisation
 
@@ -473,29 +449,28 @@ cookies or custom middleware needed. Sessions survive service restarts.
 | Setting | Default | Meaning |
 |---------|---------|---------|
 | `SummarisationThreshold` | 20 | Trigger LLM summarisation when history > 20 messages |
-| `TailMessagesToKeep` | 6 | Keep last 6 verbatim; summarise the rest |
-| `ThreadTtl` | 30 days | Redis key expiry |
+| `TailMessagesToKeep` | 6 | Keep last 6 messages verbatim; summarise the rest |
+| `ThreadTtl` | 30 days | Redis key expiry time |
 
 ### RAG Context Injection
 
 `AzureAiSearchContextProvider` queries Azure AI Search on every turn using the
-last user message. Results are injected as a `ChatRole.System` message before the
-LLM call. Failures are logged and silently skipped — the agent continues without
-RAG context rather than returning an error.
+last user message (if `AzureAISearch.Endpoint` is configured). Results are injected as a 
+`ChatRole.System` message before the LLM call. If Azure AI Search isn't configured or fails, 
+the agent continues without RAG context.
 
 ### MCP Tool Bridge
 
 `McpToolsProvider` connects to `HelpdeskAI.McpServer` at startup via
 `HttpClientTransport` and loads all tools as `AIFunction[]`. Because
 `ModelContextProtocol 1.0.0` makes `McpClientTool` implement `AIFunction`
-directly, they slot into `ChatClientAgentOptions.ChatOptions.Tools` with zero
-adapter code.
+directly, they integrate seamlessly into the agent pipeline.
 
 ---
 
 ## Configuration — AgentHost (`appsettings.json`)
 
-> **Redis (local development only)**: Needed for conversation history persistence when running locally. For Azure deployment, comment out or omit the `ConnectionStrings.Redis` section.
+> **Redis (local development only)**: Required for conversation history persistence when running services locally. See [Session Persistence](#session-persistence-local-development-only) for details.
 
 ```jsonc
 {
@@ -545,11 +520,15 @@ You also need:
 
 ---
 
-## Option A — Deploy to Azure (Recommended)
+## Getting Started — Two Paths
 
-The `infra/` folder contains a fully automated deployment script that provisions every Azure resource and generates a ready-to-use `appsettings.Development.json` for local development.
+> **Note:** The HelpdeskAI app runs **locally on port 3000** in both paths. The difference is whether you automatically provision Azure resources or manually configure them.
 
-### What gets created
+## Option A — Provision Azure Resources + Run Locally (Recommended)
+
+The `infra/` folder contains a fully automated deployment script that provisions Azure OpenAI and Azure AI Search, then generates `appsettings.Development.json` for local development. After provisioning, you run the three services locally.
+
+### What Gets Provisioned
 
 | Resource | Purpose |
 |----------|---------|
@@ -565,7 +544,7 @@ az account set --subscription "<Your Subscription ID or Name>"
 
 > Find your subscription ID: `az account list --output table`
 
-### Step 2 — Run the deploy script
+### Step 2 — Run the Provisioning Script
 
 **Windows (PowerShell 7+)**
 
@@ -588,9 +567,9 @@ The script takes **10–15 minutes**. It will:
 3. Seed the index with 5 IT knowledge-base articles
 4. Generate `src/HelpdeskAI.AgentHost/appsettings.Development.json` with real connection strings
 
-### Step 3 — Run locally with Azure services
+### Step 3 — Run Services Locally
 
-After the script finishes, the `appsettings.Development.json` file is ready. Start the three services:
+After the provisioning script finishes, the `appsettings.Development.json` file is ready. Start the three services:
 
 ```bash
 # Terminal 1 — MCP Server
@@ -611,9 +590,9 @@ Open http://localhost:3000 in your browser.
 
 ---
 
-## Option B — Run Locally without Azure
+## Option B — Run Locally with Manual Azure Configuration
 
-This mode uses Azure OpenAI but skips Azure AI Search. The agent can answer IT questions and manage tickets without knowledge-base RAG context. Conversation history is stored locally in Redis.
+Skip automated provisioning and manually configure Azure OpenAI credentials. You'll create `appsettings.Development.json` by hand. Azure AI Search seeding is also manual if you want RAG features.
 
 > **Demo Project Note:** This project uses Redis installed in **WSL (Windows Subsystem for Linux)** for local development on Windows.
 
@@ -823,32 +802,56 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 
 | Component | Description |
 |-----------|-------------|
-| `App.tsx` | Shell: sidebar (session ID, status dot, new-chat), message list, textarea input |
-| `ChatMessage` | User/assistant bubbles; markdown via `react-markdown`; streaming cursor `▋` |
-| `ToolCallBadge` | Collapsible badge — tool name, args (pretty JSON), result, status icon (⟳ / ✓ / ✗) |
-| `SuggestionChips` | Quick-start prompts shown on empty-state screen |
-| `useAgentStream` | Core hook — bridges CopilotKit AG-UI state to app `Message[]`; merges tool results |
+| `HelpdeskChat.tsx` | Main shell: sidebar navigation (4 pages), multi-page layout, ticket list |
+| `HelpdeskActions.tsx` | CopilotKit integration: render actions (tickets, incidents), suggestions, user context exposure |
+| `CopilotChat` | From `@copilotkit/react-ui` — real-time streaming chat UI with input field |
 
-### CopilotKit Wiring
+### CopilotKit Integration
 
+**`app/page.tsx`** — Root app wiring:
 ```tsx
-// main.tsx
 <CopilotKit
-  agent="HelpdeskAgent"                       // must match HelpdeskAgentFactory.AgentName
-  agents__unsafe_dev_only={{
-    HelpdeskAgent: new HttpAgent({ url: '/agent' })
-  }}                                          // bypasses Runtime info round-trip → direct MapAGUI
+  runtimeUrl="/api/copilotkit"   // Next.js API endpoint that connects to backend
+  agent="HelpdeskAgent"           // Agent ID to invoke
+  onError={(event) => {...}}      // Error handler for browser extensions
 >
+  <HelpdeskChat />
+</CopilotKit>
+```
 
-// useAgentStream.ts
-useCopilotChatHeadless_c() → { ckMessages, ckSendMessage, setMessages, isLoading }
-useThreads()               → { threadId, setThreadId }
+**`components/HelpdeskActions.tsx`** — Agent integration layer:
+```tsx
+// Expose user context and ticket list to agent
+useCopilotReadable({
+  description: "User profile and ticket list",
+  value: { user: currentUser, tickets }
+});
 
-useMemo maps ckMessages → Message[]:
-  role === 'tool'      → toolResultMap  (keyed by toolCallId)
-  role === 'user'      → { role:'user', content, isStreaming:false }
-  role === 'assistant' → { role:'assistant', toolCalls merged from map,
-                           isStreaming: isLoading && isLast }
+// Define render actions (custom UI components shown in chat)
+useCopilotAction({
+  name: "show_ticket_created",
+  description: "Show ticket confirmation card",
+  handler: ({ ticket }) => {
+    setTickets(prev => [...prev, ticket]);
+    return <TicketCard ticket={ticket} />;
+  }
+});
+
+// Provide follow-up suggestions
+useCopilotChatSuggestions({
+  suggestions: ["Show my open tickets", "What issues are affecting my team?"]
+});
+```
+
+**`components/HelpdeskChat.tsx`** — Main UI shell:
+```tsx
+<CopilotChat
+  instructions="You are an IT helpdesk assistant..."
+  labels={{
+    title: "IT Support",
+    placeholder: "Ask me about your IT issues"
+  }}
+/>
 ```
 
 ---
@@ -870,7 +873,7 @@ useMemo maps ckMessages → Message[]:
 
 ### Agent Host won't start
 
-- **`appsettings.Development.json` not found / missing keys** — ensure the file exists at `src/HelpdeskAI.AgentHost/appsettings.Development.json`. Check that `AzureOpenAI.ChatDeployment`, `McpServer.Endpoint`, and `ConnectionStrings.Redis` are all present (see [Option B — Step 2](#step-2--create-appsettingsdevelopmentjson)).
+- **`appsettings.Development.json` not found / missing keys** — ensure the file exists at `src/HelpdeskAI.AgentHost/appsettings.Development.json`. Check that `AzureOpenAI.ChatDeployment`, `McpServer.Endpoint`, and `ConnectionStrings.Redis` are all present (see [Configuration Reference](#configuration-reference)).
 - **Redis connection refused** — make sure Docker is running: `docker ps`. Restart Redis: `docker start redis`.
 - **Azure OpenAI 401 / 403** — double-check your `ApiKey` and `Endpoint` values from the Azure portal. The endpoint must end with `/`.
 
@@ -897,7 +900,7 @@ useMemo maps ckMessages → Message[]:
 - Delete `node_modules/` and run `npm install` again.
 - Check that the Agent Host is running on port 5200 and `AGENT_URL` in next.config.ts is correct.
 
-### Deploy script fails
+### Provisioning script fails
 
 - **`az login` required** — run `az login` and `az account set --subscription "<id>"`.
 - **Bicep not installed** — run `az bicep install` then retry.
