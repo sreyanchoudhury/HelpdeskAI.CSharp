@@ -85,18 +85,18 @@ flowchart LR
     USER(["💻  Browser"]):::ui
 
     subgraph APP["💻  Next.js App Router  ·  Port 3000"]
-        LAYOUT["app/layout.tsx\nmetadata  ·  fonts"]:::ui
-        PAGE["app/page.tsx\nCopilotKit Provider"]:::ui
-        CHAT["HelpdeskChat\nsidebar nav  ·  4-page UI"]:::ui
-        ACTIONS["HelpdeskActions\nrender actions  ·  useCopilotReadable"]:::ui
+        LAYOUT["app/layout.tsx<br/>metadata  ·  fonts"]:::ui
+        PAGE["app/page.tsx<br/>CopilotKit Provider"]:::ui
+        CHAT["HelpdeskChat<br/>sidebar nav  ·  4-page UI"]:::ui
+        ACTIONS["HelpdeskActions<br/>render actions  ·  useCopilotReadable"]:::ui
     end
 
     subgraph ROUTES["  Next.js API Routes"]
-        CK["api/copilotkit\nCopilotKit Runtime  ·  HttpAgent"]:::api
-        KB["api/kb\nKB search proxy"]:::api
-        TK["api/tickets\nTickets proxy"]:::api
-        STRT["api/status\nHealth check proxy"]:::api
-        UL["api/upload\nFile upload proxy"]:::api
+        CK["api/copilotkit<br/>CopilotKit Runtime  ·  HttpAgent"]:::api
+        KB["api/kb<br/>KB search proxy"]:::api
+        TK["api/tickets<br/>Tickets proxy"]:::api
+        STRT["api/status<br/>Health check proxy"]:::api
+        UL["api/upload<br/>File upload proxy"]:::api
     end
 
     AH(["⚙️  AgentHost  ·  :5200"]):::backend

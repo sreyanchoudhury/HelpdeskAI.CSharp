@@ -67,33 +67,33 @@ flowchart TD
     classDef redis  fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
 
     subgraph BROWSER["💻  Browser  ·  React 19 + CopilotKit"]
-        FE1["HelpdeskChat.tsx\nsidebar · multi-page UI"]:::fe
-        FE2["HelpdeskActions.tsx\nrender actions · context"]:::fe
+        FE1["HelpdeskChat.tsx<br/>sidebar · multi-page UI"]:::fe
+        FE2["HelpdeskActions.tsx<br/>render actions · context"]:::fe
     end
 
     subgraph AGENTHOST["⚙️  AgentHost  ·  .NET 10  ·  :5200"]
-        AH1["MapAGUI /agent\nSSE stream endpoint"]:::agent
-        AH2["ThreadId Middleware\nper-session routing"]:::agent
-        AH3["AttachmentContextProvider\nupload  ·  OCR  ·  vision"]:::agent
-        AH4["AzureAiSearchContextProvider\nRAG  ·  BrowseLatestAsync"]:::agent
-        AH5["McpToolsProvider\nMCP HTTP client"]:::agent
-        AH6["RedisChatHistoryProvider\nper-session history"]:::agent
+        AH1["MapAGUI /agent<br/>SSE stream endpoint"]:::agent
+        AH2["ThreadId Middleware<br/>per-session routing"]:::agent
+        AH3["AttachmentContextProvider<br/>upload  ·  OCR  ·  vision"]:::agent
+        AH4["AzureAiSearchContextProvider<br/>RAG  ·  BrowseLatestAsync"]:::agent
+        AH5["McpToolsProvider<br/>MCP HTTP client"]:::agent
+        AH6["RedisChatHistoryProvider<br/>per-session history"]:::agent
     end
 
     subgraph MCPSERVER["🔧  McpServer  ·  .NET 10  ·  :5100"]
-        MS1["TicketTools\ncreate · update · list · close · assign"]:::mcp
-        MS2["SystemStatusTools\nping · health · metrics"]:::mcp
-        MS3[("In-memory store\n+ seed data")]:::mcp
+        MS1["TicketTools<br/>create · update · list · close · assign"]:::mcp
+        MS2["SystemStatusTools<br/>ping · health · metrics"]:::mcp
+        MS3[("In-memory store<br/>+ seed data")]:::mcp
     end
 
     subgraph AZURE["☁️  Azure Services"]
-        AOA{{"Azure OpenAI\ngpt-4.1"}}:::azure
-        AIS{{"Azure AI Search\nvector + semantic"}}:::azure
-        ABS{{"Azure Blob Storage\nattachments"}}:::azure
-        ADI{{"Document Intelligence\nOCR"}}:::azure
+        AOA{{"Azure OpenAI<br/>gpt-4.1"}}:::azure
+        AIS{{"Azure AI Search<br/>vector + semantic"}}:::azure
+        ABS{{"Azure Blob Storage<br/>attachments"}}:::azure
+        ADI{{"Document Intelligence<br/>OCR"}}:::azure
     end
 
-    REDIS[("🔴  Redis\nchat history")]:::redis
+    REDIS[("🔴  Redis<br/>chat history")]:::redis
 
     style BROWSER   fill:#060e20,stroke:#3d5afe,color:#9098b0
     style AGENTHOST fill:#0a0315,stroke:#a855f7,color:#9098b0
@@ -414,17 +414,17 @@ flowchart LR
     classDef redis   fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
     classDef azure   fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
 
-    U(["💬 User\ntypes message"]):::fe
-    CK["CopilotKit Runtime\n/api/copilotkit"]:::next
-    AH["MapAGUI\nPOST /agent"]:::agent
-    RAG["RAG Injection\nAzure AI Search → system msg"]:::azure
-    RH["Redis History\nload thread"]:::redis
-    LLM["Azure OpenAI\ngpt-4.1"]:::azure
-    MCP["McpToolsProvider\n→ tool call → MCP Server"]:::mcp
-    SSE["AG-UI SSE Stream\nTextMessage · ToolCall events"]:::agent
-    RP["Redis History\npersist thread"]:::redis
-    RA["Render Actions\nshow_ticket · show_incident"]:::fe
-    R(["🖥️ Browser\nUI updated"]):::fe
+    U(["💬 User<br/>types message"]):::fe
+    CK["CopilotKit Runtime<br/>/api/copilotkit"]:::next
+    AH["MapAGUI<br/>POST /agent"]:::agent
+    RAG["RAG Injection<br/>Azure AI Search → system msg"]:::azure
+    RH["Redis History<br/>load thread"]:::redis
+    LLM["Azure OpenAI<br/>gpt-4.1"]:::azure
+    MCP["McpToolsProvider<br/>→ tool call → MCP Server"]:::mcp
+    SSE["AG-UI SSE Stream<br/>TextMessage · ToolCall events"]:::agent
+    RP["Redis History<br/>persist thread"]:::redis
+    RA["Render Actions<br/>show_ticket · show_incident"]:::fe
+    R(["🖥️ Browser<br/>UI updated"]):::fe
 
     U --> CK --> AH --> RAG --> RH --> LLM
     LLM -. "tool call" .-> MCP
