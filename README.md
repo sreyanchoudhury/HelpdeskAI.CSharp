@@ -404,25 +404,33 @@ npm install
 
 > **Note:** Redis operations (history load/persist) are **local development only**. Your conversation history is NOT persisted across browser refreshes.
 
-```
-User types message in CopilotChat input
-  → CopilotChat component sends message
-  → /api/copilotkit receives request (Next.js API route)
-  → CopilotKit Runtime forwards to backend
-  → Backend POST /agent  (AG-UI RunAgentInput)         [AG-UI protocol]
-  → MapAGUI receives the request
-      → AzureAiSearchContextProvider.ProvideAIContextAsync  [RAG → System msg (if configured)]
-      → RedisChatHistoryProvider.ProvideChatHistoryAsync    [load history from Redis (local only)]
-      → IChatClient (FunctionInvocation middleware)         [call Azure OpenAI]
-           Azure OpenAI may call tools:
-           → McpToolsProvider routes to HelpdeskAI.McpServer  [MCP / HTTP]
-           → tool results returned → LLM produces final answer
-      → SSE: TextMessageStart / TextMessageContent / End     [AG-UI streaming]
-      → RedisChatHistoryProvider.StoreChatHistoryAsync       [persist to Redis (local only)]
-  → CopilotKit receives AG-UI events → updates CopilotChat state
-  → Messages stream in real-time with animated cursor (▋)
-  → Agent calls render actions (show_ticket_created, show_incident_alert, etc.)
-  → HelpdeskActions renders custom cards (ticket, incident, ticket list)
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#3d5afe44", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
+flowchart LR
+    classDef fe      fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
+    classDef next    fill:#0d0a1e,stroke:#818cf8,color:#e8eaf0,stroke-width:2px
+    classDef agent   fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
+    classDef mcp     fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
+    classDef redis   fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
+    classDef azure   fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
+
+    U(["💬 User\ntypes message"]):::fe
+    CK["CopilotKit Runtime\n/api/copilotkit"]:::next
+    AH["MapAGUI\nPOST /agent"]:::agent
+    RAG["RAG Injection\nAzure AI Search → system msg"]:::azure
+    RH["Redis History\nload thread"]:::redis
+    LLM["Azure OpenAI\ngpt-4.1"]:::azure
+    MCP["McpToolsProvider\n→ tool call → MCP Server"]:::mcp
+    SSE["AG-UI SSE Stream\nTextMessage · ToolCall events"]:::agent
+    RP["Redis History\npersist thread"]:::redis
+    RA["Render Actions\nshow_ticket · show_incident"]:::fe
+    R(["🖥️ Browser\nUI updated"]):::fe
+
+    U --> CK --> AH --> RAG --> RH --> LLM
+    LLM -. "tool call" .-> MCP
+    MCP -. "result" .-> LLM
+    LLM --> SSE --> RP
+    SSE --> RA --> R
 ```
 
 ### Session Persistence (Local Development Only)
