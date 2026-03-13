@@ -89,7 +89,7 @@ In addition to MCP tools, the server exposes a plain HTTP endpoint for the front
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET/POST` | `/mcp` | MCP tool discovery + invocation |
-| `GET` | `/tickets` | JSON list of tickets — supports `?requestedBy=`, `?status=`, `?category=` query params |
+| `GET` | `/tickets` | JSON list of tickets — **internal-only** (consumed by AgentHost `GET /api/tickets` proxy; not browser-facing) — supports `?requestedBy=`, `?status=`, `?category=` |
 | `GET` | `/healthz` | Liveness probe |
 
 ---

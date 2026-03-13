@@ -363,8 +363,8 @@ npm install
 
 | Project | Port | Role |
 |---------|------|------|
-| `HelpdeskAI.AgentHost` | 5200 | .NET 10 Web API — AG-UI endpoint, agent pipeline, Redis chat history, file attachments |
-| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — 10 MCP tools (tickets, status, KB) + `GET /tickets` REST |
+| `HelpdeskAI.AgentHost` | 5200 | .NET 10 Web API — AG-UI endpoint, agent pipeline, Redis chat history, file attachments, ticket proxy |
+| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — 10 MCP tools (tickets, status, KB) + `GET /tickets` REST (internal-only) |
 | `HelpdeskAI.Frontend` | 3000 (dev) | Next.js App Router — React frontend with CopilotKit + 4 API proxy routes |
 
 ---
@@ -473,9 +473,13 @@ directly, they integrate seamlessly into the agent pipeline.
 ```jsonc
 {
   "AzureOpenAI": {
-    "Endpoint":        "https://<resource>.openai.azure.com/",
-    "ApiKey":          "",          // leave empty → DefaultAzureCredential (managed identity)
-    "ChatDeployment":  "gpt-4.1"
+    "Endpoint":           "https://<resource>.openai.azure.com/",
+    "ApiKey":             "",          // leave empty → DefaultAzureCredential (managed identity)
+    "ChatDeployment":     "gpt-4.1",
+    "EmbeddingDeployment": "text-embedding-3-small"
+  },
+  "DynamicTools": {
+    "TopK": 5                          // top-K tools injected per turn via cosine similarity
   },
   "AzureAISearch": {
     "Endpoint":   "https://<search>.search.windows.net",
@@ -624,9 +628,13 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
 ```jsonc
 {
   "AzureOpenAI": {
-    "Endpoint":        "https://<your-resource>.openai.azure.com/",
-    "ApiKey":          "<your-api-key>",
-    "ChatDeployment":  "gpt-4.1"
+    "Endpoint":           "https://<your-resource>.openai.azure.com/",
+    "ApiKey":             "<your-api-key>",
+    "ChatDeployment":     "gpt-4.1",
+    "EmbeddingDeployment": "text-embedding-3-small"
+  },
+  "DynamicTools": {
+    "TopK": 5
   },
   "AzureAISearch": {
     "Endpoint":   "",
@@ -653,6 +661,7 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
 > - `Endpoint` — the URL ending in `.openai.azure.com/`
 > - `ApiKey` — either Key 1 or Key 2
 > - `ChatDeployment` — the **Deployment name** you chose in Azure OpenAI Studio, e.g. `gpt-4.1`
+> - `EmbeddingDeployment` — an embedding model deployment in the same resource, e.g. `text-embedding-3-small`
 
 > **No AI Search?** Leave `Endpoint` and `ApiKey` empty. The agent will skip RAG and answer from its training data alone.
 
@@ -1181,7 +1190,7 @@ Expected chain:
 - **RAG (Retrieval-Augmented Generation)** — `AzureAiSearchContextProvider` injects top-K KB articles from Azure AI Search on every turn
 - **File attachments** — upload `.txt`, `.pdf`, `.docx` (OCR via Azure Document Intelligence), and `.png`/`.jpg`/`.jpeg` (vision) via `POST /api/attachments`; staged in Redis for one-shot injection into the next agent turn
 - **Knowledge Base tab** — live search via `/api/kb?q=...`; displays `KbArticleCard` results from Azure AI Search
-- **My Tickets tab** — live ticket list fetched from McpServer `GET /tickets` REST endpoint
+- **My Tickets tab** — live ticket list fetched via AgentHost `GET /api/tickets` proxy (which internally calls McpServer `GET /tickets`)
 - **Settings panel** — dual health-check pinging McpServer + AgentHost `/healthz`
 - **MCP tools (10 total):**
   - Ticket: `create_ticket`, `get_ticket`, `search_tickets`, `update_ticket_status`, `add_ticket_comment`, `assign_ticket`

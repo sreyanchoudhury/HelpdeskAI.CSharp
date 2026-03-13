@@ -230,7 +230,11 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<api-key>",
-    "ChatDeployment": "gpt-4.1"
+    "ChatDeployment": "gpt-4.1",
+    "EmbeddingDeployment": "text-embedding-3-small"
+  },
+  "DynamicTools": {
+    "TopK": 5
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
