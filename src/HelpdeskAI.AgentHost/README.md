@@ -27,17 +27,17 @@ flowchart TD
     BROWSER(["💻  Browser  ·  Next.js  ·  Port 3000"]):::browser
 
     subgraph AH["⚙️  HelpdeskAI.AgentHost  ·  Port 5200"]
-        AGUI["MapAGUI /agent\nAG-UI deserialization  ·  IChatClient pipeline  ·  SSE streaming"]:::core
-        RAG["AzureAiSearchContextProvider\nRAG injection before each LLM call"]:::core
-        FI["IChatClient — FunctionInvocation\nTool discovery  ·  Azure OpenAI gpt-4.1"]:::core
-        MCP["McpToolsProvider\n→ http://localhost:5100/mcp"]:::core
-        HIST["RedisChatHistoryProvider\nper-session  ·  keyed by AG-UI threadId"]:::core
-        ATT["POST /api/attachments\n.txt → text   .pdf/.docx → OCR   .png/.jpg → vision\nBlobStorageService  ·  RedisAttachmentStore (1-hour staging)"]:::core
-        KB["GET /api/kb/search\nAzureAiSearchService"]:::core
+        AGUI["MapAGUI /agent<br/>AG-UI deserialization  ·  IChatClient pipeline  ·  SSE streaming"]:::core
+        RAG["AzureAiSearchContextProvider<br/>RAG injection before each LLM call"]:::core
+        FI["IChatClient — FunctionInvocation<br/>Tool discovery  ·  Azure OpenAI gpt-4.1"]:::core
+        MCP["McpToolsProvider<br/>→ http://localhost:5100/mcp"]:::core
+        HIST["RedisChatHistoryProvider<br/>per-session  ·  keyed by AG-UI threadId"]:::core
+        ATT["POST /api/attachments<br/>.txt → text   .pdf/.docx → OCR   .png/.jpg → vision<br/>BlobStorageService  ·  RedisAttachmentStore (1-hour staging)"]:::core
+        KB["GET /api/kb/search<br/>AzureAiSearchService"]:::core
     end
 
     MCPSRV(["🔧  McpServer  ·  Port 5100"]):::mcp
-    AOA{{"Azure OpenAI\ngpt-4.1"}}:::azure
+    AOA{{"Azure OpenAI<br/>gpt-4.1"}}:::azure
     AIS{{"Azure AI Search"}}:::azure
     ABS{{"Azure Blob Storage"}}:::azure
     ADI{{"Document Intelligence"}}:::azure
@@ -229,12 +229,12 @@ flowchart LR
     classDef endpoint fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
     classDef step     fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
 
-    S1(["💻  Browser\nPOST /agent"]):::endpoint
-    S2["①  Deserialize\nRunAgentInput"]:::step
-    S3["②  RAG Injection\nAI Search  ·  top-K KB context"]:::step
-    S4["③  LLM Reasoning\nTool calls  ·  gpt-4.1 response"]:::step
-    S5["④  SSE Stream\nTextMessageStart  ·  chunks  ·  ToolCall events"]:::step
-    S6(["💻  Browser\nUI updated"]):::endpoint
+    S1(["💻  Browser<br/>POST /agent"]):::endpoint
+    S2["①  Deserialize<br/>RunAgentInput"]:::step
+    S3["②  RAG Injection<br/>AI Search  ·  top-K KB context"]:::step
+    S4["③  LLM Reasoning<br/>Tool calls  ·  gpt-4.1 response"]:::step
+    S5["④  SSE Stream<br/>TextMessageStart  ·  chunks  ·  ToolCall events"]:::step
+    S6(["💻  Browser<br/>UI updated"]):::endpoint
 
     S1 --> S2 --> S3 --> S4 --> S5 --> S6
 ```

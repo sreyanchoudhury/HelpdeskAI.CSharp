@@ -63,14 +63,14 @@ flowchart TD
     classDef tool      fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
     classDef service   fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
 
-    AH(["⚙️  AgentHost  ·  Port 5200\nMcpToolsProvider  ·  HttpClientTransport"]):::agenthost
+    AH(["⚙️  AgentHost  ·  Port 5200<br/>McpToolsProvider  ·  HttpClientTransport"]):::agenthost
 
     subgraph MCP["🔧  HelpdeskAI.McpServer  ·  Port 5100"]
-        TT["TicketTools\ncreate  ·  get  ·  search  ·  update  ·  comment  ·  assign"]:::tool
-        SST["SystemStatusTools\nhealth  ·  incidents  ·  impact analysis"]:::tool
-        KT["KnowledgeBaseTools\nindex_kb_article  →  Azure AI Search"]:::tool
-        TS[("TicketService\nin-memory  ·  thread-safe")]:::service
-        SS[("SystemStatusService\n12 IT services  ·  incidents  ·  workarounds")]:::service
+        TT["TicketTools<br/>create  ·  get  ·  search  ·  update  ·  comment  ·  assign"]:::tool
+        SST["SystemStatusTools<br/>health  ·  incidents  ·  impact analysis"]:::tool
+        KT["KnowledgeBaseTools<br/>index_kb_article  →  Azure AI Search"]:::tool
+        TS[("TicketService<br/>in-memory  ·  thread-safe")]:::service
+        SS[("SystemStatusService<br/>12 IT services  ·  incidents  ·  workarounds")]:::service
     end
 
     style MCP fill:#010f0a,stroke:#10b981,color:#9098b0
