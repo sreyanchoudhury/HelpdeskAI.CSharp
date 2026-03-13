@@ -57,36 +57,67 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────┐
-│  Browser (React 19 + CopilotKit)                     │
-│  - HelpdeskChat.tsx (sidebar + multi-page UI)        │
-│  - HelpdeskActions.tsx (render actions + context)    │
-└────────────────┬─────────────────────────────────────┘
-                 │ AG-UI (POST /agent + SSE stream)
-                 ▼
-┌──────────────────────────────────────────────────────┐
-│  HelpdeskAI.AgentHost (.NET 10, port 5200)           │
-│  - MapAGUI("/agent", agent)                          │
-│  - Azure OpenAI integration (gpt-4.1)                │
-│  - Azure AI Search RAG context provider              │
-│  - MCP Tools Provider (connects to MCP Server)       │
-│  - Redis chat history (local dev only)               │
-└────────────────┬─────────────────────────────────────┘
-                 │ MCP / HTTP (port 5100)
-                 ▼
-┌──────────────────────────────────────────────────────┐
-│  HelpdeskAI.McpServer (.NET 10, port 5100)           │
-│  - MCP Tool Server (/mcp endpoint)                   │
-│  - Ticket Management Tools (5 tools)                 │
-│  - System Status & Monitoring Tools (3 tools)        │
-│  - In-memory storage with seed data                  │
-└──────────────────────────────────────────────────────┘
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
-   Azure OpenAI    Azure AI Search
-   (gpt-4.1)       (semantic search)
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#0f1117", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
+flowchart TD
+    classDef fe     fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
+    classDef agent  fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
+    classDef mcp    fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
+    classDef azure  fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
+    classDef redis  fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
+
+    subgraph BROWSER["💻  Browser  ·  React 19 + CopilotKit"]
+        FE1["HelpdeskChat.tsx\nsidebar · multi-page UI"]:::fe
+        FE2["HelpdeskActions.tsx\nrender actions · context"]:::fe
+    end
+
+    subgraph AGENTHOST["⚙️  AgentHost  ·  .NET 10  ·  :5200"]
+        AH1["MapAGUI /agent\nSSE stream endpoint"]:::agent
+        AH2["ThreadId Middleware\nper-session routing"]:::agent
+        AH3["AttachmentContextProvider\nupload  ·  OCR  ·  vision"]:::agent
+        AH4["AzureAiSearchContextProvider\nRAG  ·  BrowseLatestAsync"]:::agent
+        AH5["McpToolsProvider\nMCP HTTP client"]:::agent
+        AH6["RedisChatHistoryProvider\nper-session history"]:::agent
+    end
+
+    subgraph MCPSERVER["🔧  McpServer  ·  .NET 10  ·  :5100"]
+        MS1["TicketTools\ncreate · update · list · close · assign"]:::mcp
+        MS2["SystemStatusTools\nping · health · metrics"]:::mcp
+        MS3[("In-memory store\n+ seed data")]:::mcp
+    end
+
+    subgraph AZURE["☁️  Azure Services"]
+        AOA{{"Azure OpenAI\ngpt-4.1"}}:::azure
+        AIS{{"Azure AI Search\nvector + semantic"}}:::azure
+        ABS{{"Azure Blob Storage\nattachments"}}:::azure
+        ADI{{"Document Intelligence\nOCR"}}:::azure
+    end
+
+    REDIS[("🔴  Redis\nchat history")]:::redis
+
+    style BROWSER   fill:#060e20,stroke:#3d5afe,color:#9098b0
+    style AGENTHOST fill:#0a0315,stroke:#a855f7,color:#9098b0
+    style MCPSERVER fill:#010f0a,stroke:#10b981,color:#9098b0
+    style AZURE     fill:#01080e,stroke:#38bdf8,color:#9098b0
+
+    BROWSER -- "AG-UI  ·  POST /agent + SSE" --> AGENTHOST
+    BROWSER -- "PUT /api/attachments" --> AH3
+
+    AH1 --> AH2
+    AH2 --> AH3
+    AH2 --> AH4
+    AH2 --> AH5
+    AH2 --> AH6
+
+    AH5 -- "MCP HTTP  ·  POST /mcp" --> MCPSERVER
+    MS1 --> MS3
+    MS2 --> MS3
+
+    AH1 -- "chat completions" --> AOA
+    AH4 -- "semantic search"  --> AIS
+    AH3 -- "upload"           --> ABS
+    AH3 -- "OCR"              --> ADI
+    AH6 -- "read / write"     --> REDIS
 ```
 
 ---

@@ -15,41 +15,51 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 ## Architecture
 
-```
-Browser (Next.js @ Port 3000)
-    │
-    ├─ POST /agent (AG-UI stream)
-    │
-    └─ CORS allowed → http://localhost:3000
-            │ (via CopilotKit)
-            ▼
-    ───────────────────────────────────
-    HelpdeskAI.AgentHost (Port 5200)
-    ───────────────────────────────────
-            │
-            ├─ MapAGUI("/agent", agent)
-            │   ├─ AG-UI request deserialization
-            │   ├─ IChatClient pipeline invocation
-            │   └─ SSE response streaming
-            │
-            ├─ AzureAiSearchContextProvider (RAG injection)
-            │
-            ├─ IChatClient (FunctionInvocation middleware)
-            │  ├─ Tool discovery from McpToolsProvider
-            │  └─ Azure OpenAI gpt-4.1 invocation
-            │
-            ├─ McpToolsProvider → http://localhost:5100/mcp
-            │
-            ├─ RedisChatHistoryProvider (per-session, keyed by AG-UI threadId)
-            │
-            ├─ POST /api/attachments (AttachmentEndpoints)
-            │  ├─ .txt         → StreamReader (direct text)
-            │  ├─ .pdf / .docx → DocumentIntelligenceService (Azure OCR)
-            │  ├─ .png / .jpg  → raw bytes (vision content-part)
-            │  ├─ BlobStorageService → Azure Blob Storage
-            │  └─ RedisAttachmentStore (1-hour staging, load-and-clear)
-            │
-            └─ GET /api/kb/search → AzureAiSearchService
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#a855f7", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#0a0315", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
+flowchart TD
+    classDef browser  fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
+    classDef core     fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
+    classDef azure    fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
+    classDef redis    fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
+    classDef mcp      fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
+
+    BROWSER(["💻  Browser  ·  Next.js  ·  Port 3000"]):::browser
+
+    subgraph AH["⚙️  HelpdeskAI.AgentHost  ·  Port 5200"]
+        AGUI["MapAGUI /agent\nAG-UI deserialization  ·  IChatClient pipeline  ·  SSE streaming"]:::core
+        RAG["AzureAiSearchContextProvider\nRAG injection before each LLM call"]:::core
+        FI["IChatClient — FunctionInvocation\nTool discovery  ·  Azure OpenAI gpt-4.1"]:::core
+        MCP["McpToolsProvider\n→ http://localhost:5100/mcp"]:::core
+        HIST["RedisChatHistoryProvider\nper-session  ·  keyed by AG-UI threadId"]:::core
+        ATT["POST /api/attachments\n.txt → text   .pdf/.docx → OCR   .png/.jpg → vision\nBlobStorageService  ·  RedisAttachmentStore (1-hour staging)"]:::core
+        KB["GET /api/kb/search\nAzureAiSearchService"]:::core
+    end
+
+    MCPSRV(["🔧  McpServer  ·  Port 5100"]):::mcp
+    AOA{{"Azure OpenAI\ngpt-4.1"}}:::azure
+    AIS{{"Azure AI Search"}}:::azure
+    ABS{{"Azure Blob Storage"}}:::azure
+    ADI{{"Document Intelligence"}}:::azure
+    REDIS[("🔴  Redis")]:::redis
+
+    style AH fill:#0a0315,stroke:#a855f7,color:#9098b0
+
+    BROWSER -- "POST /agent  (AG-UI stream)" --> AGUI
+    BROWSER -- "POST /api/attachments"       --> ATT
+
+    AGUI --> RAG
+    AGUI --> HIST
+    RAG  --> FI
+    FI   --> MCP
+    FI   -- "chat completions" --> AOA
+    MCP  -- "MCP / HTTP"       --> MCPSRV
+    RAG  -- "semantic search"  --> AIS
+    KB   -- "semantic search"  --> AIS
+    ATT  -- "upload"           --> ABS
+    ATT  -- "OCR"              --> ADI
+    ATT  -- "1-hour staging"   --> REDIS
+    HIST -- "read / write"     --> REDIS
 ```
 
 ---
@@ -213,28 +223,20 @@ HelpdeskAI.AgentHost/
 
 ### Message Flow (one turn)
 
-```
-1. Browser sends POST /agent { message: "...", threadId: "..." }
-  ↓
-2. MapAGUI deserializes RunAgentInput
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#3d5afe", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
+flowchart LR
+    classDef endpoint fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
+    classDef step     fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
 
-3. AzureAiSearchContextProvider.ProvideAIContextAsync()
-   → Query AI Search for top-K articles matching the user message
-   → Inject as System message: "Here's relevant KB context: ..."
+    S1(["💻  Browser\nPOST /agent"]):::endpoint
+    S2["①  Deserialize\nRunAgentInput"]:::step
+    S3["②  RAG Injection\nAI Search  ·  top-K KB context"]:::step
+    S4["③  LLM Reasoning\nTool calls  ·  gpt-4.1 response"]:::step
+    S5["④  SSE Stream\nTextMessageStart  ·  chunks  ·  ToolCall events"]:::step
+    S6(["💻  Browser\nUI updated"]):::endpoint
 
-4. IChatClient.CompleteAsync(messages)
-   → FunctionInvocation middleware detects tool calls
-   → McpToolsProvider resolves tool from MCP Server
-   → Tool result returned to LLM
-   → LLM produces final response
-
-5. AG-UI SSE streaming
-   → TextMessageStart
-   → TextMessageContent (chunks)
-   → TextMessageEnd / ToolCall events
-   → Client receives messages in real time
-
-6. Browser receives streamed response, updates UI
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
 ```
 
 ### RAG (Retrieval-Augmented Generation)
