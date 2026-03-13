@@ -51,19 +51,18 @@ public static class HelpdeskAgentFactory
 
 	public static AIAgent Create(
 		IChatClient chatClient,
-		IReadOnlyList<AIFunction> tools,
 		ChatHistoryProvider historyProvider,
 		AIContextProvider searchProvider,
-		AIContextProvider attachmentProvider) =>
+		AIContextProvider attachmentProvider,
+		AIContextProvider toolSelectionProvider) =>
 		chatClient.AsAIAgent(new ChatClientAgentOptions
 		{
 			Name = AgentName,
 			ChatOptions = new ChatOptions
 			{
 				Instructions = BaseInstructions,
-				Tools = [.. tools.Cast<AITool>()]
 			},
 			ChatHistoryProvider = historyProvider,
-			AIContextProviders = [searchProvider, attachmentProvider]
+			AIContextProviders = [searchProvider, attachmentProvider, toolSelectionProvider]
 		});
 }

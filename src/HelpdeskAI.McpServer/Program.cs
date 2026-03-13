@@ -20,6 +20,8 @@ var app = builder.Build();
 
 app.MapMcp("/mcp");           // GET /mcp (SSE handshake) + POST /mcp (messages)
 
+// Internal-only REST endpoint — not browser-facing.
+// Called exclusively by AgentHost's TicketEndpoints proxy (GET /api/tickets).
 app.MapGet("/tickets", (TicketService svc, string? requestedBy, string? status, string? category) =>
 {
     TicketStatus?   s = status   is not null && Enum.TryParse<TicketStatus>(status,   true, out var sv) ? sv : null;

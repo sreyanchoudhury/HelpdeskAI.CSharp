@@ -33,6 +33,17 @@ IChatClient azureClient = string.IsNullOrWhiteSpace(aiSettings.ApiKey)
 		  .GetChatClient(aiSettings.ChatDeployment)
 		  .AsIChatClient();
 
+IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator =
+	string.IsNullOrWhiteSpace(aiSettings.ApiKey)
+		? new AzureOpenAIClient(new Uri(aiSettings.Endpoint), new DefaultAzureCredential())
+			  .GetEmbeddingClient(aiSettings.EmbeddingDeployment)
+			  .AsIEmbeddingGenerator()
+		: new AzureOpenAIClient(
+				  new Uri(aiSettings.Endpoint),
+				  new Azure.AzureKeyCredential(aiSettings.ApiKey))
+			  .GetEmbeddingClient(aiSettings.EmbeddingDeployment)
+			  .AsIEmbeddingGenerator();
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 	ConnectionMultiplexer.Connect(
 		cfg.GetConnectionString("Redis")
@@ -44,6 +55,11 @@ builder.Services.AddSingleton<IKnowledgeSearch>(sp => sp.GetRequiredService<Azur
 builder.Services.AddSingleton<IKnowledgeIngestion>(sp => sp.GetRequiredService<AzureAiSearchService>());
 builder.Services.AddSingleton<IMcpToolsProvider, McpToolsProvider>();
 builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
+
+// Named HttpClient for internal McpServer calls (base URL derived from MCP endpoint)
+var mcpBase = new Uri(cfg["McpServer:Endpoint"] ?? "http://localhost:5100/mcp");
+builder.Services.AddHttpClient("McpServer", c =>
+	c.BaseAddress = new Uri($"{mcpBase.Scheme}://{mcpBase.Authority}/"));
 builder.Services.AddSingleton<IAttachmentStore, RedisAttachmentStore>();
 builder.Services.AddSingleton<IDocumentIntelligenceService, DocumentIntelligenceService>();
 
@@ -90,6 +106,13 @@ var toolsProvider = app.Services.GetRequiredService<IMcpToolsProvider>();
 
 var tools = await toolsProvider.GetToolsAsync();
 
+// Pre-embed all tool descriptions once — index is reused for the app's lifetime
+var toolDescriptions = tools.Select(t => $"{t.Name}: {t.Description}").ToList();
+var toolEmbeddings = await embeddingGenerator.GenerateAsync(toolDescriptions);
+var toolIndex = tools
+	.Zip(toolEmbeddings, (t, e) => (Tool: t, Vector: e.Vector.ToArray()))
+	.ToList();
+
 var historyProvider = new RedisChatHistoryProvider(
 	app.Services.GetRequiredService<IRedisService>(),
 	chatClient,
@@ -103,10 +126,18 @@ var attachmentProvider = new AttachmentContextProvider(
 	app.Services.GetRequiredService<IAttachmentStore>(),
 	app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AttachmentContextProvider>());
 
-var agent = HelpdeskAgentFactory.Create(chatClient, tools, historyProvider, searchProvider, attachmentProvider);
+var topK = cfg.GetSection("DynamicTools").GetValue<int?>("TopK") ?? 5;
+var toolSelectionProvider = new DynamicToolSelectionProvider(
+	toolIndex,
+	embeddingGenerator,
+	topK,
+	app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<DynamicToolSelectionProvider>());
+
+var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, searchProvider, attachmentProvider, toolSelectionProvider);
 
 app.MapAGUI("/agent", agent);
 app.MapAttachmentEndpoints();
+app.MapTicketEndpoints();
 
 app.MapGet("/agent/info", () => Results.Ok(new
 {

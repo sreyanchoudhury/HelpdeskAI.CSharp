@@ -7,6 +7,12 @@ public sealed class AzureOpenAiSettings
     public string Endpoint { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
     public string ChatDeployment { get; set; } = "gpt-4.1";
+    public string EmbeddingDeployment { get; set; } = "text-embedding-3-small";
+}
+
+public sealed class DynamicToolsSettings
+{
+    public int TopK { get; set; } = 5;
 }
 
 public sealed class AzureAiSearchSettings

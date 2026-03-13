@@ -116,7 +116,8 @@ flowchart LR
     CK   -- "HttpAgent  ·  AG-UI"   --> AH
     KB   -- "GET /api/kb/search"    --> AH
     UL   -- "POST /api/attachments" --> AH
-    TK   -- "GET /tickets"          --> MS
+    TK   -- "GET /api/tickets"      --> AH
+    AH   -- "GET /tickets (internal)" --> MS
     STRT -- "GET /healthz"          --> AH
     STRT -- "GET /healthz"          --> MS
 ```
@@ -200,8 +201,8 @@ Set in `.env.local`:
 | Variable | Default | Purpose |
 |----------|---------|----------|
 | `AGENT_URL` | `http://localhost:5200/agent` | Includes `/agent` suffix — used by the copilotkit route **only** |
-| `AGENT_BASE_URL` | `http://localhost:5200` | No `/agent` suffix — used by `/api/kb` and `/api/status` |
-| `MCP_URL` | `http://127.0.0.1:5100` | McpServer base URL — used by `/api/tickets` and `/api/status` |
+| `AGENT_BASE_URL` | `http://localhost:5200` | No `/agent` suffix — used by `/api/kb`, `/api/status`, and `/api/tickets` |
+| `MCP_URL` | `http://127.0.0.1:5100` | McpServer base URL — used by `/api/status` only (tickets now proxied via AgentHost) |
 
 For production, update `next.config.ts`:
 ```typescript

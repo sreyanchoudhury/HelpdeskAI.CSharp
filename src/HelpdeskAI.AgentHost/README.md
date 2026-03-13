@@ -34,6 +34,8 @@ flowchart TD
         HIST["RedisChatHistoryProvider<br/>per-session  ·  keyed by AG-UI threadId"]:::core
         ATT["POST /api/attachments<br/>.txt → text   .pdf/.docx → OCR   .png/.jpg → vision<br/>BlobStorageService  ·  RedisAttachmentStore (1-hour staging)"]:::core
         KB["GET /api/kb/search<br/>AzureAiSearchService"]:::core
+        TKP["GET /api/tickets<br/>proxy → McpServer /tickets (internal)"]:::core
+        DTS["DynamicToolSelectionProvider<br/>text-embedding-3-small  ·  cosine top-K per turn"]:::core
     end
 
     MCPSRV(["🔧  McpServer  ·  Port 5100"]):::mcp
@@ -47,13 +49,17 @@ flowchart TD
 
     BROWSER -- "POST /agent  (AG-UI stream)" --> AGUI
     BROWSER -- "POST /api/attachments"       --> ATT
+    BROWSER -- "GET /api/tickets"            --> TKP
 
     AGUI --> RAG
     AGUI --> HIST
     RAG  --> FI
     FI   --> MCP
+    FI   --> DTS
     FI   -- "chat completions" --> AOA
     MCP  -- "MCP / HTTP"       --> MCPSRV
+    DTS  -- "embed query"      --> AOA
+    TKP  -- "GET /tickets"     --> MCPSRV
     RAG  -- "semantic search"  --> AIS
     KB   -- "semantic search"  --> AIS
     ATT  -- "upload"           --> ABS
@@ -92,7 +98,11 @@ Create `appsettings.Development.json` at project root:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4.1"
+    "ChatDeployment": "gpt-4.1",
+    "EmbeddingDeployment": "text-embedding-3-small"
+  },
+  "DynamicTools": {
+    "TopK": 5
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
@@ -150,7 +160,9 @@ npm run dev
 |---------|-----|------|----------|---------|
 | `AzureOpenAI` | `Endpoint` | string | ✅ | Azure OpenAI resource endpoint (ends with `/`) |
 | `AzureOpenAI` | `ApiKey` | string | ✅ | Admin API key for Azure OpenAI |
-| `AzureOpenAI` | `ChatDeployment` | string | ✅ | Deployment name (e.g., `gpt-4.1`) |
+| `AzureOpenAI` | `ChatDeployment` | string | ✅ | Chat model deployment name (e.g., `gpt-4.1`) |
+| `AzureOpenAI` | `EmbeddingDeployment` | string | ✅ | Embedding model deployment for dynamic tool selection (e.g., `text-embedding-3-small`) |
+| `DynamicTools` | `TopK` | int | | Top-K tools to inject per turn via cosine similarity (default: `5`) |
 | `AzureAISearch` | `Endpoint` | string | ❌ | Search service endpoint (leave empty to skip RAG) |
 | `AzureAISearch` | `ApiKey` | string | ❌ | Search admin key |
 | `AzureAISearch` | `IndexName` | string | | Index name (default: `helpdesk-kb`) |
@@ -202,9 +214,11 @@ HelpdeskAI.AgentHost/
 ├── Agents/
 │   ├── HelpdeskAgentFactory.cs          # Creates the main agent (IChatClient pipeline)
 │   ├── AzureAiSearchContextProvider.cs  # RAG injection before each LLM call
-│   └── AttachmentContextProvider.cs     # Injects staged attachment content into each turn
+│   ├── AttachmentContextProvider.cs     # Injects staged attachment content into each turn
+│   └── DynamicToolSelectionProvider.cs  # Per-turn cosine similarity tool selection via embeddings
 ├── Endpoints/
-│   └── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
+│   ├── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
+│   └── TicketEndpoints.cs          # GET /api/tickets — proxy to McpServer /tickets
 ├── Infrastructure/
 │   ├── AzureAiSearchService.cs     # Search client wrapper
 │   ├── BlobStorageService.cs       # Azure Blob Storage — GUID-prefixed uploads
@@ -231,7 +245,7 @@ flowchart LR
 
     S1(["💻  Browser<br/>POST /agent"]):::endpoint
     S2["①  Deserialize<br/>RunAgentInput"]:::step
-    S3["②  RAG Injection<br/>AI Search  ·  top-K KB context"]:::step
+    S3["②  RAG + Tool Selection<br/>AI Search  ·  top-K KB context<br/>DynamicToolSelectionProvider  ·  cosine top-K tools"]:::step
     S4["③  LLM Reasoning<br/>Tool calls  ·  gpt-4.1 response"]:::step
     S5["④  SSE Stream<br/>TextMessageStart  ·  chunks  ·  ToolCall events"]:::step
     S6(["💻  Browser<br/>UI updated"]):::endpoint
@@ -270,6 +284,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
 | `GET` | `/api/kb/search?q=...` | Knowledge base search (proxied from frontend `/api/kb`) |
 | `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
+| `GET` | `/api/tickets` | Ticket list proxy → McpServer `/tickets` (supports `?requestedBy=`, `?status=`, `?category=`) |
 
 ### POST /agent (AG-UI)
 

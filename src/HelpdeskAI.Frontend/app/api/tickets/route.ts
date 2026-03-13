@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const MCP_URL = process.env.MCP_URL ?? "http://127.0.0.1:5100";
+const AGENT_BASE_URL = process.env.AGENT_BASE_URL ?? "http://localhost:5200";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const qs = searchParams.toString();
   try {
-    const res = await fetch(`${MCP_URL}/tickets${qs ? `?${qs}` : ""}`, {
+    const res = await fetch(`${AGENT_BASE_URL}/api/tickets${qs ? `?${qs}` : ""}`, {
       cache: "no-store",
     });
     const data = await res.json();
