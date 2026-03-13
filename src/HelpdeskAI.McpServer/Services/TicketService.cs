@@ -5,8 +5,11 @@ namespace HelpdeskAI.McpServer.Services;
 
 public sealed class TicketService
 {
+	private const int MaxSearchResults = 15;
+	private const int InitialTicketNumber = 1000;
+
 	private readonly ConcurrentDictionary<string, Ticket> _tickets = new();
-	private int _nextId = 1000;
+	private int _nextId = InitialTicketNumber;
 
 	public TicketService() => Seed();
 
@@ -34,7 +37,7 @@ public sealed class TicketService
 			.Where(t => status is null || t.Status == status)
 			.Where(t => category is null || t.Category == category)
 			.OrderByDescending(t => t.CreatedAt)
-			.Take(15)
+			.Take(MaxSearchResults)
 			.ToList();
 
 	public Ticket? UpdateStatus(string id, TicketStatus status, string? resolution)
@@ -51,6 +54,16 @@ public sealed class TicketService
 		if (!_tickets.TryGetValue(id, out var ticket)) return null;
 		ticket.Comments.Add(new TicketComment { Author = author, Message = message, IsInternal = isInternal });
 		ticket.UpdatedAt = DateTimeOffset.UtcNow;
+		return ticket;
+	}
+
+	public Ticket? AssignTicket(string id, string assignTo)
+	{
+		if (!_tickets.TryGetValue(id, out var ticket)) return null;
+		ticket.AssignedTo = assignTo;
+		ticket.UpdatedAt = DateTimeOffset.UtcNow;
+		if (ticket.Status == TicketStatus.Open)
+			ticket.Status = TicketStatus.InProgress;
 		return ticket;
 	}
 

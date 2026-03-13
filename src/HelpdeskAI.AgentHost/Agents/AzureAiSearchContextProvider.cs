@@ -4,29 +4,10 @@ using Microsoft.Extensions.AI;
 
 namespace HelpdeskAI.AgentHost.Agents;
 
-/// <summary>
-/// MAF <see cref="AIContextProvider"/> that injects Azure AI Search (RAG) results
-/// into every agent turn before the LLM is invoked.
-///
-/// <para>
-/// The base <see cref="AIContextProvider.InvokingCoreAsync"/> filters the input
-/// to only external (caller-provided) messages before calling
-/// <see cref="ProvideAIContextAsync"/>, so <c>context.AIContext.Messages</c> here
-/// contains only the user's current turn � no history noise.
-/// </para>
-///
-/// <para>
-/// Nothing needs to be persisted after a turn, so
-/// <see cref="AIContextProvider.StoreAIContextAsync"/> is intentionally left as the
-/// no-op base implementation.
-/// </para>
-/// </summary>
 internal sealed class AzureAiSearchContextProvider(
     IKnowledgeSearch knowledgeSearch,
     ILogger<AzureAiSearchContextProvider> log) : AIContextProvider
 {
-    public override string StateKey => nameof(AzureAiSearchContextProvider);
-
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
         AIContextProvider.InvokingContext context,
         CancellationToken cancellationToken = default)

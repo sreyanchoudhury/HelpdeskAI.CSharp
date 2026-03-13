@@ -12,7 +12,9 @@ import { NextRequest } from "next/server";
 const agentUrl = process.env.AGENT_URL ?? "http://localhost:5200/agent";
 
 
-const helpdeskAgent = new HttpAgent({ url: agentUrl, agentId: "HelpdeskAgent" }) as any;
+// HttpAgent implements the AG-UI protocol; the CopilotRuntime agents map expects a
+// CopilotKitAgent shape, but the runtime accepts any object with the AG-UI call interface.
+const helpdeskAgent = new HttpAgent({ url: agentUrl, agentId: "HelpdeskAgent" }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 const serviceAdapter = new ExperimentalEmptyAdapter();
 

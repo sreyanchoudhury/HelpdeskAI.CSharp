@@ -32,4 +32,38 @@ public sealed class ConversationSettings
     public TimeSpan ThreadTtl { get; set; } = TimeSpan.FromDays(1);
 }
 
+public sealed class AzureBlobStorageSettings
+{
+    public string ConnectionString { get; set; } = string.Empty;
+    public string ContainerName { get; set; } = "helpdesk-attachments";
+}
+
+public sealed class DocumentIntelligenceSettings
+{
+    public string Endpoint { get; set; } = string.Empty;
+    public string Key { get; set; } = string.Empty;
+}
+
+// Attachment models
+
+public enum AttachmentKind { Text, Image }
+
+public sealed class ProcessedAttachment
+{
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "text/plain";
+    public AttachmentKind Kind { get; set; } = AttachmentKind.Text;
+    /// <summary>Extracted text for .txt / .pdf / .docx files. Null for images.</summary>
+    public string? ExtractedText { get; set; }
+    /// <summary>Base64-encoded bytes for image files, used for vision content-part injection. Null for non-image files.</summary>
+    public string? ImageBase64 { get; set; }
+    /// <summary>Permanent Blob Storage URL for the archived file.</summary>
+    public string? BlobUrl { get; set; }
+    public DateTimeOffset ProcessedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+// Knowledge base search result (returned by AzureAiSearchService.SearchStructuredAsync)
+
+internal sealed record KbSearchResult(string Id, string Title, string Content, string? Category);
+
 

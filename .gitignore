@@ -9,3 +9,4 @@ dist/
 *.pfx
 .DS_Store
 .next/
+secrets/
