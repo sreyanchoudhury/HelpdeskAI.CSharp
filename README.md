@@ -1,6 +1,6 @@
 ﻿# HelpdeskAI
 
-An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), and manages support tickets — all streamed in real time to the browser via Server-Sent Events.
+An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events.
 
 <img width="1914" height="915" alt="image" src="https://github.com/user-attachments/assets/4f909edb-04d2-4a9f-84c6-e3fd878c250a" />
 
@@ -330,9 +330,11 @@ npm install
 │         ├─ HelpdeskChat (multi-page shell)                          │
 │         │    └─ CopilotChat component (chat page)                   │
 │         │    └─ HelpdeskActions (render actions + suggestions)      │
-│         ├─ Tickets page                                             │
-│         ├─ Knowledge Base page                                      │
-│         └─ Settings page                                            │
+│         ├─ Tickets page  ←── GET /api/tickets (→ McpServer)        │
+│         ├─ Knowledge Base page  ←── GET /api/kb (→ AgentHost)      │
+│         └─ Settings page  ←── GET /api/status (→ both healthz)     │
+│                                                                     │
+│  File uploads: POST /api/upload (→ AgentHost /api/attachments)      │
 └────────────────────────┬────────────────────────────────────────────┘
                          │  AG-UI  (SSE stream + POST /agent)
                          ▼
@@ -344,9 +346,14 @@ npm install
 │         ├─ IChatClient pipeline                                     │
 │         │    FunctionInvocation → Logging → OpenTelemetry           │
 │         │    → Azure OpenAI (gpt-4.1)                               │
-│         ├─ RedisChatHistoryProvider  (per-session history +         │
-│         │    SummarizingChatReducer    LLM summarisation)           │
+│         ├─ RedisChatHistoryProvider  (per-session, keyed by         │
+│         │    SummarizingChatReducer    AG-UI threadId)              │
 │         └─ AzureAiSearchContextProvider  (RAG — injects KB context) │
+│                                                                     │
+│  AttachmentEndpoints  POST /api/attachments                         │
+│    ├─ BlobStorageService  → Azure Blob Storage                      │
+│    ├─ DocumentIntelligenceService  → Azure Document Intelligence    │
+│    └─ RedisAttachmentStore  (1-hour staging, load-and-clear)        │
 │                                                                     │
 │  McpToolsProvider  ─────────────────────────────────────────────┐   │
 └─────────────────────────────────────────────────────────────────┼───┘
@@ -357,16 +364,22 @@ npm install
 │  HelpdeskAI.McpServer  (.NET 10, port 5100)                         │
 │                                                                     │
 │  MapMcp("/mcp")                                                     │
-│    ├─ TicketTools        create / get / search / update / comment   │
-│    └─ SystemStatusTools  status / incidents / team-impact          │
+│    ├─ TicketTools      create / get / search / update / comment /   │
+│    │                   assign                                       │
+│    ├─ SystemStatusTools  status / incidents / team-impact           │
+│    └─ KnowledgeBaseTools  index_kb_article                          │
 │                                                                     │
 │  TicketService        (in-memory, thread-safe, seeded)              │
 │  SystemStatusService  (in-memory, 12 IT services + incidents)       │
+│  KnowledgeBaseService (Azure AI Search client)                      │
+│                                                                     │
+│  GET /tickets  (REST proxy for frontend)                            │
 └─────────────────────────────────────────────────────────────────────┘
-                    │
-         Azure AI Search
-         (semantic RAG,
-          helpdesk-kb index)
+                    │                        │
+         Azure AI Search          Azure Blob Storage +
+         (semantic RAG,            Azure Document Intelligence
+          helpdesk-kb index,        (file OCR + vision)
+          index_kb_article)
 ```
 
 ---
@@ -375,9 +388,9 @@ npm install
 
 | Project | Port | Role |
 |---------|------|------|
-| `HelpdeskAI.AgentHost` | 5200 | .NET 10 Web API — AG-UI endpoint, agent pipeline, Redis chat history |
-| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — MCP tool server (tickets + system status) |
-| `HelpdeskAI.Frontend` | 3000 (dev) | Next.js App Router — React frontend with CopilotKit integration |
+| `HelpdeskAI.AgentHost` | 5200 | .NET 10 Web API — AG-UI endpoint, agent pipeline, Redis chat history, file attachments |
+| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — 10 MCP tools (tickets, status, KB) + `GET /tickets` REST |
+| `HelpdeskAI.Frontend` | 3000 (dev) | Next.js App Router — React frontend with CopilotKit + 4 API proxy routes |
 
 ---
 
@@ -392,7 +405,7 @@ npm install
 | AG-UI hosting | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview | `MapAGUI()` SSE endpoint |
 | Agent + MAF providers | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc2 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
 | MCP client | `ModelContextProtocol` | 1.0.0 | `McpClientTool` implements `AIFunction` — zero adapter |
-| MCP server | `ModelContextProtocol.AspNetCore` | 1.0.0 | `AddMcpServer().WithHttpTransport()` |
+| MCP server | `ModelContextProtocol.AspNetCore` | 1.1.0 | `AddMcpServer().WithHttpTransport()` |
 | Azure OpenAI SDK | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
 | Azure AI Search | `Azure.Search.Documents` | 11.8.0-beta.1 | Semantic search / RAG |
 | Redis | `StackExchange.Redis` | 2.11.8 | Chat history Sorted Sets |
@@ -579,6 +592,10 @@ dotnet run
 # Terminal 3 — React dev server
 cd src/HelpdeskAI.Frontend
 npm install
+
+# Windows — increase Node.js heap to avoid OOM during type checking
+$env:NODE_OPTIONS="--max-old-space-size=4096"
+
 npm run dev
 ```
 
@@ -674,6 +691,10 @@ dotnet run
 # Terminal 3 — React dev server
 cd src/HelpdeskAI.Frontend
 npm install
+
+# Windows — increase Node.js heap to avoid OOM during type checking
+$env:NODE_OPTIONS="--max-old-space-size=4096"
+
 npm run dev
 # → http://localhost:3000
 ```
@@ -762,14 +783,17 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/agent` | AG-UI agent endpoint (SSE stream) |
-| `GET`  | `/agent/info` | Diagnostic — package stack versions |
+| `GET`  | `/agent/info` | Diagnostic — library names, runtime info |
 | `GET`  | `/healthz` | Health (includes Redis ping) |
+| `GET`  | `/api/kb/search?q=...` | Knowledge base search |
+| `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
 
 ### McpServer
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET/POST` | `/mcp` | MCP tool discovery + invocation |
+| `GET`  | `/tickets` | JSON ticket list (supports `?requestedBy=`, `?status=`, `?category=`) |
 | `GET`  | `/healthz` | Health check |
 
 ---
@@ -785,6 +809,7 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 | `search_tickets` | Filter by email / status / category (up to 15) |
 | `update_ticket_status` | Change status; resolution note required for Resolved/Closed |
 | `add_ticket_comment` | Add public or internal (IT-only) comment |
+| `assign_ticket` | Assign a ticket to an IT staff member |
 
 **System Status & Monitoring (3 tools):**
 
@@ -792,7 +817,13 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 |------|-------------|  
 | `get_system_status` | Live IT services health check with optional filtering |
 | `get_active_incidents` | All active incidents with impact and workarounds |
-| `check_impact_for_team` | Team-scoped incident filtering
+| `check_impact_for_team` | Team-scoped incident filtering |
+
+**Knowledge Base (1 tool):**
+
+| Tool | Description |
+|------|-------------|
+| `index_kb_article` | Save an incident resolution or document to Azure AI Search |
 
 ## UI Components
 
@@ -1133,3 +1164,45 @@ Expected chain:
 | INC-1011 | Password reset — locked out of Windows | Resolved | High |
 | INC-1012 | Slow internet — only 2 Mbps on office ethernet | Resolved | Medium |
 | INC-1013 | Company Portal not loading on Mac | Resolved | Low |
+
+---
+
+## Changelog
+
+### [1.1.0] — 2026-03-13
+
+**Refactoring & Upgrades**
+
+- **Package upgrades:** `ModelContextProtocol.AspNetCore` 1.0.0 → 1.1.0; HealthChecks preview.1 → preview.2
+- **C# refactor:**
+  - Extracted `ServiceStatus.cs` + `ServiceHealth` enum from `SystemStatusTools.cs` into `Models/`
+  - De-duplicated `BuildSearchOptions()` and `GetSeverityLabel()` by extraction into named methods
+  - Replaced all magic numbers/strings with named constants (`SemanticConfigName`, `SeparatorWidth`, `MaxSearchResults`, `InitialTicketNumber`)
+  - Cleaned XML doc comments — removed misleading SDK references and stale changelog bullets
+  - Removed `KbSearchResult` duplicate from `AzureAiSearchService.cs`; moved to `Models/Models.cs`
+- **TypeScript refactor:**
+  - Centralised all display maps into `lib/constants.ts` (`PRIORITY_COLOR`, `PRIORITY_BG`, `CATEGORY_ICON`, `HEALTH_COLOR`, `HEALTH_BG`, `HEALTH_ICON`, `KB_CATEGORY_COLOR`, `KB_CAT_ICON`, `DEMO_USER`)
+  - Removed duplicate `const` declarations from both `HelpdeskChat.tsx` and `HelpdeskActions.tsx`
+  - Extracted `AGENT_INSTRUCTIONS` to module scope (was an inline 40-line string)
+  - Fixed `React.KeyboardEvent` / `React.ChangeEvent` → named imports; removed unused default React import
+- **Redis:** Per-session cache keys now derived from the AG-UI `threadId` (read from the POST body by ASP.NET Core middleware via `ThreadIdContext`) — each browser tab has fully isolated chat history
+
+---
+
+### [1.0.0] — Initial release
+
+**Features**
+
+- **AI helpdesk chat** — real-time streaming via AG-UI protocol; system prompt with user context injected via `useCopilotReadable`
+- **Generative UI render actions** — `show_ticket_created`, `show_incident_alert`, `show_my_tickets` render inline cards in the chat
+- **RAG (Retrieval-Augmented Generation)** — `AzureAiSearchContextProvider` injects top-K KB articles from Azure AI Search on every turn
+- **File attachments** — upload `.txt`, `.pdf`, `.docx` (OCR via Azure Document Intelligence), and `.png`/`.jpg`/`.jpeg` (vision) via `POST /api/attachments`; staged in Redis for one-shot injection into the next agent turn
+- **Knowledge Base tab** — live search via `/api/kb?q=...`; displays `KbArticleCard` results from Azure AI Search
+- **My Tickets tab** — live ticket list fetched from McpServer `GET /tickets` REST endpoint
+- **Settings panel** — dual health-check pinging McpServer + AgentHost `/healthz`
+- **MCP tools (10 total):**
+  - Ticket: `create_ticket`, `get_ticket`, `search_tickets`, `update_ticket_status`, `add_ticket_comment`, `assign_ticket`
+  - System status: `get_system_status`, `get_active_incidents`, `check_impact_for_team`
+  - Knowledge base: `index_kb_article`
+- **Conversation summarisation** — `SummarizingChatReducer` compresses history after N messages
+- **Azure infrastructure** — Bicep one-click provisioning (`infra/deploy.ps1`) for Azure OpenAI + Azure AI Search

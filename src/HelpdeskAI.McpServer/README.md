@@ -6,19 +6,23 @@ An **ASP.NET Core (.NET 10)** Model Context Protocol (MCP) server that exposes I
 
 ## What It Does
 
-Hosts **8 MCP tools** over HTTP at `/mcp` in two categories:
+Hosts **10 MCP tools** over HTTP at `/mcp` in three categories:
 
-**Ticket Management (5 tools):**
+**Ticket Management (6 tools):**
 - Create support tickets
 - Retrieve ticket details with comments
 - Search and filter tickets by email/status/category
 - Update ticket status with resolution notes
 - Add public or internal comments
+- Assign tickets to IT staff members
 
 **System Status & Monitoring (3 tools):**
 - Check live health of IT services with incident details
 - View all active infrastructure incidents with workarounds
 - Get incident impact analysis for specific teams
+
+**Knowledge Base (1 tool):**
+- Index incident resolutions and documents into Azure AI Search
 
 ---
 
@@ -67,17 +71,30 @@ MCP Server (port 5100)
     ├─ SystemStatusService (12 IT services, incidents, workarounds)
     │
     └─ Tool Handlers
-       ├─ TicketTools (create, get, search, update, comment)
-       └─ SystemStatusTools (system health, incident checks)
+       ├─ TicketTools (create, get, search, update, comment, assign)
+       ├─ SystemStatusTools (system health, incident checks)
+       └─ KnowledgeBaseTools (index_kb_article)
 ```
+
+---
+
+## REST Endpoints
+
+In addition to MCP tools, the server exposes a plain HTTP endpoint for the frontend proxy:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/mcp` | MCP tool discovery + invocation |
+| `GET` | `/tickets` | JSON list of tickets — supports `?requestedBy=`, `?status=`, `?category=` query params |
+| `GET` | `/healthz` | Liveness probe |
 
 ---
 
 ## Tools Reference
 
-The server exposes **8 MCP tools** in two categories:
+The server exposes **10 MCP tools** in three categories:
 
-### Ticket Management (5 tools)
+### Ticket Management (6 tools)
 
 #### `create_ticket`
 
@@ -177,6 +194,23 @@ Add a public or internal comment to a ticket.
 Comment added to INC-1001. Total comments: 5
 ```
 
+#### `assign_ticket`
+
+Assign a ticket to an IT staff member.
+
+**Parameters:**
+```typescript
+{
+  ticketId: string    // e.g., "INC-1001"
+  assignee: string    // IT staff email or display name
+}
+```
+
+**Returns:** Confirmation
+```
+INC-1001 assigned to sarah.it@contoso.com
+```
+
 ### System Status (3 tools)
 
 These tools provide real-time IT infrastructure and service health status.
@@ -270,6 +304,31 @@ Active incidents affecting: Engineering
 ----------------------------------------------------
 2 incident(s) found. Raise a ticket if workarounds are insufficient.
 ```
+
+---
+
+### Knowledge Base (1 tool)
+
+#### `index_kb_article`
+
+Saves a document or incident resolution to the IT knowledge base (Azure AI Search) so it can be found in future RAG queries.
+
+**Parameters:**
+```typescript
+{
+  title:    string   // Short descriptive title (max 100 chars)
+  content:  string   // Full content — troubleshooting steps, resolution, or reference material
+  category?: string  // VPN | Email | Hardware | Network | Access | Printing | Software | Other
+}
+```
+
+**Returns:** KB article ID
+```
+Successfully indexed into the knowledge base. KB article ID: KB-0006.
+It will be available for retrieval in future helpdesk conversations.
+```
+
+> **Requires Azure AI Search** — configures via `AzureAISearch.Endpoint` + `AzureAISearch.ApiKey` in `appsettings.Development.json` on the **AgentHost** side. The MCP server's `KnowledgeBaseSettings` section must also point to the same Search endpoint.
 
 ---
 

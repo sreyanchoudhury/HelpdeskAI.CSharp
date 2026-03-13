@@ -40,7 +40,16 @@ Browser (Next.js @ Port 3000)
             │
             ├─ McpToolsProvider → http://localhost:5100/mcp
             │
-            └─ RedisChatHistoryProvider (local development only)
+            ├─ RedisChatHistoryProvider (per-session, keyed by AG-UI threadId)
+            │
+            ├─ POST /api/attachments (AttachmentEndpoints)
+            │  ├─ .txt         → StreamReader (direct text)
+            │  ├─ .pdf / .docx → DocumentIntelligenceService (Azure OCR)
+            │  ├─ .png / .jpg  → raw bytes (vision content-part)
+            │  ├─ BlobStorageService → Azure Blob Storage
+            │  └─ RedisAttachmentStore (1-hour staging, load-and-clear)
+            │
+            └─ GET /api/kb/search → AzureAiSearchService
 ```
 
 ---
@@ -140,6 +149,18 @@ npm run dev
 | `Conversation` | `SummarisationThreshold` | int | | Trigger summarization after N messages (default: 20) |
 | `Conversation` | `TailMessagesToKeep` | int | | Keep last N messages verbatim when summarizing (default: 6) |
 | `Conversation` | `ThreadTtl` | timespan | | Session expiry (default: 30 days) |
+| `AzureBlobStorage` | `ConnectionString` | string | ❌ | Azure Storage connection string for attachment uploads |
+| `AzureBlobStorage` | `ContainerName` | string | ❌ | Blob container (default: `helpdesk-attachments`) |
+| `DocumentIntelligence` | `Endpoint` | string | ❌ | Azure Document Intelligence endpoint for PDF/DOCX OCR |
+| `DocumentIntelligence` | `Key` | string | ❌ | Document Intelligence API key |
+
+> **Attachment services are optional.** When `AzureBlobStorage` or `DocumentIntelligence` config is absent the `/api/attachments` endpoint returns a graceful error; all other agent functionality is unaffected.
+| `AzureBlobStorage` | `ConnectionString` | string | ❌ | Azure Storage connection string for attachment uploads |
+| `AzureBlobStorage` | `ContainerName` | string | ❌ | Blob container name (default: `helpdesk-attachments`) |
+| `DocumentIntelligence` | `Endpoint` | string | ❌ | Azure Document Intelligence endpoint for PDF/DOCX OCR |
+| `DocumentIntelligence` | `Key` | string | ❌ | Document Intelligence API key |
+
+> **Attachment services are optional.** When `AzureBlobStorage` or `DocumentIntelligence` config is absent the `/api/attachments` endpoint returns a graceful error; all other agent functionality is unaffected.
 
 ### Getting Azure OpenAI Credentials
 
@@ -167,17 +188,23 @@ HelpdeskAI.AgentHost/
 ├── appsettings.json                # Production defaults
 ├── appsettings.Development.json    # Local overrides (.gitignored)
 ├── Abstractions/
-│   └── Abstractions.cs             # IContextProvider, AgentOptions interfaces
+│   └── Abstractions.cs             # IContextProvider, AgentOptions, IBlobStorageService, IAttachmentStore interfaces
 ├── Agents/
-│   ├── HelpdeskAgentFactory.cs     # Creates the main agent (IChatClient pipeline)
-│   └── AzureAiSearchContextProvider.cs  # RAG injection before each LLM call
+│   ├── HelpdeskAgentFactory.cs          # Creates the main agent (IChatClient pipeline)
+│   ├── AzureAiSearchContextProvider.cs  # RAG injection before each LLM call
+│   └── AttachmentContextProvider.cs     # Injects staged attachment content into each turn
+├── Endpoints/
+│   └── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
 ├── Infrastructure/
 │   ├── AzureAiSearchService.cs     # Search client wrapper
-│   └── McpToolsProvider.cs          # Connects to MCP server, loads tools
+│   ├── BlobStorageService.cs       # Azure Blob Storage — GUID-prefixed uploads
+│   ├── DocumentIntelligenceService.cs  # PDF/DOCX OCR via Azure Document Intelligence
+│   ├── McpToolsProvider.cs         # Connects to MCP server, loads tools
+│   ├── RedisChatHistoryProvider.cs # Per-session chat history (per AG-UI threadId)
+│   └── RedisAttachmentStore.cs     # 1-hour staging store (load-and-clear on next turn)
 ├── Models/
-│   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, etc.)
+│   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, AzureBlobStorageSettings, etc.)
 └── HelpdeskAI.AgentHost.csproj     # Project file (.NET 10)
-```
 ```
 
 ---
@@ -238,6 +265,9 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 |--------|------|------|
 | `POST` | `/agent` | AG-UI streaming endpoint (SSE) |
 | `GET` | `/healthz` | Liveness / readiness probe |
+| `GET` | `/agent/info` | Stack metadata — library names, runtime info |
+| `GET` | `/api/kb/search?q=...` | Knowledge base search (proxied from frontend `/api/kb`) |
+| `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
 
 ### POST /agent (AG-UI)
 
