@@ -56,24 +56,28 @@ Response:
 
 ## Architecture
 
-```
-Agent Host (port 5200)
-    │
-    └─ McpToolsProvider
-       │
-       └─ HttpClientTransport
-          │
-          ▼
-MCP Server (port 5100)
-    │
-    ├─ TicketService (in-memory, thread-safe)
-    │
-    ├─ SystemStatusService (12 IT services, incidents, workarounds)
-    │
-    └─ Tool Handlers
-       ├─ TicketTools (create, get, search, update, comment, assign)
-       ├─ SystemStatusTools (system health, incident checks)
-       └─ KnowledgeBaseTools (index_kb_article)
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#10b981", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#010f0a", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
+flowchart TD
+    classDef agenthost fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
+    classDef tool      fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
+    classDef service   fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
+
+    AH(["⚙️  AgentHost  ·  Port 5200\nMcpToolsProvider  ·  HttpClientTransport"]):::agenthost
+
+    subgraph MCP["🔧  HelpdeskAI.McpServer  ·  Port 5100"]
+        TT["TicketTools\ncreate  ·  get  ·  search  ·  update  ·  comment  ·  assign"]:::tool
+        SST["SystemStatusTools\nhealth  ·  incidents  ·  impact analysis"]:::tool
+        KT["KnowledgeBaseTools\nindex_kb_article  →  Azure AI Search"]:::tool
+        TS[("TicketService\nin-memory  ·  thread-safe")]:::service
+        SS[("SystemStatusService\n12 IT services  ·  incidents  ·  workarounds")]:::service
+    end
+
+    style MCP fill:#010f0a,stroke:#10b981,color:#9098b0
+
+    AH -- "MCP HTTP  ·  POST /mcp" --> MCP
+    TT  --> TS
+    SST --> SS
 ```
 
 ---

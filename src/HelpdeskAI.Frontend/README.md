@@ -74,30 +74,51 @@ lib/
 
 ## Architecture
 
-```
-Browser
-   │
-   ├─ Next.js App Router
-   │   │
-   │   ├─ app/layout.tsx — Metadata, fonts
-   │   │
-   │   └─ app/page.tsx
-   │       └─ CopilotKit Provider
-   │           └─ HelpdeskChat (multi-page UI)
-   │               ├─ Sidebar navigation
-   │               ├─ Chat page + HelpdeskActions (render actions)
-   │               ├─ Tickets page  ←── GET /api/tickets
-   │               ├─ Knowledge Base page  ←── GET /api/kb
-   │               └─ Settings page  ←── GET /api/status
-   │
-   └─ Next.js API Routes
-       ├─ app/api/copilotkit/route.ts
-       │   ├─ CopilotKit Runtime
-       │   └─ HttpAgent → Backend AG-UI (port 5200)
-       ├─ app/api/kb/route.ts      → GET AgentHost /api/kb/search
-       ├─ app/api/tickets/route.ts → GET McpServer /tickets
-       ├─ app/api/status/route.ts  → GET McpServer + AgentHost /healthz
-       └─ app/api/upload/route.ts  → POST AgentHost /api/attachments
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#0f1117", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
+flowchart LR
+    classDef ui      fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
+    classDef api     fill:#0d0a24,stroke:#818cf8,color:#e8eaf0,stroke-width:2px
+    classDef backend fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
+    classDef mcpsrv  fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
+
+    USER(["💻  Browser"]):::ui
+
+    subgraph APP["💻  Next.js App Router  ·  Port 3000"]
+        LAYOUT["app/layout.tsx\nmetadata  ·  fonts"]:::ui
+        PAGE["app/page.tsx\nCopilotKit Provider"]:::ui
+        CHAT["HelpdeskChat\nsidebar nav  ·  4-page UI"]:::ui
+        ACTIONS["HelpdeskActions\nrender actions  ·  useCopilotReadable"]:::ui
+    end
+
+    subgraph ROUTES["  Next.js API Routes"]
+        CK["api/copilotkit\nCopilotKit Runtime  ·  HttpAgent"]:::api
+        KB["api/kb\nKB search proxy"]:::api
+        TK["api/tickets\nTickets proxy"]:::api
+        STRT["api/status\nHealth check proxy"]:::api
+        UL["api/upload\nFile upload proxy"]:::api
+    end
+
+    AH(["⚙️  AgentHost  ·  :5200"]):::backend
+    MS(["🔧  McpServer  ·  :5100"]):::mcpsrv
+
+    style APP    fill:#06101e,stroke:#3d5afe,color:#9098b0
+    style ROUTES fill:#090718,stroke:#818cf8,color:#9098b0
+
+    USER --> LAYOUT --> PAGE --> CHAT --> ACTIONS
+
+    CHAT -- "AG-UI stream"     --> CK
+    CHAT -- "GET /api/kb"      --> KB
+    CHAT -- "GET /api/tickets" --> TK
+    CHAT -- "GET /api/status"  --> STRT
+    CHAT -- "POST /api/upload" --> UL
+
+    CK   -- "HttpAgent  ·  AG-UI"   --> AH
+    KB   -- "GET /api/kb/search"    --> AH
+    UL   -- "POST /api/attachments" --> AH
+    TK   -- "GET /tickets"          --> MS
+    STRT -- "GET /healthz"          --> AH
+    STRT -- "GET /healthz"          --> MS
 ```
 
 ---
