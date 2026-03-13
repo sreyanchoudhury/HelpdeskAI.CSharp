@@ -1,28 +1,24 @@
 ﻿using System.ComponentModel;
 using System.Text;
+using HelpdeskAI.McpServer.Models;
 using ModelContextProtocol.Server;
 
 namespace HelpdeskAI.McpServer.Tools;
 
-public enum ServiceHealth { Operational, Degraded, Outage, Maintenance }
-
-public sealed class ServiceStatus
-{
-	public string Name { get; init; } = string.Empty;
-	public string Category { get; init; } = string.Empty;
-	public ServiceHealth Health { get; init; } = ServiceHealth.Operational;
-	public string? StatusMessage { get; init; }
-	public string? IncidentId { get; init; }
-	public DateTimeOffset? IncidentStarted { get; init; }
-	public DateTimeOffset? EstimatedResolve { get; init; }
-	public string[] AffectedTeams { get; init; } = [];
-	public string? Workaround { get; init; }
-}
-
 [McpServerToolType]
 public static class SystemStatusTools
 {
+	private const int SeparatorWidth = 52;
+
 	private static readonly List<ServiceStatus> Services = BuildSeed();
+
+	private static string GetSeverityLabel(ServiceHealth h) => h switch
+	{
+		ServiceHealth.Outage      => "OUTAGE",
+		ServiceHealth.Degraded    => "DEGRADED",
+		ServiceHealth.Maintenance => "MAINTENANCE",
+		_                         => h.ToString().ToUpper(),
+	};
 
 	[McpServerTool(Name = "get_system_status")]
 	[Description("""
@@ -53,7 +49,7 @@ public static class SystemStatusTools
 
 		var sb = new StringBuilder();
 		sb.AppendLine($"IT System Status  {DateTimeOffset.UtcNow:R}");
-		sb.AppendLine(new string('-', 52));
+		sb.AppendLine(new string('-', SeparatorWidth));
 
 		foreach (var s in list)
 		{
@@ -73,7 +69,7 @@ public static class SystemStatusTools
 		}
 
 		var incidents = list.Count(s => s.Health != ServiceHealth.Operational);
-		sb.AppendLine(new string('-', 52));
+		sb.AppendLine(new string('-', SeparatorWidth));
 		sb.AppendLine($"{list.Count} service(s) checked  {incidents} active incident(s)");
 		return sb.ToString();
 	}
@@ -97,20 +93,12 @@ public static class SystemStatusTools
 
 		var sb = new StringBuilder();
 		sb.AppendLine($"Active IT Incidents ({incidents.Count})  {DateTimeOffset.UtcNow:R}");
-		sb.AppendLine(new string('=', 52));
+		sb.AppendLine(new string('=', SeparatorWidth));
 
 		foreach (var s in incidents)
 		{
-			var severity = s.Health switch
-			{
-				ServiceHealth.Outage => "OUTAGE",
-				ServiceHealth.Degraded => "DEGRADED",
-				ServiceHealth.Maintenance => "MAINTENANCE",
-				_ => s.Health.ToString().ToUpper(),
-			};
-
 			sb.AppendLine();
-			sb.AppendLine($"[{severity}] {s.Name}");
+			sb.AppendLine($"[{GetSeverityLabel(s.Health)}] {s.Name}");
 			if (s.IncidentId is not null)
 				sb.AppendLine($"  Incident ID : {s.IncidentId}");
 			sb.AppendLine($"  Category    : {s.Category}");
@@ -130,12 +118,10 @@ public static class SystemStatusTools
 		}
 
 		sb.AppendLine();
-		sb.AppendLine(new string('=', 52));
+		sb.AppendLine(new string('=', SeparatorWidth));
 		sb.AppendLine("For live updates, visit: https://status.contoso.com");
 		return sb.ToString();
 	}
-
-	//  3. check_impact_for_team 
 
 	[McpServerTool(Name = "check_impact_for_team")]
 	[Description("""
@@ -162,18 +148,11 @@ public static class SystemStatusTools
 
 		var sb = new StringBuilder();
 		sb.AppendLine($"Active incidents affecting: {team}");
-		sb.AppendLine(new string('-', 52));
+		sb.AppendLine(new string('-', SeparatorWidth));
 
 		foreach (var s in affected)
 		{
-			var severity = s.Health switch
-			{
-				ServiceHealth.Outage => "OUTAGE",
-				ServiceHealth.Degraded => "DEGRADED",
-				ServiceHealth.Maintenance => "MAINTENANCE",
-				_ => s.Health.ToString().ToUpper(),
-			};
-			sb.AppendLine($"[{severity}] {s.Name}");
+			sb.AppendLine($"[{GetSeverityLabel(s.Health)}] {s.Name}");
 			if (s.StatusMessage is not null)
 				sb.AppendLine($"  {s.StatusMessage}");
 			if (s.Workaround is not null)
@@ -182,7 +161,7 @@ public static class SystemStatusTools
 				sb.AppendLine($"  ETA: {s.EstimatedResolve:t} UTC");
 		}
 
-		sb.AppendLine(new string('-', 52));
+		sb.AppendLine(new string('-', SeparatorWidth));
 		sb.AppendLine($"{affected.Count} incident(s) found. Raise a ticket if workarounds are insufficient.");
 		return sb.ToString();
 	}

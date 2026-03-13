@@ -20,8 +20,6 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 	};
 
-	public override string StateKey => _sessionState.StateKey;
-
 	public RedisChatHistoryProvider(
 		IRedisService redisService,
 		IChatClient chatClient,
@@ -31,11 +29,14 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 		_chatClient = chatClient;
 		_settings = settings.Value;
 
-		// TODO: Replace the hardcoded user/session with real values from your
-		// auth context once authentication is wired up, e.g.:
-		//   stateInitializer: _ => new ProviderState { RedisKey = $"messages:{userId}:{sessionId}" }
+		// ThreadIdContext is set by middleware from the AG-UI threadId before this fires.
 		_sessionState = new ProviderSessionState<ProviderState>(
-			stateInitializer: _ => new ProviderState { RedisKey = "messages:alex.johnson:dev-session" },
+			stateInitializer: _ => new ProviderState
+			{
+				RedisKey = ThreadIdContext.Current is { Length: > 0 } tid
+					? $"messages:{tid}"
+					: "messages:dev-session"
+			},
 			stateKey: nameof(RedisChatHistoryProvider),
 			jsonSerializerOptions: JsonOptions);
 	}
@@ -66,7 +67,6 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 	{
 		var state = _sessionState.GetOrInitializeState(context.Session);
 
-		// Load existing messages so we can append.
 		var existing = new List<SerializableChatMessage>();
 		var json = await _redisService.GetAsync(state.RedisKey);
 		if (!string.IsNullOrEmpty(json))
@@ -86,7 +86,6 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 			JsonSerializer.Serialize(existing, JsonOptions),
 			_settings.ThreadTtl);
 
-		// Save state so the RedisKey survives across turns via AG-UI state protocol.
 		_sessionState.SaveState(context.Session, state);
 	}
 }

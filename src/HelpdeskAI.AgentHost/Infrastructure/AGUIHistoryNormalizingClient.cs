@@ -2,21 +2,8 @@
 
 namespace HelpdeskAI.AgentHost.Infrastructure;
 
-/// <summary>
-/// Normalizes chat message history by merging consecutive assistant tool-call messages
-/// into a single message to comply with OpenAI API requirements.
-///
-/// Transforms:
-///   assistant: toolCalls[call_A]
-///   assistant: toolCalls[call_B]
-///   tool:      result_A
-///   tool:      result_B
-///
-/// Into:
-///   assistant: toolCalls[call_A, call_B]
-///   tool:      result_A
-///   tool:      result_B
-/// </summary>
+// Merges consecutive assistant tool-call messages into one to satisfy OpenAI's
+// requirement that parallel tool calls appear in a single assistant message.
 internal sealed class AGUIHistoryNormalizingClient(IChatClient innerClient)
 	: DelegatingChatClient(innerClient)
 {
@@ -49,7 +36,6 @@ internal sealed class AGUIHistoryNormalizingClient(IChatClient innerClient)
 				continue;
 			}
 
-			// Collect the run of consecutive assistant tool-call messages.
 			var group = new List<ChatMessage> { msg };
 			i++;
 			while (i < list.Count && IsToolCallMessage(list[i]))
@@ -64,7 +50,6 @@ internal sealed class AGUIHistoryNormalizingClient(IChatClient innerClient)
 			}
 			else
 			{
-				// Merge all FunctionCallContent items into one assistant message.
 				var allCalls = group
 					.SelectMany(m => m.Contents.OfType<FunctionCallContent>())
 					.Cast<AIContent>()
@@ -72,7 +57,6 @@ internal sealed class AGUIHistoryNormalizingClient(IChatClient innerClient)
 				result.Add(new ChatMessage(ChatRole.Assistant, allCalls));
 			}
 
-			// Tool result messages that follow pass through unchanged.
 			while (i < list.Count && list[i].Role == ChatRole.Tool)
 			{
 				result.Add(list[i]);

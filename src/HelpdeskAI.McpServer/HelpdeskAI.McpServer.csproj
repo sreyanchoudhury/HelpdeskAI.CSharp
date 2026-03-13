@@ -9,13 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      MCP server-side hosting: HTTP+SSE transport, tool discovery, DI integration.
-      Latest stable: 0.3.0-preview.3 (AspNetCore extension on top of core 1.0.0)
-    -->
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.0.0" />
+    <!-- MCP server-side hosting: HTTP+SSE transport, tool discovery, DI integration. -->
+    <PackageReference Include="Azure.Search.Documents" Version="11.7.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.1.0" />
 
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0-preview.1.26104.118" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0-preview.2.26159.112" />
   </ItemGroup>
 
 </Project>
