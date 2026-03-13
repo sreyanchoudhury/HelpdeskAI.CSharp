@@ -25,6 +25,10 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 
 ```bash
 npm install
+
+# Windows — increase Node.js heap to avoid out-of-memory during type checking
+$env:NODE_OPTIONS="--max-old-space-size=4096"
+
 npm run dev
 # → http://localhost:3000
 ```
@@ -49,11 +53,21 @@ app/
 ├── globals.css                  # Global styles
 ├── next.config.ts               # Next.js configuration
 ├── api/
-│   └── copilotkit/
-│       └── route.ts             # CopilotKit Runtime endpoint
+│   ├── copilotkit/
+│   │   └── route.ts             # CopilotKit Runtime → AG-UI backend
+│   ├── kb/
+│   │   └── route.ts             # KB search proxy  → AgentHost /api/kb/search
+│   ├── tickets/
+│   │   └── route.ts             # Tickets proxy    → McpServer /tickets (REST)
+│   ├── status/
+│   │   └── route.ts             # Health check     → McpServer + AgentHost /healthz
+│   └── upload/
+│       └── route.ts             # File upload      → AgentHost /api/attachments
 components/
 ├── HelpdeskChat.tsx             # Main shell: sidebar nav, multi-page layout
 ├── HelpdeskActions.tsx          # Render actions: tickets, incidents, suggestions
+lib/
+└── constants.ts                 # Shared display maps (priority colours, category icons, health badges)
 ```
 
 ---
@@ -72,14 +86,18 @@ Browser
    │           └─ HelpdeskChat (multi-page UI)
    │               ├─ Sidebar navigation
    │               ├─ Chat page + HelpdeskActions (render actions)
-   │               ├─ Tickets page
-   │               ├─ Knowledge Base page (placeholder)
-   │               └─ Settings page (placeholder)
+   │               ├─ Tickets page  ←── GET /api/tickets
+   │               ├─ Knowledge Base page  ←── GET /api/kb
+   │               └─ Settings page  ←── GET /api/status
    │
-   └─ Next.js API Route
-       └─ app/api/copilotkit/route.ts
-           ├─ CopilotKit Runtime
-           └─ HttpAgent → Backend AG-UI (port 5200)
+   └─ Next.js API Routes
+       ├─ app/api/copilotkit/route.ts
+       │   ├─ CopilotKit Runtime
+       │   └─ HttpAgent → Backend AG-UI (port 5200)
+       ├─ app/api/kb/route.ts      → GET AgentHost /api/kb/search
+       ├─ app/api/tickets/route.ts → GET McpServer /tickets
+       ├─ app/api/status/route.ts  → GET McpServer + AgentHost /healthz
+       └─ app/api/upload/route.ts  → POST AgentHost /api/attachments
 ```
 
 ---
@@ -108,7 +126,8 @@ Main UI shell:
 - **Page router** — switches between pages on nav click
 - **Chat page** — hosts `CopilotChat` component + `HelpdeskActions`
 - **Tickets page** — displays user's created tickets with status badges
-- **Placeholder pages** — KB and Settings (coming soon)
+- **Knowledge Base page** — live search via `/api/kb?q=...`; renders `KbArticleCard` results sourced from Azure AI Search
+- **Settings page** — pings `/api/status`; renders green/red health indicators for McpServer + AgentHost
 - **Styling** — CopilotKit CSS variable overrides for dark theme
 
 ### `components/HelpdeskActions.tsx`
@@ -159,12 +178,16 @@ Set in `.env.local`:
 
 | Variable | Default | Purpose |
 |----------|---------|----------|
-| `AGENT_URL` | `http://localhost:5200/agent` | Backend AG-UI endpoint |
+| `AGENT_URL` | `http://localhost:5200/agent` | Includes `/agent` suffix — used by the copilotkit route **only** |
+| `AGENT_BASE_URL` | `http://localhost:5200` | No `/agent` suffix — used by `/api/kb` and `/api/status` |
+| `MCP_URL` | `http://127.0.0.1:5100` | McpServer base URL — used by `/api/tickets` and `/api/status` |
 
 For production, update `next.config.ts`:
 ```typescript
 env: {
-  AGENT_URL: process.env.AGENT_URL ?? "https://api.helpdeskai.example.com/agent",
+  AGENT_URL:      process.env.AGENT_URL      ?? "https://api.helpdeskai.example.com/agent",
+  AGENT_BASE_URL: process.env.AGENT_BASE_URL ?? "https://api.helpdeskai.example.com",
+  MCP_URL:        process.env.MCP_URL        ?? "https://mcp.helpdeskai.example.com",
 }
 ```
 
@@ -253,6 +276,21 @@ npm install
 ```bash
 cd ../HelpdeskAI.AgentHost
 dotnet run
+```
+
+### `AGENT_URL` vs `AGENT_BASE_URL` — 404 on KB / Settings pages
+
+**Symptom:** Knowledge Base search or Settings health panel returns 502 or 404.
+
+**Cause:** Two separate env vars control routing:
+- `AGENT_URL` — must include the `/agent` suffix; used **only** by `app/api/copilotkit/route.ts`
+- `AGENT_BASE_URL` — must **not** include `/agent`; used by `app/api/kb/route.ts` and `app/api/status/route.ts`
+
+**Fix:** Ensure both are set correctly in `.env.local`:
+```
+AGENT_URL=http://localhost:5200/agent
+AGENT_BASE_URL=http://localhost:5200
+MCP_URL=http://127.0.0.1:5100
 ```
 
 ### "Chat responses not streaming"

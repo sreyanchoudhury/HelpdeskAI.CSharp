@@ -90,6 +90,19 @@ public static class TicketTools
         var t = svc.AddComment(ticketId, author, message, isInternal);
         return t is null ? $"Not found: {ticketId}" : $"Comment added to {ticketId}. Total comments: {t.Comments.Count}";
     }
+
+    [McpServerTool(Name = "assign_ticket")]
+    [Description("Assigns a ticket to a support agent or team. Use when escalating or routing to a specific person or queue.")]
+    public static string AssignTicket(
+        TicketService svc,
+        [Description("Ticket ID")] string ticketId,
+        [Description("Email or name of the agent or team to assign to, e.g. helpdesk-tier2@contoso.com")] string assignTo)
+    {
+        var t = svc.AssignTicket(ticketId, assignTo);
+        return t is null
+            ? $"Not found: {ticketId}"
+            : $"{t.Id} assigned to {t.AssignedTo}. Status: {t.Status}";
+    }
 }
 
 
