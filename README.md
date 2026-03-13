@@ -2,7 +2,16 @@
 
 An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events.
 
-<img width="1914" height="915" alt="image" src="https://github.com/user-attachments/assets/4f909edb-04d2-4a9f-84c6-e3fd878c250a" />
+<table>
+  <tr>
+    <td><img alt="IT Support chat" src="images/it_support.png" /></td>
+    <td><img alt="Knowledge Base" src="images/knowledge_base.png" /></td>
+  </tr>
+  <tr>
+    <td><img alt="My Tickets" src="images/my_tickets.png" /></td>
+    <td><img alt="Settings" src="images/settings.png" /></td>
+  </tr>
+</table>
 
 ---
 
