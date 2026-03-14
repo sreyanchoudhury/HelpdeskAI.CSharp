@@ -5,38 +5,53 @@ namespace HelpdeskAI.AgentHost.Agents;
 
 /// <summary>
 /// Per-turn AIContextProvider that injects only the most relevant MCP tools into the LLM context.
-/// Tool descriptions are embedded once at startup (passed via constructor); only the user's query
-/// is embedded each turn, then cosine similarity selects the top-K tools.
+/// Tool descriptions are embedded once at startup (initialised via ApplicationStarted to avoid
+/// blocking the health probe); only the user's query is embedded each turn, then cosine similarity
+/// selects the top-K tools.
 /// </summary>
 internal sealed class DynamicToolSelectionProvider : AIContextProvider
 {
-	private readonly IReadOnlyList<(AIFunction Tool, float[] Vector)> _toolIndex;
+	// Resolved after server starts — awaited with a timeout on the first chat turn.
+	private readonly Task<IReadOnlyList<(AIFunction Tool, float[] Vector)>> _toolIndexTask;
 	private readonly IEmbeddingGenerator<string, Embedding<float>> _embedder;
 	private readonly int _topK;
 	private readonly ILogger<DynamicToolSelectionProvider> _logger;
 
 	public DynamicToolSelectionProvider(
-		IReadOnlyList<(AIFunction Tool, float[] Vector)> toolIndex,
+		Task<IReadOnlyList<(AIFunction Tool, float[] Vector)>> toolIndexTask,
 		IEmbeddingGenerator<string, Embedding<float>> embedder,
 		int topK,
 		ILogger<DynamicToolSelectionProvider> logger)
 	{
-		_toolIndex = toolIndex;
-		_embedder  = embedder;
-		_topK      = topK;
-		_logger    = logger;
+		_toolIndexTask = toolIndexTask;
+		_embedder      = embedder;
+		_topK          = topK;
+		_logger        = logger;
 	}
 
 	protected override async ValueTask<AIContext> ProvideAIContextAsync(
 		AIContextProvider.InvokingContext context, CancellationToken ct)
 	{
+		// Await the index — it resolves quickly after the first request if startup
+		// init has already completed; 60 s timeout guards against init failure.
+		IReadOnlyList<(AIFunction Tool, float[] Vector)> toolIndex;
+		try
+		{
+			toolIndex = await _toolIndexTask.WaitAsync(TimeSpan.FromSeconds(60), ct);
+		}
+		catch (Exception ex)
+		{
+			_logger.LogWarning(ex, "Tool index not ready — returning empty tool list");
+			return new AIContext { Tools = [] };
+		}
+
 		var query = context.AIContext.Messages?
 			.LastOrDefault(m => m.Role == ChatRole.User)?.Text;
 
 		if (string.IsNullOrWhiteSpace(query))
 		{
-			_logger.LogDebug("No user message — injecting all {Count} tools", _toolIndex.Count);
-			return new AIContext { Tools = [.. _toolIndex.Select(x => x.Tool).Cast<AITool>()] };
+			_logger.LogDebug("No user message — injecting all {Count} tools", toolIndex.Count);
+			return new AIContext { Tools = [.. toolIndex.Select(x => x.Tool).Cast<AITool>()] };
 		}
 
 		try
@@ -44,7 +59,7 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
 			var queryVec = (await _embedder.GenerateAsync([query], cancellationToken: ct))
 				[0].Vector.ToArray();
 
-			var selected = _toolIndex
+			var selected = toolIndex
 				.Select(x => (x.Tool, Score: Cosine(queryVec, x.Vector)))
 				.OrderByDescending(x => x.Score)
 				.Take(_topK)
@@ -58,8 +73,8 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
 		}
 		catch (Exception ex)
 		{
-			_logger.LogWarning(ex, "Embedding failed — falling back to all {Count} tools", _toolIndex.Count);
-			return new AIContext { Tools = [.. _toolIndex.Select(x => x.Tool).Cast<AITool>()] };
+			_logger.LogWarning(ex, "Embedding failed — falling back to all {Count} tools", toolIndex.Count);
+			return new AIContext { Tools = [.. toolIndex.Select(x => x.Tool).Cast<AITool>()] };
 		}
 	}
 

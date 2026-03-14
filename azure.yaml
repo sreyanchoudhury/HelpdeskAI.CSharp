@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: helpdeskaiapp
+
+infra:
+  provider: bicep
+  path: infra/app-deploy
+  module: apps
+
+services:
+  agenthost:
+    project: src/HelpdeskAI.AgentHost
+    language: dotnet
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
+      platform: linux/amd64
+      remoteBuild: true
+
+  mcpserver:
+    project: src/HelpdeskAI.McpServer
+    language: dotnet
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
+      platform: linux/amd64
+      remoteBuild: true
+
+  frontend:
+    project: src/HelpdeskAI.Frontend
+    language: js
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
+      platform: linux/amd64
+      remoteBuild: true

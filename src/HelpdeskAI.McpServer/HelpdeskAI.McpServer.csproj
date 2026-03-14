@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -6,10 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>HelpdeskAI.McpServer</RootNamespace>
     <AssemblyName>HelpdeskAI.McpServer</AssemblyName>
+    <UserSecretsId>e7630d2d-d507-4ebf-bdd7-7de917b68ed1</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- MCP server-side hosting: HTTP+SSE transport, tool discovery, DI integration. -->
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.4.0" />
     <PackageReference Include="Azure.Search.Documents" Version="11.7.0" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.1.0" />
 
