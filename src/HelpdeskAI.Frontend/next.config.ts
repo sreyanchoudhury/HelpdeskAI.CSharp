@@ -19,9 +19,9 @@ const nextConfig: NextConfig = {
     "pino",
     "pino-pretty",
   ],
-  env: {
-    AGENT_URL: process.env.AGENT_URL ?? "http://localhost:5200/agent",
-  },
+  // Do NOT put AGENT_URL in the env block — that bakes it at build time.
+  // Server-side API routes read process.env at runtime, which picks up
+  // the Container App env var automatically.
 };
 
 export default nextConfig;

@@ -90,8 +90,9 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
 
 builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
-builder.Services.AddHealthChecks()
-	.AddRedis(cfg.GetConnectionString("Redis") ?? "localhost:6379");
+// Redis is ephemeral/non-blocking — exclude it from the liveness check so
+// /healthz returns 200 whenever the app is running, regardless of Redis state.
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 app.UseCors();
