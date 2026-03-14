@@ -1,4 +1,5 @@
-﻿using HelpdeskAI.McpServer.Models;
+﻿using Azure.Monitor.OpenTelemetry.AspNetCore;
+using HelpdeskAI.McpServer.Models;
 using HelpdeskAI.McpServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +16,7 @@ builder.Services.AddMcpServer()
     .WithToolsFromAssembly();
 
 builder.Services.AddHealthChecks();
+builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
 var app = builder.Build();
 

@@ -1,5 +1,6 @@
 ﻿using Azure.AI.OpenAI;
 using Azure.Identity;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using HelpdeskAI.AgentHost.Abstractions;
 using HelpdeskAI.AgentHost.Agents;
 using HelpdeskAI.AgentHost.Endpoints;
@@ -45,9 +46,16 @@ IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator =
 			  .AsIEmbeddingGenerator();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-	ConnectionMultiplexer.Connect(
-		cfg.GetConnectionString("Redis")
-		?? throw new InvalidOperationException("Redis connection string missing")));
+{
+	var redisCs = cfg.GetConnectionString("Redis")
+		?? throw new InvalidOperationException("Redis connection string missing");
+	// abortConnect=false: non-blocking — app starts even if Redis isn't reachable yet.
+	// connectTimeout kept short so startup doesn't stall waiting for TCP resolution.
+	var options = ConfigurationOptions.Parse(redisCs);
+	options.AbortOnConnectFail = false;
+	options.ConnectTimeout = 5000;
+	return ConnectionMultiplexer.Connect(options);
+});
 
 builder.Services.AddSingleton<IRedisService, RedisService>();
 builder.Services.AddSingleton<AzureAiSearchService>();
@@ -73,9 +81,14 @@ var allowedOrigins = cfg["AllowedOrigins"]?.Split(',', StringSplitOptions.Remove
 	?? ["http://localhost:3000"];
 
 builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
-	p.WithOrigins(allowedOrigins)
-	 .AllowAnyHeader()
-	 .AllowAnyMethod()));
+{
+	if (allowedOrigins is ["*"])
+		p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+	else
+		p.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+}));
+
+builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
 builder.Services.AddHealthChecks()
 	.AddRedis(cfg.GetConnectionString("Redis") ?? "localhost:6379");
@@ -102,16 +115,6 @@ app.Use(async (context, next) =>
 });
 
 var chatClient = app.Services.GetRequiredService<IChatClient>();
-var toolsProvider = app.Services.GetRequiredService<IMcpToolsProvider>();
-
-var tools = await toolsProvider.GetToolsAsync();
-
-// Pre-embed all tool descriptions once — index is reused for the app's lifetime
-var toolDescriptions = tools.Select(t => $"{t.Name}: {t.Description}").ToList();
-var toolEmbeddings = await embeddingGenerator.GenerateAsync(toolDescriptions);
-var toolIndex = tools
-	.Zip(toolEmbeddings, (t, e) => (Tool: t, Vector: e.Vector.ToArray()))
-	.ToList();
 
 var historyProvider = new RedisChatHistoryProvider(
 	app.Services.GetRequiredService<IRedisService>(),
@@ -126,9 +129,14 @@ var attachmentProvider = new AttachmentContextProvider(
 	app.Services.GetRequiredService<IAttachmentStore>(),
 	app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AttachmentContextProvider>());
 
+// Tool index is built AFTER the HTTP server starts (via ApplicationStarted) so the
+// startup health probe passes immediately. Chat turns await this task (60 s guard).
+var toolIndexTcs = new TaskCompletionSource<IReadOnlyList<(AIFunction Tool, float[] Vector)>>(
+	TaskCreationOptions.RunContinuationsAsynchronously);
+
 var topK = cfg.GetSection("DynamicTools").GetValue<int?>("TopK") ?? 5;
 var toolSelectionProvider = new DynamicToolSelectionProvider(
-	toolIndex,
+	toolIndexTcs.Task,
 	embeddingGenerator,
 	topK,
 	app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<DynamicToolSelectionProvider>());
@@ -138,6 +146,32 @@ var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, searchProvi
 app.MapAGUI("/agent", agent);
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
+
+// Initialise tool index after the HTTP server starts so health probes pass immediately.
+// Chat turns await toolIndexTcs.Task with a 60 s guard inside DynamicToolSelectionProvider.
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+	_ = Task.Run(async () =>
+	{
+		try
+		{
+			var toolsProvider = app.Services.GetRequiredService<IMcpToolsProvider>();
+			var tools = await toolsProvider.GetToolsAsync();
+			var toolDescriptions = tools.Select(t => $"{t.Name}: {t.Description}").ToList();
+			var toolEmbeddings = await embeddingGenerator.GenerateAsync(toolDescriptions);
+			var index = tools
+				.Zip(toolEmbeddings, (t, e) => (Tool: t, Vector: e.Vector.ToArray()))
+				.ToList<(AIFunction Tool, float[] Vector)>();
+			toolIndexTcs.TrySetResult(index);
+			app.Logger.LogInformation("Tool index ready: {Count} tools embedded.", index.Count);
+		}
+		catch (Exception ex)
+		{
+			toolIndexTcs.TrySetException(ex);
+			app.Logger.LogError(ex, "Tool index initialisation failed.");
+		}
+	});
+});
 
 app.MapGet("/agent/info", () => Results.Ok(new
 {
