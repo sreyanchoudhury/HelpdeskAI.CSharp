@@ -3,12 +3,14 @@ using Azure.Search.Documents;
 using Azure.Search.Documents.Models;
 using HelpdeskAI.AgentHost.Abstractions;
 using HelpdeskAI.AgentHost.Models;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace HelpdeskAI.AgentHost.Infrastructure;
 
 internal sealed class AzureAiSearchService(
     IOptions<AzureAiSearchSettings> opts,
+    IMemoryCache cache,
     ILogger<AzureAiSearchService> log) : IKnowledgeSearch, IKnowledgeIngestion
 {
     private const string SemanticConfigName = "helpdesk-semantic-config";
@@ -31,9 +33,27 @@ internal sealed class AzureAiSearchService(
         Select = { "id", "title", "content", "category" }
     };
 
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(60);
+
     public async Task<string?> SearchAsync(string query, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query)) return null;
+
+        // Short messages like "ok", "thanks", "create the ticket" don't benefit from KB search.
+        // Skip the semantic query to save ~300-600ms on every follow-up/acknowledgment turn.
+        if (query.Trim().Length < 15)
+        {
+            log.LogDebug("Skipping AI Search — query too short ('{Query}')", query);
+            return null;
+        }
+
+        var cacheKey = $"search:v1:{query.Trim().ToLowerInvariant()}";
+        if (cache.TryGetValue(cacheKey, out string? cached))
+        {
+            log.LogDebug("AI Search cache hit for '{Query}'", query);
+            return cached;
+        }
+
         try
         {
             var results = await _client.SearchAsync<SearchDocument>(query, BuildSearchOptions(), ct);
@@ -48,8 +68,11 @@ internal sealed class AzureAiSearchService(
                 chunks.Add($"### {title}\n{snippet}");
             }
 
-            return chunks.Count == 0 ? null
+            var result = chunks.Count == 0 ? null
                 : "## Relevant IT Knowledge Base Articles\n\n" + string.Join("\n\n---\n\n", chunks);
+
+            cache.Set(cacheKey, result, CacheTtl);
+            return result;
         }
         catch (RequestFailedException ex)
         {

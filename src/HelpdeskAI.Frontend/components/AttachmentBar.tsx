@@ -8,6 +8,7 @@ export interface AttachedFile {
   contentType: string;
   uploading?: boolean;
   error?: string;
+  file?: File;
 }
 
 interface Props {

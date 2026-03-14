@@ -4,6 +4,7 @@ using HelpdeskAI.AgentHost.Abstractions;
 using HelpdeskAI.AgentHost.Models;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace HelpdeskAI.AgentHost.Infrastructure;
@@ -14,6 +15,7 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 	private readonly IChatClient _chatClient;
 	private readonly ConversationSettings _settings;
 	private readonly ProviderSessionState<ProviderState> _sessionState;
+	private readonly ILogger<RedisChatHistoryProvider> _logger;
 
 	private static readonly JsonSerializerOptions JsonOptions = new()
 	{
@@ -23,11 +25,13 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 	public RedisChatHistoryProvider(
 		IRedisService redisService,
 		IChatClient chatClient,
-		IOptions<ConversationSettings> settings)
+		IOptions<ConversationSettings> settings,
+		ILogger<RedisChatHistoryProvider> logger)
 	{
 		_redisService = redisService;
 		_chatClient = chatClient;
 		_settings = settings.Value;
+		_logger = logger;
 
 		// ThreadIdContext is set by middleware from the AG-UI threadId before this fires.
 		_sessionState = new ProviderSessionState<ProviderState>(
@@ -45,48 +49,67 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
 		InvokingContext context,
 		CancellationToken cancellationToken = default)
 	{
-		var state = _sessionState.GetOrInitializeState(context.Session);
-		var json = await _redisService.GetAsync(state.RedisKey);
+		try
+		{
+			var state = _sessionState.GetOrInitializeState(context.Session);
+			var json = await _redisService.GetAsync(state.RedisKey);
 
-		if (string.IsNullOrEmpty(json))
+			if (string.IsNullOrEmpty(json))
+				return [];
+
+			var messages = JsonSerializer.Deserialize<List<SerializableChatMessage>>(json, JsonOptions) ?? [];
+
+			var reducer = new SummarizingChatReducer(
+				_chatClient,
+				_settings.TailMessagesToKeep,
+				_settings.SummarisationThreshold);
+
+			return await reducer.ReduceAsync(messages.Select(m => m.ToChatMessage()), cancellationToken);
+		}
+		catch (Exception ex)
+		{
+			// Redis unavailable (e.g. connection not yet established, transient network issue).
+			// Degrade gracefully: start the turn with empty history rather than crashing the agent.
+			_logger.LogWarning(ex, "Redis read failed; starting turn with empty history.");
 			return [];
-
-		var messages = JsonSerializer.Deserialize<List<SerializableChatMessage>>(json, JsonOptions) ?? [];
-
-		var reducer = new SummarizingChatReducer(
-			_chatClient,
-			_settings.TailMessagesToKeep,
-			_settings.SummarisationThreshold);
-
-		return await reducer.ReduceAsync(messages.Select(m => m.ToChatMessage()), cancellationToken);
+		}
 	}
 
 	protected override async ValueTask StoreChatHistoryAsync(
 		InvokedContext context,
 		CancellationToken cancellationToken = default)
 	{
-		var state = _sessionState.GetOrInitializeState(context.Session);
+		try
+		{
+			var state = _sessionState.GetOrInitializeState(context.Session);
 
-		var existing = new List<SerializableChatMessage>();
-		var json = await _redisService.GetAsync(state.RedisKey);
-		if (!string.IsNullOrEmpty(json))
-			existing = JsonSerializer.Deserialize<List<SerializableChatMessage>>(json, JsonOptions) ?? [];
+			var existing = new List<SerializableChatMessage>();
+			var json = await _redisService.GetAsync(state.RedisKey);
+			if (!string.IsNullOrEmpty(json))
+				existing = JsonSerializer.Deserialize<List<SerializableChatMessage>>(json, JsonOptions) ?? [];
 
-		var newMessages = context.RequestMessages
-			.Concat(context.ResponseMessages ?? [])
-			.Where(m =>
-				(m.Role == ChatRole.User || m.Role == ChatRole.Assistant) &&
-				!string.IsNullOrWhiteSpace(m.Text))
-			.Select(SerializableChatMessage.FromChatMessage);
+			var newMessages = context.RequestMessages
+				.Concat(context.ResponseMessages ?? [])
+				.Where(m =>
+					(m.Role == ChatRole.User || m.Role == ChatRole.Assistant) &&
+					!string.IsNullOrWhiteSpace(m.Text))
+				.Select(SerializableChatMessage.FromChatMessage);
 
-		existing.AddRange(newMessages);
+			existing.AddRange(newMessages);
 
-		await _redisService.SetAsync(
-			state.RedisKey,
-			JsonSerializer.Serialize(existing, JsonOptions),
-			_settings.ThreadTtl);
+			await _redisService.SetAsync(
+				state.RedisKey,
+				JsonSerializer.Serialize(existing, JsonOptions),
+				_settings.ThreadTtl);
 
-		_sessionState.SaveState(context.Session, state);
+			_sessionState.SaveState(context.Session, state);
+		}
+		catch (Exception ex)
+		{
+			// Redis unavailable — history won't be persisted for this turn, but the
+			// response has already been streamed. Log and continue.
+			_logger.LogWarning(ex, "Redis write failed; history not persisted.");
+		}
 	}
 }
 

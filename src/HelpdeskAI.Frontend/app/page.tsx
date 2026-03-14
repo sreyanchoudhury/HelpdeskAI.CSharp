@@ -8,6 +8,8 @@ export default function Home() {
     <CopilotKit
       runtimeUrl="/api/copilotkit"
       agent="HelpdeskAgent"
+      showDevConsole
+      enableInspector
       onError={(event) => {
         // CopilotErrorEvent shape: { error: unknown } — not Error directly.
         // Suppress browser extension noise (React DevTools, Chrome extensions)

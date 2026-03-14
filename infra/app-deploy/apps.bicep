@@ -212,8 +212,8 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',  secretRef: 'appinsights-cs' }
           ]
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('0.75')
+            memory: '1.5Gi'
           }
         }
       ]
@@ -284,8 +284,8 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',  secretRef: 'appinsights-cs' }
           ]
           resources: {
-            cpu: json('0.75')
-            memory: '1.5Gi'
+            cpu: json('1.5')
+            memory: '3Gi'
           }
         }
       ]

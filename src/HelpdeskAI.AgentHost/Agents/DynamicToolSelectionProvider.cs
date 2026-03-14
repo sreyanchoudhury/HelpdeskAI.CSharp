@@ -45,6 +45,14 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
 			return new AIContext { Tools = [] };
 		}
 
+		// If the total tool count is at or below topK, ranking adds nothing — skip the
+		// embedding API call entirely and return all tools directly.
+		if (toolIndex.Count <= _topK)
+		{
+			_logger.LogDebug("Tool count {Count} <= topK {TopK} — returning all tools without embedding", toolIndex.Count, _topK);
+			return new AIContext { Tools = [.. toolIndex.Select(x => x.Tool).Cast<AITool>()] };
+		}
+
 		var query = context.AIContext.Messages?
 			.LastOrDefault(m => m.Role == ChatRole.User)?.Text;
 
