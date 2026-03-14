@@ -14,6 +14,18 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 
 ---
 
+
+## Configuration
+
+### Example .env.local (do not use real secrets)
+
+```
+MCP_URL=http://localhost:5100/mcp
+```
+
+For Azure deployment, set these values via Azure App Service/Container App settings. Never commit real secrets.
+
+---
 ## Quick Start
 
 ### Prerequisites

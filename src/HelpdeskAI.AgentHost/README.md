@@ -13,6 +13,33 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 ---
 
+
+## Configuration
+
+### Example appsettings.json (do not use real secrets)
+
+```json
+{
+  "AzureOpenAI": {
+    "Endpoint": "<YOUR_AZURE_OPENAI_ENDPOINT>",
+    "ApiKey": "<YOUR_AZURE_OPENAI_API_KEY>"
+  },
+  "AzureAISearch": {
+    "Endpoint": "<YOUR_AZURE_AI_SEARCH_ENDPOINT>",
+    "ApiKey": "<YOUR_AZURE_AI_SEARCH_API_KEY>"
+  },
+  "ConnectionStrings": {
+    "Redis": "localhost:6379"
+  },
+  "McpServer": {
+    "Endpoint": "http://localhost:5100/mcp"
+  }
+}
+```
+
+For Azure deployment, set these values via Azure App Service/Container App settings or Key Vault. Never commit real secrets.
+
+---
 ## Architecture
 
 ```mermaid
