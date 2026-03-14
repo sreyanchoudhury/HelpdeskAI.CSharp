@@ -15,6 +15,36 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ---
 
+
+## Configuration & Environment Setup
+
+### Local Development
+- Uses `appsettings.json` (or `appsettings.Development.json`) for backend services and `.env.local` for the frontend.
+- Example (do not use real secrets in code):
+  - `src/HelpdeskAI.AgentHost/appsettings.json`:
+    - `"AzureOpenAI:ApiKey": "<YOUR_AZURE_OPENAI_API_KEY>"`
+    - `"AzureAISearch:ApiKey": "<YOUR_AZURE_AI_SEARCH_API_KEY>"`
+    - `"ConnectionStrings:Redis": "localhost:6379"`
+    - `"McpServer:Endpoint": "http://localhost:5100/mcp"`
+  - `src/HelpdeskAI.Frontend/.env.local`:
+    - `MCP_URL=http://localhost:5100/mcp`
+- To override settings, create `appsettings.Development.json` or set environment variables locally.
+
+### Azure Deployment
+- Secrets and connection strings are injected via Azure App Service/Container App settings or Azure Key Vault.
+- Example (do not use real secrets in code):
+  - `"AzureOpenAI:ApiKey": "<YOUR_AZURE_OPENAI_API_KEY_FROM_AZURE>"`
+  - `"AzureAISearch:ApiKey": "<YOUR_AZURE_AI_SEARCH_API_KEY_FROM_AZURE>"`
+  - `"ConnectionStrings:Redis": "<YOUR_AZURE_REDIS_CONNECTION_STRING>"`
+  - `"McpServer:Endpoint": "<YOUR_MCP_SERVER_URL>"`
+- See `infra/README.md` for provisioning and secret management.
+
+### Switching Environments
+- Local: Use `.env.local` and local `appsettings.json`.
+- Azure: Use Azure Portal or Bicep deployment to set environment variables and secrets.
+
+---
+
 ## Table of Contents
 
 ### Getting Started

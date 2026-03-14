@@ -26,6 +26,24 @@ Hosts **10 MCP tools** over HTTP at `/mcp` in three categories:
 
 ---
 
+
+## Configuration
+
+### Example appsettings.json (do not use real secrets)
+
+```json
+{
+  "AzureAISearch": {
+    "Endpoint": "<YOUR_AZURE_AI_SEARCH_ENDPOINT>",
+    "ApiKey": "<YOUR_AZURE_AI_SEARCH_API_KEY>"
+  },
+  "APPLICATIONINSIGHTS_CONNECTION_STRING": "<YOUR_APPINSIGHTS_CONNECTION_STRING>"
+}
+```
+
+For Azure deployment, set these values via Azure App Service/Container App settings or Key Vault. Never commit real secrets.
+
+---
 ## Quick Start
 
 ### Prerequisites
