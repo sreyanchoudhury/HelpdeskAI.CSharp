@@ -325,9 +325,13 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'frontend'
           image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           env: [
-            // Points to the AgentHost external FQDN — set from the deployed resource's ingress FQDN
+            // Points to the AgentHost external FQDN — set from the deployed resource's ingress FQDN.
+            // NOTE: AGENT_URL must NOT be in next.config.ts env block or it gets baked at build time.
+            //       These are read at runtime by Next.js API routes via process.env.
             { name: 'AGENT_URL',      value: 'https://${agentHostApp.properties.configuration.ingress.fqdn}/agent' }
             { name: 'AGENT_BASE_URL', value: 'https://${agentHostApp.properties.configuration.ingress.fqdn}' }
+            // Internal hostname — reachable from other apps within the same Container Apps environment.
+            { name: 'MCP_URL',        value: 'http://${names.mcpServer}' }
             { name: 'NODE_ENV',       value: 'production' }
           ]
           resources: {
