@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 // MCP_URL: internal hostname within the Container Apps environment.
 // AGENT_BASE_URL: external FQDN of AgentHost (set by Bicep).
-const MCP_URL        = process.env.MCP_URL        ?? "http://helpdeskaiapp-dev-mcpserver";
+const MCP_URL        = process.env.MCP_URL        ?? "http://localhost:5100";
 const AGENT_BASE_URL = process.env.AGENT_BASE_URL ?? "http://localhost:5200";
 
 async function ping(url: string): Promise<"ok" | "down"> {

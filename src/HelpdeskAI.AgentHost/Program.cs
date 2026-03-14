@@ -50,10 +50,14 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 	var redisCs = cfg.GetConnectionString("Redis")
 		?? throw new InvalidOperationException("Redis connection string missing");
 	// abortConnect=false: non-blocking — app starts even if Redis isn't reachable yet.
-	// connectTimeout kept short so startup doesn't stall waiting for TCP resolution.
+	// syncTimeout: wait up to 15 s for a command to be sent — gives the multiplexer
+	//   time to establish the connection after the Container App's DNS becomes ready.
+	// keepAlive: ping every 60 s to prevent the Azure TCP proxy from dropping idle connections.
 	var options = ConfigurationOptions.Parse(redisCs);
 	options.AbortOnConnectFail = false;
-	options.ConnectTimeout = 5000;
+	options.ConnectTimeout = 10000;
+	options.SyncTimeout = 15000;
+	options.KeepAlive = 60;
 	return ConnectionMultiplexer.Connect(options);
 });
 
@@ -88,6 +92,7 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
 		p.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
 }));
 
+builder.Services.AddMemoryCache();
 builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
 // Redis is ephemeral/non-blocking — exclude it from the liveness check so
@@ -120,7 +125,8 @@ var chatClient = app.Services.GetRequiredService<IChatClient>();
 var historyProvider = new RedisChatHistoryProvider(
 	app.Services.GetRequiredService<IRedisService>(),
 	chatClient,
-	app.Services.GetRequiredService<IOptions<ConversationSettings>>());
+	app.Services.GetRequiredService<IOptions<ConversationSettings>>(),
+	app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<RedisChatHistoryProvider>());
 
 var searchProvider = new AzureAiSearchContextProvider(
 	app.Services.GetRequiredService<IKnowledgeSearch>(),

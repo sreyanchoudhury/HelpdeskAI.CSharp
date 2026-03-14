@@ -1,6 +1,6 @@
 "use client";
 
-import { useCopilotAction, useCopilotReadable, useCopilotChatSuggestions } from "@copilotkit/react-core";
+import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import type { AttachedFile } from "./AttachmentBar";
 import {
   DEMO_USER,
@@ -633,12 +633,6 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
       return <RelatedArticlesCard articles={parsed} status={status} />;
     },
     handler: () => "Related articles card displayed.",
-  });
-
-  // ── Suggestions ───────────────────────────────────────────────────────────
-  useCopilotChatSuggestions({
-    instructions: "Suggest 3 short follow-up questions for an IT helpdesk user. Under 8 words each. Focus on: VPN issues, ticket status, system outages, software installs, access requests.",
-    maxSuggestions: 3,
   });
 
   return null;

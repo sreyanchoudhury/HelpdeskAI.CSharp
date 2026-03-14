@@ -450,21 +450,23 @@ interface AttachmentContextValue {
   attachedFiles: AttachedFile[];
   onAdd: (file: File) => void;
   onRemove: (name: string) => void;
+  onRetry: (name: string) => void;
   clearAll: () => void;
 }
 const AttachmentContext = createContext<AttachmentContextValue>({
-  attachedFiles: [], onAdd: () => {}, onRemove: () => {}, clearAll: () => {},
+  attachedFiles: [], onAdd: () => {}, onRemove: () => {}, onRetry: () => {}, clearAll: () => {},
 });
 
 // ── Custom chat input with built-in paperclip ────────────────────────────────────
 function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
-  const { attachedFiles, onAdd, onRemove, clearAll } = useContext(AttachmentContext);
+  const { attachedFiles, onAdd, onRemove, onRetry, clearAll } = useContext(AttachmentContext);
   const [text, setText] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const isUploading = attachedFiles.some(f => f.uploading);
   const readyFiles = attachedFiles.filter(f => !f.uploading && !f.error);
-  const canSend = !inProgress && (text.trim().length > 0 || readyFiles.length > 0);
+  const canSend = !inProgress && !isUploading && (text.trim().length > 0 || readyFiles.length > 0);
 
   const fileIcon = (name: string) => {
     const e = name.split(".").pop()?.toLowerCase();
@@ -518,6 +520,12 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
                   background: `${color}22`, color, border: `1px solid ${color}44`,
                 }}>
                   {f.uploading ? "⏳" : f.error ? "⚠️" : fileIcon(f.name)} {f.name}
+                  {f.error && (
+                    <button onClick={() => onRetry(f.name)} title="Retry upload" style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color, fontSize: 14, lineHeight: 1, padding: "0 2px", marginLeft: 2,
+                    }}>↺</button>
+                  )}
                   {!f.uploading && (
                     <button onClick={() => onRemove(f.name)} style={{
                       background: "none", border: "none", cursor: "pointer",
@@ -533,12 +541,13 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
         {/* Textarea */}
         <textarea
           ref={textareaRef}
-          placeholder="Describe your IT issue…"
+          placeholder={isUploading ? "Waiting for file upload to complete…" : "Describe your IT issue…"}
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          disabled={isUploading}
           rows={1}
-          style={{ overflow: "hidden" }}
+          style={{ overflow: "hidden", opacity: isUploading ? 0.5 : 1 }}
         />
 
         {/* Controls: paperclip ← spacer → send/stop */}
@@ -635,13 +644,18 @@ export function HelpdeskChat() {
       contentType: file.type || "text/plain",
       blobUrl: "",
       uploading: true,
+      file,
     };
     setAttachedFiles(prev => [...prev, placeholder]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body });
+      const res = await fetch("/api/upload", { method: "POST", body, signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
@@ -655,14 +669,24 @@ export function HelpdeskChat() {
         )
       );
     } catch (err) {
+      clearTimeout(timeoutId);
+      const isTimeout = err instanceof DOMException && err.name === "AbortError";
       setAttachedFiles(prev =>
         prev.map(f =>
           f.name === placeholder.name && f.uploading
-            ? { ...f, uploading: false, error: (err as Error).message }
+            ? { ...f, uploading: false, error: isTimeout ? "Upload timed out" : (err as Error).message }
             : f
         )
       );
     }
+  };
+
+  const handleRetryAttachment = (name: string) => {
+    const entry = attachedFiles.find(f => f.name === name);
+    if (!entry?.file) return;
+    const fileToRetry = entry.file;
+    setAttachedFiles(prev => prev.filter(f => f.name !== name));
+    handleAttachFile(fileToRetry);
   };
 
   const handleRemoveAttachment = (name: string) => {
@@ -728,6 +752,7 @@ export function HelpdeskChat() {
             attachedFiles,
             onAdd: handleAttachFile,
             onRemove: handleRemoveAttachment,
+            onRetry: handleRetryAttachment,
             clearAll: clearAllAttachments,
           }}>
             <HelpdeskActions
