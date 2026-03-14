@@ -466,7 +466,9 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
 
   const isUploading = attachedFiles.some(f => f.uploading);
   const readyFiles = attachedFiles.filter(f => !f.uploading && !f.error);
-  const canSend = !inProgress && !isUploading && (text.trim().length > 0 || readyFiles.length > 0);
+  // Disable input and attachment while agent is responding or uploading
+  const inputDisabled = inProgress || isUploading;
+  const canSend = !inputDisabled && (text.trim().length > 0 || readyFiles.length > 0);
 
   const fileIcon = (name: string) => {
     const e = name.split(".").pop()?.toLowerCase();
@@ -541,13 +543,13 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
         {/* Textarea */}
         <textarea
           ref={textareaRef}
-          placeholder={isUploading ? "Waiting for file upload to complete…" : "Describe your IT issue…"}
+          placeholder={inputDisabled ? (isUploading ? "Waiting for file upload to complete…" : "Agent is responding…") : "Describe your IT issue…"}
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
-          disabled={isUploading}
+          disabled={inputDisabled}
           rows={1}
-          style={{ overflow: "hidden", opacity: isUploading ? 0.5 : 1 }}
+          style={{ overflow: "hidden", opacity: inputDisabled ? 0.5 : 1 }}
         />
 
         {/* Controls: paperclip ← spacer → send/stop */}
@@ -558,7 +560,7 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
           <button
             className="copilotKitInputControlButton"
             onClick={() => fileRef.current?.click()}
-            disabled={inProgress}
+            disabled={inputDisabled}
             title="Attach a file (.txt, .pdf, .docx, .png, .jpg)"
             aria-label="Attach file"
           >
