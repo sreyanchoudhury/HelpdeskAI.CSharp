@@ -267,6 +267,88 @@ If you get a quota error, try a different region.
 
 ---
 
+## Container Apps Deployment (`app-deploy/`)
+
+The `app-deploy/` subfolder contains a separate Bicep template (`apps.bicep`) that provisions
+the full application stack: Container Apps Environment, Azure Container Registry, Redis,
+McpServer, AgentHost, and Frontend.
+
+This is deployed via **Azure Developer CLI (`azd`)**, not directly with `az deployment group create`.
+
+```bash
+azd provision   # provisions infrastructure (images reset to placeholder)
+azd deploy      # builds Docker images → pushes to ACR → updates Container Apps with real images
+```
+
+> **Always run both together.** `azd provision` alone leaves the placeholder image
+> (`mcr.microsoft.com/azuredocs/containerapps-helloworld:latest`) in the Container Apps, which
+> will fail the startup probe because it listens on port 80 while the ingress expects port 8080.
+
+### Updating Environment Variables After Deployment
+
+**Do NOT re-run the bicep template to change env vars.** Running `az deployment group create` with
+`apps.bicep` (or the Azure Portal's bicep workflow) resets images back to the placeholder and
+causes all revisions to fail startup probes.
+
+Use `az containerapp update --set-env-vars` for targeted changes:
+
+```bash
+# Change a single env var (preserves the current image — safe)
+az containerapp update \
+  --name helpdeskaiapp-dev-agenthost \
+  --resource-group rg-helpdeskaiapp-dev \
+  --set-env-vars "ConnectionStrings__Redis=helpdeskaiapp-dev-redis:6379,abortConnect=false,connectTimeout=5000"
+
+# Change the image only
+az containerapp update \
+  --name helpdeskaiapp-dev-agenthost \
+  --resource-group rg-helpdeskaiapp-dev \
+  --image <acrName>.azurecr.io/helpdeskaiapp/agenthost-...:azd-deploy-<timestamp>
+```
+
+> Note the double underscore `__` separator for nested config keys (ASP.NET Core convention).
+
+### Recovering from a Broken Revision
+
+If a revision gets stuck in startup probe failure (image reset to placeholder):
+
+1. Find the last working revision and its ACR image:
+   ```bash
+   az containerapp revision list \
+     --name helpdeskaiapp-dev-agenthost \
+     --resource-group rg-helpdeskaiapp-dev \
+     --query '[].{name:name, traffic:properties.trafficWeight, image:properties.template.containers[0].image}'
+   ```
+
+2. Restore with `az containerapp update` (specify both image and any env var changes):
+   ```bash
+   az containerapp update \
+     --name helpdeskaiapp-dev-agenthost \
+     --resource-group rg-helpdeskaiapp-dev \
+     --image <last-working-acr-image>
+
+   az containerapp update \
+     --name helpdeskaiapp-dev-mcpserver \
+     --resource-group rg-helpdeskaiapp-dev \
+     --image <last-working-acr-image>
+   ```
+
+3. Confirm the new revision is healthy:
+   ```bash
+   az containerapp revision list \
+     --name helpdeskaiapp-dev-agenthost \
+     --resource-group rg-helpdeskaiapp-dev \
+     --query '[].{name:name, traffic:properties.trafficWeight, healthy:properties.healthState}'
+   ```
+
+### Internal Hostnames
+
+Within the same Container Apps Environment:
+- **HTTP apps** (McpServer): `http://helpdeskaiapp-dev-mcpserver/mcp` — short name, no TLS
+- **TCP apps** (Redis): `helpdeskaiapp-dev-redis:6379` — short name works within the environment
+
+---
+
 ## Troubleshooting
 
 ### "Insufficient permissions"
