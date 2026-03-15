@@ -955,6 +955,35 @@ useCopilotChatSuggestions({
 - **Bicep not installed** — run `az bicep install` then retry.
 - **Region quota** — Azure OpenAI `gpt-4.1` has limited regional availability. Try `swedencentral` or `eastus2` if your region lacks quota.
 
+### Container App revision fails startup probe after a configuration change
+
+**Symptom:** New revision stuck in `startup probe failed: connection refused` restart loop; logs show the placeholder image `mcr.microsoft.com/azuredocs/containerapps-helloworld:latest` being pulled.
+
+**Cause:** The `apps.bicep` template was re-deployed directly (e.g. via `az deployment group create` or the Azure Portal's bicep workflow). This resets Container App images back to the placeholder, which listens on port 80 — but the startup probe checks port 8080, causing immediate failure.
+
+**Fix:** Use `az containerapp update` to restore the last working ACR image (and apply any env var changes):
+
+```bash
+# Find the last working revision's image
+az containerapp revision list \
+  --name helpdeskaiapp-dev-agenthost \
+  --resource-group rg-helpdeskaiapp-dev \
+  --query '[].{name:name, traffic:properties.trafficWeight, image:properties.template.containers[0].image}'
+
+# Restore it (optionally adding --set-env-vars for any changes)
+az containerapp update \
+  --name helpdeskaiapp-dev-agenthost \
+  --resource-group rg-helpdeskaiapp-dev \
+  --image <last-working-acr-image>
+
+az containerapp update \
+  --name helpdeskaiapp-dev-mcpserver \
+  --resource-group rg-helpdeskaiapp-dev \
+  --image <last-working-acr-image>
+```
+
+**Rule of thumb:** To change an env var, use `--set-env-vars`. To update images, use `azd deploy`. Never use raw `az deployment group create` with `apps.bicep` for post-deployment changes.
+
 ---
 
 ## Demo Prompts

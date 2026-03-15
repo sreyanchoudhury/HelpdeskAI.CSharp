@@ -273,10 +273,10 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AzureAISearch__IndexName',               value: aiSearchIndexName }
             { name: 'DynamicTools__TopK',                     value: '5' }
             // Internal hostnames within a Container Apps Environment:
-            //   HTTP apps  → http://<appname>  (no FQDN, no TLS)
-            //   TCP apps   → <appname>.<env-default-domain>:<port>  (full FQDN required for TCP)
+            //   HTTP apps  → http://<appname>          (short name, no TLS)
+            //   TCP apps   → <appname>:<port>          (short name resolves within the environment)
             { name: 'McpServer__Endpoint',                    value: 'http://${names.mcpServer}/mcp' }
-            { name: 'ConnectionStrings__Redis',               value: '${names.redis}.${caEnv.properties.defaultDomain}:6379,abortConnect=false,connectTimeout=5000' }
+            { name: 'ConnectionStrings__Redis',               value: '${names.redis}:6379,abortConnect=false,connectTimeout=5000' }
             { name: 'AzureBlobStorage__ConnectionString',     secretRef: 'blob-connection-string' }
             { name: 'AzureBlobStorage__ContainerName',        value: blobContainerName }
             { name: 'DocumentIntelligence__Endpoint',         secretRef: 'doc-intel-endpoint' }
