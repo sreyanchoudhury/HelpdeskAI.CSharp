@@ -280,16 +280,17 @@ Key styles:
 
 ## Dependencies
 
-| Package | Purpose |
-|-----------|----------|
-| `react` | UI framework |
-| `next` | Framework (app router, SSR, static gen) |
-| `@copilotkit/react-core` | CopilotKit provider and hooks |
-| `@copilotkit/react-ui` | CopilotKit UI components |
-| `@copilotkit/runtime` | CopilotKit runtime integration |
-| `@ag-ui/client` | HttpAgent (AG-UI protocol) |
-| `@ag-ui/core` | AG-UI types and utilities |
-| `typescript` | Type checking |
+| Package | Version | Purpose |
+|-----------|---------|----------|
+| `react` | 19.2.4 | UI framework |
+| `react-dom` | 19.2.4 | React DOM renderer |
+| `next` | 16.1.6 | Framework (app router, SSR, static generation) |
+| `@copilotkit/react-core` | 1.54.0 | CopilotKit provider and hooks |
+| `@copilotkit/react-ui` | 1.54.0 | CopilotKit UI components (CopilotChat) |
+| `@copilotkit/runtime` | 1.54.0 | CopilotKit runtime integration |
+| `@ag-ui/client` | 0.0.47 | `HttpAgent` (AG-UI protocol) |
+| `@ag-ui/core` | 0.0.47 | AG-UI types and utilities |
+| `typescript` | 5.9.3 | Type checking (devDependency) |
 
 ---
 

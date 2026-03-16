@@ -7,7 +7,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 ## What It Does
 
 - **Hosts the AI agent** — AG-UI endpoint at `/agent` (Server-Sent Events streaming)
-- **Integrates Azure OpenAI** — calls `gpt-4.1` for chat completions
+- **Integrates Azure OpenAI** — calls `gpt-4.1-mini` for chat completions
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
 - **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticket management and system status monitoring
 
@@ -56,7 +56,7 @@ flowchart TD
     subgraph AH["⚙️  HelpdeskAI.AgentHost  ·  Port 5200"]
         AGUI["MapAGUI /agent<br/>AG-UI deserialization  ·  IChatClient pipeline  ·  SSE streaming"]:::core
         RAG["AzureAiSearchContextProvider<br/>RAG injection before each LLM call"]:::core
-        FI["IChatClient — FunctionInvocation<br/>Tool discovery  ·  Azure OpenAI gpt-4.1"]:::core
+        FI["IChatClient — FunctionInvocation<br/>Tool discovery  ·  Azure OpenAI gpt-4.1-mini"]:::core
         MCP["McpToolsProvider<br/>→ http://localhost:5100/mcp"]:::core
         HIST["RedisChatHistoryProvider<br/>per-session  ·  keyed by AG-UI threadId"]:::core
         ATT["POST /api/attachments<br/>.txt → text   .pdf/.docx → OCR   .png/.jpg → vision<br/>BlobStorageService  ·  RedisAttachmentStore (1-hour staging)"]:::core
@@ -125,7 +125,7 @@ Create `appsettings.Development.json` at project root:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4.1",
+    "ChatDeployment": "gpt-4.1-mini",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -141,8 +141,8 @@ Create `appsettings.Development.json` at project root:
     "Endpoint": "http://localhost:5100/mcp"
   },
   "Conversation": {
-    "SummarisationThreshold": 20,
-    "TailMessagesToKeep": 6,
+    "SummarisationThreshold": 40,
+    "TailMessagesToKeep": 5,
     "ThreadTtl": "30.00:00:00"
   }
 }
@@ -195,17 +195,11 @@ npm run dev
 | `AzureAISearch` | `IndexName` | string | | Index name (default: `helpdesk-kb`) |
 | `AzureAISearch` | `TopK` | int | | Top-K results to inject (default: 3) |
 | `McpServer` | `Endpoint` | string | | MCP server URL (default: `http://localhost:5100/mcp`) |
-| `Conversation` | `SummarisationThreshold` | int | | Trigger summarization after N messages (default: 20) |
-| `Conversation` | `TailMessagesToKeep` | int | | Keep last N messages verbatim when summarizing (default: 6) |
+| `Conversation` | `SummarisationThreshold` | int | | Trigger summarization after N messages (default: 40) |
+| `Conversation` | `TailMessagesToKeep` | int | | Keep last N messages verbatim when summarizing (default: 5) |
 | `Conversation` | `ThreadTtl` | timespan | | Session expiry (default: 30 days) |
 | `AzureBlobStorage` | `ConnectionString` | string | ❌ | Azure Storage connection string for attachment uploads |
 | `AzureBlobStorage` | `ContainerName` | string | ❌ | Blob container (default: `helpdesk-attachments`) |
-| `DocumentIntelligence` | `Endpoint` | string | ❌ | Azure Document Intelligence endpoint for PDF/DOCX OCR |
-| `DocumentIntelligence` | `Key` | string | ❌ | Document Intelligence API key |
-
-> **Attachment services are optional.** When `AzureBlobStorage` or `DocumentIntelligence` config is absent the `/api/attachments` endpoint returns a graceful error; all other agent functionality is unaffected.
-| `AzureBlobStorage` | `ConnectionString` | string | ❌ | Azure Storage connection string for attachment uploads |
-| `AzureBlobStorage` | `ContainerName` | string | ❌ | Blob container name (default: `helpdesk-attachments`) |
 | `DocumentIntelligence` | `Endpoint` | string | ❌ | Azure Document Intelligence endpoint for PDF/DOCX OCR |
 | `DocumentIntelligence` | `Key` | string | ❌ | Document Intelligence API key |
 
@@ -247,12 +241,16 @@ HelpdeskAI.AgentHost/
 │   ├── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
 │   └── TicketEndpoints.cs          # GET /api/tickets — proxy to McpServer /tickets
 ├── Infrastructure/
-│   ├── AzureAiSearchService.cs     # Search client wrapper
-│   ├── BlobStorageService.cs       # Azure Blob Storage — GUID-prefixed uploads
-│   ├── DocumentIntelligenceService.cs  # PDF/DOCX OCR via Azure Document Intelligence
-│   ├── McpToolsProvider.cs         # Connects to MCP server, loads tools
-│   ├── RedisChatHistoryProvider.cs # Per-session chat history (per AG-UI threadId)
-│   └── RedisAttachmentStore.cs     # 1-hour staging store (load-and-clear on next turn)
+│   ├── AGUIHistoryNormalizingClient.cs  # Merges consecutive assistant tool-call messages for OpenAI parallel tool-call compatibility
+│   ├── AzureAiSearchService.cs          # Azure AI Search client wrapper (search + index)
+│   ├── BlobStorageService.cs            # Azure Blob Storage — GUID-prefixed attachment uploads
+│   ├── DocumentIntelligenceService.cs   # PDF/DOCX/image OCR via Azure Document Intelligence
+│   ├── McpToolsProvider.cs              # Connects to McpServer at startup, loads and caches tools; RefreshAsync reconnects on session expiry
+│   ├── RedisAttachmentStore.cs          # 1-hour one-shot staging store for attachments (load-and-clear on next turn)
+│   ├── RedisChatHistoryProvider.cs      # Per-session chat history keyed by AG-UI threadId
+│   ├── RedisService.cs                  # Low-level IRedisService implementation (StringGet / StringSet / KeyDelete)
+│   ├── RetryingMcpTool.cs               # DelegatingAIFunction wrapper — catches Session not found (HTTP -32001), reconnects, retries once
+│   └── ThreadIdCapturingClient.cs       # AsyncLocal<string?> holder for AG-UI threadId; populated by request middleware
 ├── Models/
 │   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, AzureBlobStorageSettings, etc.)
 └── HelpdeskAI.AgentHost.csproj     # Project file (.NET 10)
@@ -366,11 +364,15 @@ The agent has access to these tools via MCP:
 - `search_tickets` — filter by email, status, category
 - `update_ticket_status` — change ticket status with resolution
 - `add_ticket_comment` — add public or internal comment
+- `assign_ticket` — assign a ticket to an IT staff member
 
 **System Status & Monitoring:**
 - `get_system_status` — live IT services health check
 - `get_active_incidents` — all active incidents with details
 - `check_impact_for_team` — incidents affecting a specific team
+
+**Knowledge Base:**
+- `index_kb_article` — save an incident resolution or document to Azure AI Search for future RAG retrieval
 
 See [src/HelpdeskAI.McpServer/README.md](../HelpdeskAI.McpServer/README.md) for full tool details.
 
@@ -471,12 +473,19 @@ cd ../HelpdeskAI.McpServer && dotnet run
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `Microsoft.Extensions.AI` | 10.3.0 | IChatClient, AIFunction |
-| `Microsoft.Extensions.AI.OpenAI` | 10.3.0 | Azure OpenAI adapter |
-| `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview | AG-UI hosting (`MapAGUI`) |
-| `Azure.AI.OpenAI` | 2.8.0-beta.1 | Azure OpenAI SDK |
-| `Azure.Search.Documents` | 11.8.0-beta.1 | AI Search client |
-| `ModelContextProtocol` | 1.0.0 | MCP client |
+| `Microsoft.Extensions.AI` | 10.4.0 | `IChatClient`, `AIFunction`, `DelegatingAIFunction` |
+| `Microsoft.Extensions.AI.OpenAI` | 10.4.0 | Azure OpenAI adapter (`AsIChatClient()`) |
+| `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
+| `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
+| `ModelContextProtocol` | 1.1.0 | MCP client — `McpClientTool` implements `AIFunction` |
+| `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
+| `Azure.AI.DocumentIntelligence` | 1.0.0 | PDF/DOCX OCR via Azure Document Intelligence |
+| `Azure.Search.Documents` | 11.8.0-beta.1 | Semantic search / RAG |
+| `Azure.Storage.Blobs` | 12.27.0 | Attachment archival to Blob Storage |
+| `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` (managed identity) |
+| `Azure.Monitor.OpenTelemetry.AspNetCore` | 1.4.0 | Application Insights telemetry |
+| `StackExchange.Redis` | 2.11.8 | Chat history + attachment staging |
+| `AspNetCore.HealthChecks.Redis` | 9.0.0 | Redis liveness check at `/healthz` |
 
 ---
 
