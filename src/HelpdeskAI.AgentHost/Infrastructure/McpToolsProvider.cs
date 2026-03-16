@@ -63,6 +63,41 @@ internal sealed class McpToolsProvider(
         }
     }
 
+    public async Task<IReadOnlyList<AIFunction>> RefreshAsync(CancellationToken ct = default)
+    {
+        await _lock.WaitAsync(ct);
+        try
+        {
+            log.LogInformation("Reconnecting to MCP server after session expiry...");
+
+            if (_client is IAsyncDisposable d) await d.DisposeAsync();
+            _client = null;
+            _tools = null;
+
+            var transport = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = new Uri(_cfg.Endpoint)
+            });
+
+            _client = await McpClient.CreateAsync(clientTransport: transport, cancellationToken: ct);
+            var toolList = await _client.ListToolsAsync(cancellationToken: ct);
+            _tools = [..toolList.OfType<AIFunction>()];
+
+            log.LogInformation("Reconnected. Loaded {Count} MCP tools.", _tools.Count);
+            return _tools;
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Failed to reconnect to MCP server at {Endpoint}.", _cfg.Endpoint);
+            _tools = [];
+            return _tools;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         _lock.Dispose();

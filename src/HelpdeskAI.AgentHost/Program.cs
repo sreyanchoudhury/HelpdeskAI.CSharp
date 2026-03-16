@@ -163,7 +163,11 @@ app.Lifetime.ApplicationStarted.Register(() =>
 		try
 		{
 			var toolsProvider = app.Services.GetRequiredService<IMcpToolsProvider>();
-			var tools = await toolsProvider.GetToolsAsync();
+			var rawTools = await toolsProvider.GetToolsAsync();
+			// Wrap each tool so it auto-reconnects on "Session not found" after McpServer restart.
+			var tools = rawTools
+				.Select(t => (AIFunction)new RetryingMcpTool(t, toolsProvider))
+				.ToList();
 			var toolDescriptions = tools.Select(t => $"{t.Name}: {t.Description}").ToList();
 			var toolEmbeddings = await embeddingGenerator.GenerateAsync(toolDescriptions);
 			var index = tools
