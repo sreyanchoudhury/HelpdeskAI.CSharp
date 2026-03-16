@@ -43,6 +43,11 @@ internal sealed class AttachmentContextProvider(
                 messages.Add(new ChatMessage(ChatRole.System,
                     $"## Attached Document: {att.FileName}\n\n{text}"));
 
+                // User-role nudge mirrors image attachment behaviour — ensures the model
+                // reads the attachment before reaching for ticket/incident lookup tools.
+                messages.Add(new ChatMessage(ChatRole.User,
+                    $"I've attached '{att.FileName}' above. Please use it to answer my next message."));
+
                 log.LogInformation(
                     "Injected text attachment '{FileName}' ({Length} chars) into agent context",
                     att.FileName, text.Length);
