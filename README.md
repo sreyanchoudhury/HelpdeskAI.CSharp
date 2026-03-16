@@ -111,9 +111,10 @@ flowchart TD
     end
 
     subgraph MCPSERVER["🔧  McpServer  ·  .NET 10  ·  :5100"]
-        MS1["TicketTools<br/>create · update · list · close · assign"]:::mcp
-        MS2["SystemStatusTools<br/>ping · health · metrics"]:::mcp
+        MS1["TicketTools<br/>create · get · search · update · comment · assign"]:::mcp
+        MS2["SystemStatusTools<br/>get_system_status · get_active_incidents · check_impact_for_team"]:::mcp
         MS3[("In-memory store<br/>+ seed data")]:::mcp
+        MS4["KnowledgeBaseTools<br/>index_kb_article  →  Azure AI Search"]:::mcp
     end
 
     subgraph AZURE["☁️  Azure Services"]
@@ -131,7 +132,7 @@ flowchart TD
     style AZURE     fill:#01080e,stroke:#38bdf8,color:#9098b0
 
     BROWSER -- "AG-UI  ·  POST /agent + SSE" --> AGENTHOST
-    BROWSER -- "PUT /api/attachments" --> AH3
+    BROWSER -- "POST /api/attachments" --> AH3
 
     AH1 --> AH2
     AH2 --> AH3
@@ -142,6 +143,7 @@ flowchart TD
     AH5 -- "MCP HTTP  ·  POST /mcp" --> MCPSERVER
     MS1 --> MS3
     MS2 --> MS3
+    MS4 --> AIS
 
     AH1 -- "chat completions" --> AOA
     AH4 -- "semantic search"  --> AIS
@@ -185,7 +187,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<your-resource>.openai.azure.com/",
     "ApiKey": "<your-key>",
-    "ChatDeployment": "gpt-4.1"
+    "ChatDeployment": "gpt-4.1-mini"
   },
   "AzureAISearch": {
     "Endpoint": "",
@@ -197,8 +199,8 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
     "Endpoint": "http://localhost:5100/mcp"
   },
   "Conversation": {
-    "SummarisationThreshold": 20,
-    "TailMessagesToKeep": 6,
+    "SummarisationThreshold": 40,
+    "TailMessagesToKeep": 5,
     "ThreadTtl": "30.00:00:00"
   }
 }
@@ -278,7 +280,7 @@ Create this file at `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4.1"
+    "ChatDeployment": "gpt-4.1-mini"
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
@@ -290,8 +292,8 @@ Create this file at `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
     "Endpoint": "http://localhost:5100/mcp"
   },
   "Conversation": {
-    "SummarisationThreshold": 20,
-    "TailMessagesToKeep": 6,
+    "SummarisationThreshold": 40,
+    "TailMessagesToKeep": 5,
     "ThreadTtl": "30.00:00:00"
   }
 }
@@ -405,26 +407,30 @@ npm install
 
 | Layer | Package | Version | Purpose |
 |-------|---------|---------|---------|
-| AI abstractions | `Microsoft.Extensions.AI` | 10.3.0 | `IChatClient`, `AIFunction`, `ChatMessage` |
-| Azure OpenAI adapter | `Microsoft.Extensions.AI.OpenAI` | 10.3.0 | `AsIChatClient()` |
-| AG-UI hosting | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview | `MapAGUI()` SSE endpoint |
-| Agent + MAF providers | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc2 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
-| MCP client | `ModelContextProtocol` | 1.0.0 | `McpClientTool` implements `AIFunction` — zero adapter |
+| AI abstractions | `Microsoft.Extensions.AI` | 10.4.0 | `IChatClient`, `AIFunction`, `ChatMessage` |
+| Azure OpenAI adapter | `Microsoft.Extensions.AI.OpenAI` | 10.4.0 | `AsIChatClient()` |
+| AG-UI hosting | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
+| Agent + MAF providers | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
+| MCP client | `ModelContextProtocol` | 1.1.0 | `McpClientTool` implements `AIFunction` — zero adapter |
 | MCP server | `ModelContextProtocol.AspNetCore` | 1.1.0 | `AddMcpServer().WithHttpTransport()` |
 | Azure OpenAI SDK | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
 | Azure AI Search | `Azure.Search.Documents` | 11.8.0-beta.1 | Semantic search / RAG |
 | Redis | `StackExchange.Redis` | 2.11.8 | Chat history Sorted Sets |
+| Azure Blob Storage | `Azure.Storage.Blobs` | 12.27.0 | Attachment archival |
+| Document Intelligence | `Azure.AI.DocumentIntelligence` | 1.0.0 | PDF/DOCX OCR |
+| Azure Identity | `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` |
 
 ### Frontend
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `@copilotkit/react-core` | 1.52.0 | `CopilotKit` provider, `useCopilotReadable`, `useCopilotAction`, `useCopilotChatSuggestions` |
-| `@copilotkit/react-ui` | 1.52.0 | `CopilotChat` component — chat UI, input, streaming |
-| `@ag-ui/client` | 0.0.45 | `HttpAgent` — direct AG-UI HTTP connection |
-| `@ag-ui/core` | 0.0.45 | AG-UI protocol types |
-| `next` | latest | React App Router, SSR, static generation |
-| `typescript` | latest | Type safety |
+| `@copilotkit/react-core` | 1.54.0 | `CopilotKit` provider, `useCopilotReadable`, `useCopilotAction`, `useCopilotChatSuggestions` |
+| `@copilotkit/react-ui` | 1.54.0 | `CopilotChat` component — chat UI, input, streaming |
+| `@ag-ui/client` | 0.0.47 | `HttpAgent` — direct AG-UI HTTP connection |
+| `@ag-ui/core` | 0.0.47 | AG-UI protocol types |
+| `@copilotkit/runtime` | 1.54.0 | CopilotKit runtime integration |
+| `next` | 16.1.6 | React App Router, SSR, static generation |
+| `typescript` | 5.9.3 | Type safety |
 
 ---
 
@@ -432,7 +438,7 @@ npm install
 
 ### Message Flow (one turn)
 
-> **Note:** Redis operations (history load/persist) are **local development only**. Your conversation history is NOT persisted across browser refreshes.
+> **Note:** Redis persists conversation history both locally and in the Azure Container Apps deployment (where Redis runs as a sidecar container). History survives service restarts within the same Redis instance.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#3d5afe44", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
@@ -476,8 +482,8 @@ flowchart LR
 
 | Setting | Default | Meaning |
 |---------|---------|---------|
-| `SummarisationThreshold` | 20 | Trigger LLM summarisation when history > 20 messages |
-| `TailMessagesToKeep` | 6 | Keep last 6 messages verbatim; summarise the rest |
+| `SummarisationThreshold` | 40 | Trigger LLM summarisation when history > 40 messages |
+| `TailMessagesToKeep` | 5 | Keep last 5 messages verbatim; summarise the rest |
 | `ThreadTtl` | 30 days | Redis key expiry time |
 
 ### RAG Context Injection
@@ -491,8 +497,9 @@ the agent continues without RAG context.
 
 `McpToolsProvider` connects to `HelpdeskAI.McpServer` at startup via
 `HttpClientTransport` and loads all tools as `AIFunction[]`. Because
-`ModelContextProtocol 1.0.0` makes `McpClientTool` implement `AIFunction`
+`ModelContextProtocol 1.1.0` makes `McpClientTool` implement `AIFunction`
 directly, they integrate seamlessly into the agent pipeline.
+A `RetryingMcpTool` wrapper catches `Session not found` (HTTP -32001) after McpServer restarts, reconnects transparently, and retries the call once.
 
 ---
 
@@ -505,7 +512,7 @@ directly, they integrate seamlessly into the agent pipeline.
   "AzureOpenAI": {
     "Endpoint":           "https://<resource>.openai.azure.com/",
     "ApiKey":             "",          // leave empty → DefaultAzureCredential (managed identity)
-    "ChatDeployment":     "gpt-4.1",
+    "ChatDeployment":     "gpt-4.1-mini",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -524,8 +531,8 @@ directly, they integrate seamlessly into the agent pipeline.
     "Redis": "localhost:6379"           // optional: local development only
   },
   "Conversation": {
-    "SummarisationThreshold": 20,
-    "TailMessagesToKeep":     6,
+    "SummarisationThreshold": 40,
+    "TailMessagesToKeep":     5,
     "ThreadTtl":              "30.00:00:00"
   }
 }
@@ -660,7 +667,7 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
   "AzureOpenAI": {
     "Endpoint":           "https://<your-resource>.openai.azure.com/",
     "ApiKey":             "<your-api-key>",
-    "ChatDeployment":     "gpt-4.1",
+    "ChatDeployment":     "gpt-4.1-mini",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -679,8 +686,8 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
     "Redis": "localhost:6379"
   },
   "Conversation": {
-    "SummarisationThreshold": 20,
-    "TailMessagesToKeep":     6,
+    "SummarisationThreshold": 40,
+    "TailMessagesToKeep":     5,
     "ThreadTtl":              "30.00:00:00"
   }
 }

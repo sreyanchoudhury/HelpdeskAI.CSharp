@@ -8,10 +8,18 @@ This folder contains **Bicep Infrastructure as Code** and deployment scripts to 
 
 | Resource | Type | Purpose | Tier/Size |
 |----------|------|---------|-----------|
-| **Azure OpenAI** | Cognitive Services | Hosts gpt-4.1 model for the AI agent | S0 SKU, 10 TPM |
-| **Azure AI Search** | Search Service | Semantic search over KB documents (RAG) | Basic (1 replica, 1 partition) |
+| **Log Analytics Workspace** | `Microsoft.OperationalInsights/workspaces` | Container Apps telemetry | PerGB2018 |
+| **Application Insights** | `Microsoft.Insights/components` | APM / distributed tracing | Connected to Log Analytics |
+| **Container Apps Environment** | `Microsoft.App/managedEnvironments` | Shared runtime for all containers | Consumption |
+| **Azure Container Registry** | `Microsoft.ContainerRegistry/registries` | Stores built Docker images | Basic |
+| **Redis** | Container App (`redis:7-alpine`) | Chat history + 1-hour attachment staging | 0.25 CPU / 0.5 Gi |
+| **McpServer** | Container App | 10 MCP tools over Streamable HTTP | 0.5 CPU / 1 Gi |
+| **AgentHost** | Container App | AG-UI agent, RAG pipeline, attachment processing | 0.5 CPU / 1 Gi |
+| **Frontend** | Container App | Next.js UI | 0.5 CPU / 1 Gi |
+| **Azure OpenAI** | Cognitive Services | `gpt-4.1-mini` (chat) + `text-embedding-3-small` (embeddings) | S0 / GlobalStandard |
+| **Azure AI Search** | Search Service | Semantic KB search (RAG), `helpdesk-kb` index | Basic (1 replica, 1 partition) |
 
-**Total monthly cost:** ~$150–200 (varies by usage)
+**Total monthly cost:** ~$200–350 (varies by usage; Container Apps, ACR, Blob Storage, Document Intelligence, and App Insights add to the base OpenAI + AI Search cost)
 
 ---
 
@@ -29,15 +37,21 @@ Before you start, ensure you have:
    az bicep install
    ```
 
-3. **Azure subscription** with permission to:
+3. **Azure Developer CLI (`azd`)** — https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
+   ```bash
+   azd version  # Must be 1.x or later
+   ```
+   Required for `azd provision` (infrastructure) and `azd deploy` (build + push Docker images + update Container Apps).
+
+4. **Azure subscription** with permission to:
    - Create resource groups
    - Create Cognitive Services (OpenAI) and Search resources
    - Assign RBAC roles
    - List/retrieve resource keys
 
-4. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have a quota for `gpt-4.1` or `gpt-4o`
+5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have a quota for `gpt-4.1` or `gpt-4o`
 
-5. **Logged in to Azure:**
+6. **Logged in to Azure:**
    ```bash
    az login
    az account set --subscription "<Subscription ID or Name>"
@@ -230,7 +244,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<api-key>",
-    "ChatDeployment": "gpt-4.1",
+    "ChatDeployment": "gpt-4.1-mini",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -246,8 +260,8 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
     "Endpoint": "http://localhost:5100/mcp"
   },
   "Conversation": {
-    "SummarisationThreshold": 20,
-    "TailMessagesToKeep": 6,
+    "SummarisationThreshold": 40,
+    "TailMessagesToKeep": 5,
     "ThreadTtl": "30.00:00:00"
   }
 }

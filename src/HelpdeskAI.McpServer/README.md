@@ -421,9 +421,6 @@ It will be available for retrieval in future helpdesk conversations.
 | INC-1001 | Cannot login to network | High | Open | Access |
 | INC-1002 | Printer not responding | Critical | InProgress | Hardware |
 | INC-1003 | Email sync issues | Medium | Resolved | Email |
-| KB-0003 | Email configuration guide | Email |
-| KB-0004 | Hardware troubleshooting | Hardware |
-| KB-0005 | DNS and network basics | Network |
 
 All seed data is loaded on startup from the code (in-memory `ConcurrentDictionary`).
 
@@ -455,10 +452,12 @@ HelpdeskAI.McpServer/
 ├── Models/
 │   └── Ticket.cs               # Ticket DTO
 ├── Services/
-│   └── TicketService.cs        # In-memory ticket storage + CRUD
+│   ├── KnowledgeBaseService.cs # Azure AI Search client — writes KB articles via index_kb_article
+│   └── TicketService.cs        # In-memory ticket storage + CRUD (thread-safe ConcurrentDictionary)
 ├── Tools/
-│   ├── TicketTools.cs          # Ticket management MCP tools
-│   └── SystemStatusTools.cs    # System health tools
+│   ├── KnowledgeBaseTools.cs   # index_kb_article — indexes docs/resolutions into Azure AI Search
+│   ├── TicketTools.cs          # Ticket management MCP tools (create · get · search · update · comment · assign)
+│   └── SystemStatusTools.cs    # System health tools (get_system_status · get_active_incidents · check_impact_for_team)
 ├── HelpdeskAI.McpServer.csproj # Project file (.NET 10)
 └── Properties/
     └── launchSettings.json     # Debug launch configuration
@@ -557,9 +556,9 @@ builder.Services.AddScoped<ITicketProvider>(sp =>
 
 ### Current (Development)
 
-- ✅ Public HTTP access on `/mcp`
-- ✅ No authentication
-- ✅ No rate limiting
+- ⚠️ Public HTTP access on `/mcp` — no authentication
+- ⚠️ No authentication required
+- ⚠️ No rate limiting
 
 ### Production Recommendations
 
@@ -626,5 +625,5 @@ dotnet run
 ## Learn More
 
 - **Model Context Protocol:** https://modelcontextprotocol.io
-- **MCP SDK:** https://github.com/modelcontextprotocol/typescript-sdk
+- **MCP .NET SDK:** https://github.com/modelcontextprotocol/csharp-sdk
 - **ASP.NET Core:** https://learn.microsoft.com/aspnet/core/
