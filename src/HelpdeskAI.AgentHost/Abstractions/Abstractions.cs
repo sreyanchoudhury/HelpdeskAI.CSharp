@@ -32,6 +32,12 @@ public interface IKnowledgeIngestion
 public interface IMcpToolsProvider
 {
     Task<IReadOnlyList<AIFunction>> GetToolsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Disposes the current MCP session and reconnects, returning fresh AIFunction instances.
+    /// Call when tool invocations fail with "Session not found" after a McpServer restart.
+    /// </summary>
+    Task<IReadOnlyList<AIFunction>> RefreshAsync(CancellationToken ct = default);
 }
 
 /// <summary>Uploads a file stream to Blob Storage and returns the blob URL.</summary>
