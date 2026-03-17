@@ -4,8 +4,8 @@ using Microsoft.Extensions.AI;
 namespace HelpdeskAI.AgentHost.Infrastructure;
 
 /// <summary>
-/// Delegates to an MCP AIFunction and automatically reconnects + retries once when a
-/// "Session not found" error is returned after a McpServer restart.
+/// Delegates to an MCP AIFunction and automatically reconnects + retries once on any
+/// MCP transport or session error (HTTP failures, dropped SSE connections, session expiry).
 /// Metadata (Name, Description, schema) always comes from the original inner function.
 /// </summary>
 internal sealed class RetryingMcpTool : DelegatingAIFunction
@@ -29,15 +29,42 @@ internal sealed class RetryingMcpTool : DelegatingAIFunction
         {
             return await _current.InvokeAsync(arguments, cancellationToken);
         }
-        catch (HttpRequestException ex)
-            when (!cancellationToken.IsCancellationRequested &&
-                  ex.Message.Contains("Session not found", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex)
+            when (!cancellationToken.IsCancellationRequested && IsMcpTransportError(ex))
         {
-            // MCP session expired after McpServer restart — reconnect and retry once.
+            // MCP session expired or transport dropped — reconnect and retry once.
+            // The McpToolsProvider.RefreshAsync disposes the stale client and creates a
+            // fresh MCP session; GetToolsAsync also proactively refreshes at 3.5 min.
             var freshTools = await _provider.RefreshAsync(cancellationToken);
             var replacement = freshTools.FirstOrDefault(t => t.Name == _toolName);
             if (replacement is not null) _current = replacement;
             return await _current.InvokeAsync(arguments, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Returns true for errors that indicate the MCP transport or session has broken down
+    /// and a reconnect is likely to succeed. Does NOT match MCP-level errors like invalid
+    /// arguments, which would fail again after reconnection.
+    /// </summary>
+    private static bool IsMcpTransportError(Exception ex)
+    {
+        // Any HTTP transport failure (connection refused, reset, 400/404 from expired session).
+        if (ex is HttpRequestException) return true;
+
+        // Transport in invalid state (e.g. disposed SSE stream).
+        if (ex is InvalidOperationException ioe &&
+            (ioe.Message.Contains("transport",  StringComparison.OrdinalIgnoreCase) ||
+             ioe.Message.Contains("session",    StringComparison.OrdinalIgnoreCase) ||
+             ioe.Message.Contains("disconnect", StringComparison.OrdinalIgnoreCase) ||
+             ioe.Message.Contains("closed",     StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Explicit "Session not found" / "Session ID" messages from MCP SDK.
+        if (ex.Message.Contains("Session not found", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("Session ID",        StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
 }

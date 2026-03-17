@@ -18,7 +18,13 @@ internal sealed class AzureAiSearchService(
     private readonly SearchClient _client = new(
         new Uri(opts.Value.Endpoint),
         opts.Value.IndexName,
-        new AzureKeyCredential(opts.Value.ApiKey));
+        new AzureKeyCredential(opts.Value.ApiKey),
+        new SearchClientOptions
+        {
+            // Retry up to 3 times with exponential back-off on transient 429/503/504.
+            Retry = { MaxRetries = 3, Mode = Azure.Core.RetryMode.Exponential,
+                      Delay = TimeSpan.FromMilliseconds(300), MaxDelay = TimeSpan.FromSeconds(5) }
+        });
     private readonly AzureAiSearchSettings _cfg = opts.Value;
 
     private SearchOptions BuildSearchOptions() => new()

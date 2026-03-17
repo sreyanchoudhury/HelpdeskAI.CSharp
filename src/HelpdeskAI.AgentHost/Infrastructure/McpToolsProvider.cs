@@ -10,21 +10,38 @@ internal sealed class McpToolsProvider(
     IOptions<McpServerSettings> opts,
     ILogger<McpToolsProvider> log) : IMcpToolsProvider, IAsyncDisposable
 {
+    // Azure Container Apps closes idle SSE streams after ~4 minutes.
+    // Proactively reconnect at 3.5 minutes to avoid mid-call session expiry.
+    private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(3.5);
+
     private readonly McpServerSettings _cfg = opts.Value;
     private McpClient? _client;
     private IReadOnlyList<AIFunction>? _tools;
+    private DateTimeOffset _connectedAt = DateTimeOffset.MinValue;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public async Task<IReadOnlyList<AIFunction>> GetToolsAsync(CancellationToken ct = default)
     {
-        if (_tools is not null) return _tools;
+        // Fast path — only skip re-init if tools are loaded AND session is still fresh.
+        if (_tools is not null && DateTimeOffset.UtcNow - _connectedAt < SessionTtl)
+            return _tools;
 
         await _lock.WaitAsync(ct);
         try
         {
-            if (_tools is not null) return _tools;
+            // Re-check inside lock — another thread may have refreshed already.
+            if (_tools is not null && DateTimeOffset.UtcNow - _connectedAt < SessionTtl)
+                return _tools;
 
-            log.LogInformation("Connecting to MCP server at {Endpoint}", _cfg.Endpoint);
+            if (_tools is not null)
+                log.LogInformation("MCP session TTL reached — proactively reconnecting.");
+            else
+                log.LogInformation("Connecting to MCP server at {Endpoint}", _cfg.Endpoint);
+
+            // Dispose stale client before reconnecting.
+            if (_client is IAsyncDisposable d) await d.DisposeAsync();
+            _client = null;
+            _tools  = null;
 
             // HttpClientTransport + McpClient.CreateAsync are the correct MCP 1.x client APIs.
             // The transport manages the HTTP+SSE connection; CreateAsync performs the protocol
@@ -40,6 +57,7 @@ internal sealed class McpToolsProvider(
 
             var toolList = await _client.ListToolsAsync(cancellationToken: ct);
             _tools = [..toolList.OfType<AIFunction>()];
+            _connectedAt = DateTimeOffset.UtcNow;
 
             log.LogInformation(
                 "Loaded {Count} MCP tools: {Names}",
@@ -54,8 +72,8 @@ internal sealed class McpToolsProvider(
                 "Failed to load MCP tools from {Endpoint}. " +
                 "Ensure HelpdeskAI.McpServer is running. Agent will continue without tools.",
                 _cfg.Endpoint);
-            _tools = [];
-            return _tools;
+            // Do NOT cache the failure — leave _tools null so the next request retries.
+            return [];
         }
         finally
         {
@@ -82,6 +100,7 @@ internal sealed class McpToolsProvider(
             _client = await McpClient.CreateAsync(clientTransport: transport, cancellationToken: ct);
             var toolList = await _client.ListToolsAsync(cancellationToken: ct);
             _tools = [..toolList.OfType<AIFunction>()];
+            _connectedAt = DateTimeOffset.UtcNow;
 
             log.LogInformation("Reconnected. Loaded {Count} MCP tools.", _tools.Count);
             return _tools;

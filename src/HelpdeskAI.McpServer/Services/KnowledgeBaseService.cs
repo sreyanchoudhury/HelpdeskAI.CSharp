@@ -20,7 +20,13 @@ public sealed class KnowledgeBaseService(
     private readonly SearchClient _client = new(
         new Uri(opts.Value.Endpoint),
         opts.Value.IndexName,
-        new AzureKeyCredential(opts.Value.ApiKey));
+        new AzureKeyCredential(opts.Value.ApiKey),
+        new Azure.Search.Documents.SearchClientOptions
+        {
+            // Retry up to 3 times with exponential back-off on transient 429/503/504.
+            Retry = { MaxRetries = 3, Mode = Azure.Core.RetryMode.Exponential,
+                      Delay = TimeSpan.FromMilliseconds(300), MaxDelay = TimeSpan.FromSeconds(5) }
+        });
 
     public async Task<string> IndexArticleAsync(
         string title, string content, string? category, CancellationToken ct = default)
