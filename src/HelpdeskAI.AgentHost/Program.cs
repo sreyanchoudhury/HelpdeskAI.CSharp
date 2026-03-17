@@ -77,6 +77,10 @@ builder.Services.AddSingleton<IDocumentIntelligenceService, DocumentIntelligence
 
 builder.Services.AddChatClient(azureClient)
 	.UseFunctionInvocation()
+	.Use((inner, services) => new UsageCapturingChatClient(
+		inner,
+		services.GetRequiredService<IRedisService>(),
+		services.GetRequiredService<IOptions<ConversationSettings>>()))
 	.Use((inner, _) => new AGUIHistoryNormalizingClient(inner))
 	.UseLogging()
 	.UseOpenTelemetry();
@@ -153,6 +157,12 @@ var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, searchProvi
 app.MapAGUI("/agent", agent);
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
+
+app.MapGet("/agent/usage", async (string threadId, IRedisService redis) =>
+{
+	var json = await redis.GetAsync($"usage:{threadId}:latest");
+	return string.IsNullOrEmpty(json) ? Results.NotFound() : Results.Content(json, "application/json");
+});
 
 // Initialise tool index after the HTTP server starts so health probes pass immediately.
 // Chat turns await toolIndexTcs.Task with a 60 s guard inside DynamicToolSelectionProvider.
