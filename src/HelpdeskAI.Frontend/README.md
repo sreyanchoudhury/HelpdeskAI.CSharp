@@ -8,6 +8,7 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 
 - **Real-time chat UI** — streams responses from the AI agent as they're generated
 - **Rich render actions** — displays tickets, incidents, and search results as interactive cards
+- **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` inline with each message's action buttons after the response completes
 - **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
 - **Session management** — maintains conversation history and ticket state
 - **Responsive design** — mobile-friendly, dark theme, keyboard accessible
@@ -66,7 +67,9 @@ app/
 ├── next.config.ts               # Next.js configuration
 ├── api/
 │   ├── copilotkit/
-│   │   └── route.ts             # CopilotKit Runtime → AG-UI backend
+│   │   ├── route.ts             # CopilotKit Runtime → AG-UI backend
+│   │   └── usage/
+│   │       └── route.ts         # Token usage proxy → AgentHost /agent/usage
 │   ├── kb/
 │   │   └── route.ts             # KB search proxy  → AgentHost /api/kb/search
 │   ├── tickets/
@@ -162,6 +165,7 @@ Main UI shell:
 - **Tickets page** — displays user's created tickets with status badges
 - **Knowledge Base page** — live search via `/api/kb?q=...`; renders `KbArticleCard` results sourced from Azure AI Search
 - **Settings page** — pings `/api/status`; renders green/red health indicators for McpServer + AgentHost
+- **Response stats chip** — after each response, fetches token usage from `/api/copilotkit/usage?threadId=` and injects a `⏱ Xs · 📥 N in / 📤 M out` chip inline with the message action buttons
 - **Styling** — CopilotKit CSS variable overrides for dark theme
 
 ### `components/HelpdeskActions.tsx`

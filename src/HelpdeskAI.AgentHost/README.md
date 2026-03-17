@@ -250,7 +250,8 @@ HelpdeskAI.AgentHost/
 │   ├── RedisChatHistoryProvider.cs      # Per-session chat history keyed by AG-UI threadId
 │   ├── RedisService.cs                  # Low-level IRedisService implementation (StringGet / StringSet / KeyDelete)
 │   ├── RetryingMcpTool.cs               # DelegatingAIFunction wrapper — catches Session not found (HTTP -32001), reconnects, retries once
-│   └── ThreadIdCapturingClient.cs       # AsyncLocal<string?> holder for AG-UI threadId; populated by request middleware
+│   ├── ThreadIdCapturingClient.cs       # AsyncLocal<string?> holder for AG-UI threadId; populated by request middleware
+│   └── UsageCapturingChatClient.cs      # DelegatingChatClient — captures token usage from streaming response; writes usage:{threadId}:latest to Redis
 ├── Models/
 │   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, AzureBlobStorageSettings, etc.)
 └── HelpdeskAI.AgentHost.csproj     # Project file (.NET 10)
@@ -307,6 +308,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | `POST` | `/agent` | AG-UI streaming endpoint (SSE) |
 | `GET` | `/healthz` | Liveness / readiness probe |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
+| `GET` | `/agent/usage?threadId=` | Token usage for a session — returns `{promptTokens, completionTokens}` from Redis |
 | `GET` | `/api/kb/search?q=...` | Knowledge base search (proxied from frontend `/api/kb`) |
 | `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
 | `GET` | `/api/tickets` | Ticket list proxy → McpServer `/tickets` (supports `?requestedBy=`, `?status=`, `?category=`) |

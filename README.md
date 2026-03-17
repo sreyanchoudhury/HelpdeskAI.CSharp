@@ -813,6 +813,7 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 |--------|------|-------------|
 | `POST` | `/agent` | AG-UI agent endpoint (SSE stream) |
 | `GET`  | `/agent/info` | Diagnostic — library names, runtime info |
+| `GET`  | `/agent/usage?threadId=` | Token usage for a session — `{promptTokens, completionTokens}` from Redis |
 | `GET`  | `/healthz` | Health (includes Redis ping) |
 | `GET`  | `/api/kb/search?q=...` | Knowledge base search |
 | `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
@@ -1226,6 +1227,17 @@ Expected chain:
 ---
 
 ## Changelog
+
+### [1.2.0] — 2026-03-17
+
+**Response Token Usage Stats**
+
+- **`UsageCapturingChatClient`** (AgentHost) — new `DelegatingChatClient` that intercepts each streaming response, aggregates token usage from the final chunk, and writes `{promptTokens, completionTokens}` to Redis under `usage:{threadId}:latest`
+- **`GET /agent/usage?threadId=`** (AgentHost) — new lightweight endpoint that reads the usage key from Redis and returns JSON; returns `404` if the key has not yet been written
+- **`/api/copilotkit/usage/route.ts`** (Frontend) — Next.js proxy that forwards to the AgentHost usage endpoint
+- **Response stats chip** (Frontend) — after each assistant response, `HelpdeskChat` fetches token usage and injects a `⏱ Xs · 📥 N in / 📤 M out` chip inline with the message's copy/thumbs action buttons; the chip is re-injected by a `MutationObserver` if CopilotKit re-renders the message list; correctly handles multi-turn tool-call responses by clearing and re-fetching stats on each intermediate `inProgress` transition
+
+---
 
 ### [1.1.0] — 2026-03-13
 

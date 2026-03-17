@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
 import { CopilotChat, CopilotKitCSSProperties, type InputProps } from "@copilotkit/react-ui";
+import { useCopilotContext } from "@copilotkit/react-core";
 import "@copilotkit/react-ui/styles.css";
 import { HelpdeskActions, Ticket } from "./HelpdeskActions";
 import type { AttachedFile } from "./AttachmentBar";
@@ -452,17 +453,33 @@ interface AttachmentContextValue {
   onRemove: (name: string) => void;
   onRetry: (name: string) => void;
   clearAll: () => void;
+  onSendStarted: () => void;
+  onResponseComplete: () => void;
+  onResponseReset: () => void;
 }
 const AttachmentContext = createContext<AttachmentContextValue>({
-  attachedFiles: [], onAdd: () => {}, onRemove: () => {}, onRetry: () => {}, clearAll: () => {},
+  attachedFiles: [], onAdd: () => {}, onRemove: () => {}, onRetry: () => {}, clearAll: () => {}, onSendStarted: () => {}, onResponseComplete: () => {}, onResponseReset: () => {},
 });
 
 // ── Custom chat input with built-in paperclip ────────────────────────────────────
 function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
-  const { attachedFiles, onAdd, onRemove, onRetry, clearAll } = useContext(AttachmentContext);
+  const { attachedFiles, onAdd, onRemove, onRetry, clearAll, onSendStarted, onResponseComplete, onResponseReset } = useContext(AttachmentContext);
   const [text, setText] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevInProgress = useRef(false);
+
+  // Detect inProgress transitions to signal parent
+  useEffect(() => {
+    if (prevInProgress.current && !inProgress) {
+      // true → false: turn complete
+      onResponseComplete();
+    } else if (!prevInProgress.current && inProgress) {
+      // false → true: new turn starting (multi-turn) — clear stale stats and re-arm
+      onResponseReset();
+    }
+    prevInProgress.current = inProgress;
+  }, [inProgress, onResponseComplete, onResponseReset]);
 
   const isUploading = attachedFiles.some(f => f.uploading);
   const readyFiles = attachedFiles.filter(f => !f.uploading && !f.error);
@@ -481,6 +498,7 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
   const handleSend = async () => {
     const msg = text.trim() || (readyFiles.length > 0 ? "Please read and summarize the attached file." : "");
     if (!msg) return;
+    onSendStarted();
     setText("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     await onSend(msg);
@@ -635,6 +653,70 @@ export function HelpdeskChat() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const current = NAV_ITEMS.find(n => n.id === page)!;
 
+  const { threadId } = useCopilotContext();
+  const threadIdRef = useRef(threadId);
+  threadIdRef.current = threadId;
+  const sendTimeRef = useRef<number>(0);
+  const waitingRef = useRef(false);
+  const [lastStats, setLastStats] = useState<{ elapsedMs: number; promptTokens: number; completionTokens: number } | null>(null);
+
+  const fetchStats = (retryDelay = 1000) => {
+    const tid = threadIdRef.current;
+    if (!tid || !waitingRef.current) return;
+    fetch(`/api/copilotkit/usage?threadId=${encodeURIComponent(tid)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.promptTokens) {
+          setLastStats({ elapsedMs: Date.now() - sendTimeRef.current, ...data });
+          waitingRef.current = false;
+        } else if (waitingRef.current && retryDelay <= 3000) {
+          setTimeout(() => fetchStats(retryDelay * 2), retryDelay);
+        }
+      })
+      .catch(() => {
+        if (waitingRef.current && retryDelay <= 3000) {
+          setTimeout(() => fetchStats(retryDelay * 2), retryDelay);
+        }
+      });
+  };
+
+  // Inject stats chip into CopilotKit's controls row (right-aligned via margin-left:auto).
+  // Uses a MutationObserver to re-inject if CopilotKit re-renders and removes the chip
+  // (common after multi-turn/tool-call responses where CopilotKit settles state post-stream).
+  useEffect(() => {
+    document.getElementById("hd-stats-chip")?.remove();
+    if (!lastStats) return;
+
+    const chipText = `⏱ ${(lastStats.elapsedMs / 1000).toFixed(1)}s · 📥 ${lastStats.promptTokens} in / 📤 ${lastStats.completionTokens} out`;
+
+    const inject = () => {
+      const all = document.querySelectorAll(".copilotKitMessageControls");
+      const controls = all[all.length - 1];
+      if (!controls) return;
+      const existing = document.getElementById("hd-stats-chip");
+      if (existing?.parentElement === controls) return; // already in the right place
+      existing?.remove();
+      const el = document.createElement("span");
+      el.id = "hd-stats-chip";
+      el.style.cssText = "margin-left:auto;font-size:11px;color:#8892b0;font-family:monospace;letter-spacing:0.02em;white-space:nowrap;padding-top:2px";
+      el.textContent = chipText;
+      controls.appendChild(el);
+    };
+
+    inject();
+
+    const observer = new MutationObserver(() => {
+      const all = document.querySelectorAll(".copilotKitMessageControls");
+      const last = all[all.length - 1];
+      const chip = document.getElementById("hd-stats-chip");
+      // Re-inject if chip is absent OR if it ended up in a stale (non-last) controls element
+      if (!chip || (last && chip.parentElement !== last)) inject();
+    });
+    observer.observe(document.querySelector(".copilotKitMessages") ?? document.body, { childList: true, subtree: true });
+
+    return () => { observer.disconnect(); document.getElementById("hd-stats-chip")?.remove(); };
+  }, [lastStats]);
+
   const handleTicketCreated = (ticket: Ticket) => {
     setTickets(prev => [ticket, ...prev]);
     setRefreshKey(k => k + 1);
@@ -756,24 +838,27 @@ export function HelpdeskChat() {
             onRemove: handleRemoveAttachment,
             onRetry: handleRetryAttachment,
             clearAll: clearAllAttachments,
+            onSendStarted: () => { sendTimeRef.current = Date.now(); setLastStats(null); waitingRef.current = true; },
+            onResponseComplete: () => fetchStats(500),
+            onResponseReset: () => { setLastStats(null); waitingRef.current = true; },
           }}>
-            <HelpdeskActions
-              tickets={tickets}
-              onTicketCreated={handleTicketCreated}
-              attachedFiles={attachedFiles}
-            />
-
-            <div className="hd-chat-wrapper" style={ckTheme}>
-              <CopilotChat
-                Input={CustomChatInput}
-              instructions={AGENT_INSTRUCTIONS}
-                labels={{
-                  title: "IT Support",
-                  initial: "👋 Hi Alex! What IT issue can I help you with today?",
-                  placeholder: "Describe your IT issue…",
-                }}
+              <HelpdeskActions
+                tickets={tickets}
+                onTicketCreated={handleTicketCreated}
+                attachedFiles={attachedFiles}
               />
-            </div>
+
+              <div className="hd-chat-wrapper" style={{ ...ckTheme }}>
+                <CopilotChat
+                  Input={CustomChatInput}
+                  instructions={AGENT_INSTRUCTIONS}
+                  labels={{
+                    title: "IT Support",
+                    initial: "👋 Hi Alex! What IT issue can I help you with today?",
+                    placeholder: "Describe your IT issue…",
+                  }}
+                />
+              </div>
           </AttachmentContext.Provider>
         )}
 

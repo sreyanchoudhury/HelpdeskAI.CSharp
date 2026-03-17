@@ -1,6 +1,6 @@
 "use client";
 
-import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
+import { useFrontendTool, useCopilotReadable } from "@copilotkit/react-core";
 import type { AttachedFile } from "./AttachmentBar";
 import {
   DEMO_USER,
@@ -464,7 +464,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   // ── Action 1: show_ticket_created ─────────────────────────────────────────
   // Renders a visual confirmation card after ticket creation.
   // Named separately from the MCP tool to prevent duplicate filtering.
-  useCopilotAction({
+  useFrontendTool({
     name: "show_ticket_created",
     description: "Renders a visual ticket card in the chat after a ticket has been created. Call this immediately after the create_ticket tool returns a ticket ID, passing the ticket details so the user can see a confirmation card.",
     parameters: [
@@ -489,7 +489,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   // ── Action 2: show_incident_alert ─────────────────────────────────────────
-  useCopilotAction({
+  useFrontendTool({
     name: "show_incident_alert",
     description: "Renders a visual incident alert card in the chat when active IT incidents are found. Call this after get_system_status or get_active_incidents returns degraded or outage services, to present the information clearly to the user instead of plain text.",
     parameters: [
@@ -514,7 +514,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   // ── Action 3: show_my_tickets ─────────────────────────────────────────────
-  useCopilotAction({
+  useFrontendTool({
     name: "show_my_tickets",
     description: "Renders a visual ticket list card in the chat. Call this after search_tickets or get_ticket returns results, to show the user their tickets in a readable card instead of plain text.",
     parameters: [
@@ -539,7 +539,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   // ── Action 4: show_attachment_preview ─────────────────────────────────────
-  useCopilotAction({
+  useFrontendTool({
     name: "show_attachment_preview",
     description: "Renders a visual confirmation card after reading an attached document. Call this after you have processed an '## Attached Document' section in your context, passing a brief one-sentence summary of what the document contains.",
     parameters: [
@@ -559,7 +559,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   // ── Action 5: show_ticket_details ─────────────────────────────────────────
-  useCopilotAction({
+  useFrontendTool({
     name: "show_ticket_details",
     description: "Renders a detailed ticket card inline in the chat for a specific ticket. ALWAYS call this after get_ticket returns results to display the full ticket information as a card instead of plain text.",
     parameters: [
@@ -589,7 +589,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   // ── Action 6: show_kb_article ─────────────────────────────────────────────
-  useCopilotAction({
+  useFrontendTool({
     name: "show_kb_article",
     description: "Renders a KB article card inline in the chat. Call this when presenting a knowledge base article to the user so they can read it directly in the conversation instead of receiving plain text.",
     parameters: [
@@ -611,7 +611,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   // ── Action 7: suggest_related_articles ────────────────────────────────────
-  useCopilotAction({
+  useFrontendTool({
     name: "suggest_related_articles",
     description: "Renders a list of related KB article suggestions inline in the chat. Call this when you have 2–3 relevant KB articles to recommend to the user based on their issue.",
     parameters: [
