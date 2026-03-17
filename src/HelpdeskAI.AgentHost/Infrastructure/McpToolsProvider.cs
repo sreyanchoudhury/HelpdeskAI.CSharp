@@ -81,16 +81,35 @@ internal sealed class McpToolsProvider(
         }
     }
 
+    // Grace window: if a concurrent RetryingMcpTool call just reconnected within this
+    // window, reuse the fresh session rather than reconnecting again and disposing
+    // the client that the first caller is still using for its retry.
+    private static readonly TimeSpan RefreshGrace = TimeSpan.FromSeconds(10);
+
     public async Task<IReadOnlyList<AIFunction>> RefreshAsync(CancellationToken ct = default)
     {
+        // Fast path outside the lock: if another parallel tool already reconnected,
+        // return its fresh session immediately without acquiring the semaphore.
+        if (_tools is not null && DateTimeOffset.UtcNow - _connectedAt < RefreshGrace)
+            return _tools;
+
         await _lock.WaitAsync(ct);
         try
         {
+            // Re-check inside the lock: a concurrent RefreshAsync may have already
+            // reconnected while we were waiting for the semaphore. Reuse that session
+            // instead of disposing it and creating yet another client underneath it.
+            if (_tools is not null && DateTimeOffset.UtcNow - _connectedAt < RefreshGrace)
+            {
+                log.LogInformation("MCP session was just refreshed by a concurrent call — reusing.");
+                return _tools;
+            }
+
             log.LogInformation("Reconnecting to MCP server after session expiry...");
 
             if (_client is IAsyncDisposable d) await d.DisposeAsync();
             _client = null;
-            _tools = null;
+            _tools  = null;
 
             var transport = new HttpClientTransport(new HttpClientTransportOptions
             {
@@ -108,8 +127,8 @@ internal sealed class McpToolsProvider(
         catch (Exception ex)
         {
             log.LogError(ex, "Failed to reconnect to MCP server at {Endpoint}.", _cfg.Endpoint);
-            _tools = [];
-            return _tools;
+            // Do NOT cache the failure — leave _tools null so the next request retries.
+            return [];
         }
         finally
         {
