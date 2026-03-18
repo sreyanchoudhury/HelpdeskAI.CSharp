@@ -1,4 +1,4 @@
-﻿using HelpdeskAI.AgentHost.Abstractions;
+using HelpdeskAI.AgentHost.Abstractions;
 using HelpdeskAI.AgentHost.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -13,6 +13,11 @@ internal sealed class McpToolsProvider(
     // Azure Container Apps closes idle SSE streams after ~4 minutes.
     // Proactively reconnect at 3.5 minutes to avoid mid-call session expiry.
     private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(3.5);
+
+    // Grace window: if a concurrent RetryingMcpTool call just reconnected within this
+    // window, reuse the fresh session rather than reconnecting again and disposing
+    // the client that the first caller is still using for its retry.
+    private static readonly TimeSpan RefreshGrace = TimeSpan.FromSeconds(10);
 
     private readonly McpServerSettings _cfg = opts.Value;
     private McpClient? _client;
@@ -38,30 +43,11 @@ internal sealed class McpToolsProvider(
             else
                 log.LogInformation("Connecting to MCP server at {Endpoint}", _cfg.Endpoint);
 
-            // Dispose stale client before reconnecting.
-            if (_client is IAsyncDisposable d) await d.DisposeAsync();
-            _client = null;
-            _tools  = null;
-
-            // HttpClientTransport + McpClient.CreateAsync are the correct MCP 1.x client APIs.
-            // The transport manages the HTTP+SSE connection; CreateAsync performs the protocol
-            // handshake and returns a ready-to-use McpClient.
-            var transport = new HttpClientTransport(new HttpClientTransportOptions
-            {
-                Endpoint = new Uri(_cfg.Endpoint)
-            });
-
-            _client = await McpClient.CreateAsync(
-                clientTransport: transport,
-                cancellationToken: ct);
-
-            var toolList = await _client.ListToolsAsync(cancellationToken: ct);
-            _tools = [..toolList.OfType<AIFunction>()];
-            _connectedAt = DateTimeOffset.UtcNow;
+            await ConnectCoreAsync(ct);
 
             log.LogInformation(
                 "Loaded {Count} MCP tools: {Names}",
-                _tools.Count,
+                _tools!.Count,
                 string.Join(", ", _tools.Select(t => t.Name)));
 
             return _tools;
@@ -80,11 +66,6 @@ internal sealed class McpToolsProvider(
             _lock.Release();
         }
     }
-
-    // Grace window: if a concurrent RetryingMcpTool call just reconnected within this
-    // window, reuse the fresh session rather than reconnecting again and disposing
-    // the client that the first caller is still using for its retry.
-    private static readonly TimeSpan RefreshGrace = TimeSpan.FromSeconds(10);
 
     public async Task<IReadOnlyList<AIFunction>> RefreshAsync(CancellationToken ct = default)
     {
@@ -107,21 +88,9 @@ internal sealed class McpToolsProvider(
 
             log.LogInformation("Reconnecting to MCP server after session expiry...");
 
-            if (_client is IAsyncDisposable d) await d.DisposeAsync();
-            _client = null;
-            _tools  = null;
+            await ConnectCoreAsync(ct);
 
-            var transport = new HttpClientTransport(new HttpClientTransportOptions
-            {
-                Endpoint = new Uri(_cfg.Endpoint)
-            });
-
-            _client = await McpClient.CreateAsync(clientTransport: transport, cancellationToken: ct);
-            var toolList = await _client.ListToolsAsync(cancellationToken: ct);
-            _tools = [..toolList.OfType<AIFunction>()];
-            _connectedAt = DateTimeOffset.UtcNow;
-
-            log.LogInformation("Reconnected. Loaded {Count} MCP tools.", _tools.Count);
+            log.LogInformation("Reconnected. Loaded {Count} MCP tools.", _tools!.Count);
             return _tools;
         }
         catch (Exception ex)
@@ -136,11 +105,28 @@ internal sealed class McpToolsProvider(
         }
     }
 
+    // Disposes the stale client and establishes a fresh MCP session.
+    // Must be called inside _lock to avoid concurrent reconnect races.
+    private async Task ConnectCoreAsync(CancellationToken ct)
+    {
+        if (_client is IAsyncDisposable d) await d.DisposeAsync();
+        _client = null;
+        _tools = null;
+
+        var transport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = new Uri(_cfg.Endpoint)
+        });
+
+        _client = await McpClient.CreateAsync(clientTransport: transport, cancellationToken: ct);
+        var toolList = await _client.ListToolsAsync(cancellationToken: ct);
+        _tools = [.. toolList.OfType<AIFunction>()];
+        _connectedAt = DateTimeOffset.UtcNow;
+    }
+
     public async ValueTask DisposeAsync()
     {
         _lock.Dispose();
         if (_client is IAsyncDisposable d) await d.DisposeAsync();
     }
 }
-
-

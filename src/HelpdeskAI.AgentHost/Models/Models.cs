@@ -21,6 +21,12 @@ public sealed class AzureAiSearchSettings
     public string ApiKey { get; set; } = string.Empty;
     public string IndexName { get; set; } = "helpdesk-kb";
     public int TopK { get; set; } = 3;
+    /// <summary>
+    /// Minimum semantic reranker score (0–4) for a KB result to be injected into context.
+    /// Results below this threshold are silently discarded, reducing irrelevant token usage.
+    /// Set to 0.0 to disable filtering.
+    /// </summary>
+    public double MinScore { get; set; } = 1.5;
 }
 
 public sealed class McpServerSettings
@@ -32,9 +38,9 @@ public sealed class McpServerSettings
 public sealed class ConversationSettings
 {
     /// <summary>Summarise when history exceeds this many messages.</summary>
-    public int SummarisationThreshold { get; set; } = 10;
-    /// <summary>Target message count to reduce history down to after summarisation.</summary>
-    public int TailMessagesToKeep { get; set; } = 5;
+    public int SummarisationThreshold { get; set; } = 8;
+    /// <summary>Keep this many recent raw messages after summarisation.</summary>
+    public int TailMessagesToKeep { get; set; } = 3;
     public TimeSpan ThreadTtl { get; set; } = TimeSpan.FromDays(1);
 }
 

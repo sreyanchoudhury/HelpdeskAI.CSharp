@@ -5,8 +5,6 @@ import { NextRequest, NextResponse } from "next/server";
 const AGENT_BASE = (process.env.AGENT_URL ?? "http://localhost:5200/agent")
   .replace(/\/agent\/?$/, "");
 
-const SESSION_ID = "alex.johnson:dev-session";
-
 export async function POST(req: NextRequest) {
   try {
     return await handleUpload(req);
@@ -30,6 +28,10 @@ async function handleUpload(req: NextRequest) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
 
+  // Session ID forwarded from the frontend (X-Session-Id = CopilotKit threadId).
+  // Falls back to "dev-session" when running locally without a thread ID.
+  const sessionId = req.headers.get("X-Session-Id") || "dev-session";
+
   // Forward to AgentHost
   const forwardForm = new FormData();
   forwardForm.append("file", file);
@@ -38,7 +40,7 @@ async function handleUpload(req: NextRequest) {
   try {
     agentResponse = await fetch(`${AGENT_BASE}/api/attachments`, {
       method: "POST",
-      headers: { "X-Session-Id": SESSION_ID },
+      headers: { "X-Session-Id": sessionId },
       body: forwardForm,
     });
   } catch (err) {

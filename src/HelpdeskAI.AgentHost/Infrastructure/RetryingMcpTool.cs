@@ -17,7 +17,7 @@ internal sealed class RetryingMcpTool : DelegatingAIFunction
 
     internal RetryingMcpTool(AIFunction inner, IMcpToolsProvider provider) : base(inner)
     {
-        _current  = inner;
+        _current = inner;
         _provider = provider;
         _toolName = inner.Name;
     }
@@ -54,15 +54,15 @@ internal sealed class RetryingMcpTool : DelegatingAIFunction
 
         // Transport in invalid state (e.g. disposed SSE stream).
         if (ex is InvalidOperationException ioe &&
-            (ioe.Message.Contains("transport",  StringComparison.OrdinalIgnoreCase) ||
-             ioe.Message.Contains("session",    StringComparison.OrdinalIgnoreCase) ||
+            (ioe.Message.Contains("transport", StringComparison.OrdinalIgnoreCase) ||
+             ioe.Message.Contains("session", StringComparison.OrdinalIgnoreCase) ||
              ioe.Message.Contains("disconnect", StringComparison.OrdinalIgnoreCase) ||
-             ioe.Message.Contains("closed",     StringComparison.OrdinalIgnoreCase)))
+             ioe.Message.Contains("closed", StringComparison.OrdinalIgnoreCase)))
             return true;
 
         // Explicit "Session not found" / "Session ID" messages from MCP SDK.
         if (ex.Message.Contains("Session not found", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("Session ID",        StringComparison.OrdinalIgnoreCase))
+            ex.Message.Contains("Session ID", StringComparison.OrdinalIgnoreCase))
             return true;
 
         return false;

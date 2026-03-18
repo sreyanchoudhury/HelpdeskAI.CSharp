@@ -1,4 +1,5 @@
 using HelpdeskAI.AgentHost.Abstractions;
+using HelpdeskAI.AgentHost.Infrastructure;
 using HelpdeskAI.AgentHost.Models;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -9,17 +10,21 @@ internal sealed class AttachmentContextProvider(
     IAttachmentStore attachmentStore,
     ILogger<AttachmentContextProvider> log) : AIContextProvider
 {
-    private const string SessionId = "alex.johnson:dev-session";
-    private const int MaxExtractedTextLength = 8000;
+    // 5 000 chars ≈ ~1 100 tokens — covers ~2–3 pages; sufficient for most helpdesk attachments.
+    private const int MaxExtractedTextLength = 5_000;
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
         AIContextProvider.InvokingContext context,
         CancellationToken cancellationToken = default)
     {
+        // Use the request-scoped thread ID so attachments are isolated per conversation.
+        // Falls back to "dev-session" when running locally without a thread ID header.
+        var sessionId = ThreadIdContext.Current is { Length: > 0 } tid ? tid : "dev-session";
+
         IReadOnlyList<ProcessedAttachment> attachments;
         try
         {
-            attachments = await attachmentStore.LoadAndClearAsync(SessionId, cancellationToken);
+            attachments = await attachmentStore.LoadAndClearAsync(sessionId, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -37,7 +42,7 @@ internal sealed class AttachmentContextProvider(
             if (att.Kind == AttachmentKind.Text && !string.IsNullOrWhiteSpace(att.ExtractedText))
             {
                 var text = att.ExtractedText.Length > MaxExtractedTextLength
-                    ? att.ExtractedText[..MaxExtractedTextLength] + "\n\n[Content truncated at 8 000 characters]"
+                    ? att.ExtractedText[..MaxExtractedTextLength] + "\n\n[Content truncated at 5 000 characters]"
                     : att.ExtractedText;
 
                 messages.Add(new ChatMessage(ChatRole.System,

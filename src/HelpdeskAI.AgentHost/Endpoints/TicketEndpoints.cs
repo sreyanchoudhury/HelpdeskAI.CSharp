@@ -24,7 +24,7 @@ internal static class TicketEndpoints
         try
         {
             var response = await client.GetAsync($"tickets{qs}", ct);
-            var content  = await response.Content.ReadAsStringAsync(ct);
+            var content = await response.Content.ReadAsStringAsync(ct);
             return Results.Content(content, "application/json", statusCode: (int)response.StatusCode);
         }
         catch (Exception ex)

@@ -7,10 +7,10 @@ namespace HelpdeskAI.McpServer.Services;
 
 public sealed class KnowledgeBaseSettings
 {
-    public string Endpoint    { get; set; } = string.Empty;
-    public string ApiKey      { get; set; } = string.Empty;
-    public string IndexName   { get; set; } = "helpdesk-kb";
-    public int    TopK        { get; set; } = 3;
+    public string Endpoint { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public string IndexName { get; set; } = "helpdesk-kb";
+    public int TopK { get; set; } = 3;
 }
 
 public sealed class KnowledgeBaseService(
@@ -31,14 +31,14 @@ public sealed class KnowledgeBaseService(
     public async Task<string> IndexArticleAsync(
         string title, string content, string? category, CancellationToken ct = default)
     {
-        var id  = $"KB-up-{Guid.NewGuid():N}";
+        var id = $"KB-up-{Guid.NewGuid():N}";
         var doc = new SearchDocument
         {
-            ["id"]       = id,
-            ["title"]    = title,
-            ["content"]  = content,
+            ["id"] = id,
+            ["title"] = title,
+            ["content"] = content,
             ["category"] = category ?? "Uploaded",
-            ["tags"]     = new[] { "agent-indexed" }
+            ["tags"] = new[] { "agent-indexed" }
         };
 
         await _client.MergeOrUploadDocumentsAsync(new[] { doc }, cancellationToken: ct);
