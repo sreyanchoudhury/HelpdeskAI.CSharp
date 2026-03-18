@@ -8,7 +8,7 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 
 - **Real-time chat UI** — streams responses from the AI agent as they're generated
 - **Rich render actions** — displays tickets, incidents, and search results as interactive cards
-- **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` inline with each message's action buttons after the response completes
+- **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` in the header row (right-aligned) after each agent response; fetches token counts from `/api/copilotkit/usage`
 - **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
 - **Session management** — maintains conversation history and ticket state
 - **Responsive design** — mobile-friendly, dark theme, keyboard accessible
@@ -165,17 +165,21 @@ Main UI shell:
 - **Tickets page** — displays user's created tickets with status badges
 - **Knowledge Base page** — live search via `/api/kb?q=...`; renders `KbArticleCard` results sourced from Azure AI Search
 - **Settings page** — pings `/api/status`; renders green/red health indicators for McpServer + AgentHost
-- **Response stats chip** — after each response, fetches token usage from `/api/copilotkit/usage?threadId=` and injects a `⏱ Xs · 📥 N in / 📤 M out` chip inline with the message action buttons
+- **Response stats chip** — after each response, fetches token usage from `/api/copilotkit/usage?threadId=` and renders a `⏱ Xs · 📥 N in / 📤 M out` chip in the header row (right-aligned, monospace); uses a `fetchStatsRef` pattern to avoid stale closures across re-renders
 - **Styling** — CopilotKit CSS variable overrides for dark theme
 
 ### `components/HelpdeskActions.tsx`
 
 Copilot integration layer:
 - **`useCopilotReadable()`** — exposes user context and ticket list to agent
-- **Render actions** — custom components rendered by agent:
-  - `show_ticket_created` — shows ticket confirmation card
-  - `show_incident_alert` — shows incident/outage alerts
-  - `show_my_tickets` — shows ticket search results
+- **Render actions** — 7 custom components rendered by the agent:
+  - `show_ticket_created` — ticket confirmation card (after `create_ticket`)
+  - `show_incident_alert` — incident/outage alert card (after `get_active_incidents` / `get_system_status`)
+  - `show_my_tickets` — ticket search results list (after `search_tickets`)
+  - `show_ticket_details` — full ticket detail card (after `get_ticket`; agent must call `get_ticket` first and pass all fields)
+  - `show_kb_article` — knowledge base article card
+  - `suggest_related_articles` — 2–3 related article suggestions
+  - `show_attachment_preview` — document preview card (after processing an `## Attached Document`)
 - **Chat suggestions** — `useCopilotChatSuggestions()` for follow-up prompts
 
 ---

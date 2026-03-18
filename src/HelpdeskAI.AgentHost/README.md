@@ -250,8 +250,9 @@ HelpdeskAI.AgentHost/
 │   ├── RedisChatHistoryProvider.cs      # Per-session chat history keyed by AG-UI threadId
 │   ├── RedisService.cs                  # Low-level IRedisService implementation (StringGet / StringSet / KeyDelete)
 │   ├── RetryingMcpTool.cs               # DelegatingAIFunction wrapper — catches Session not found (HTTP -32001), reconnects, retries once
+│   ├── IncludeStreamingUsagePolicy.cs   # Azure SDK PipelinePolicy — injects stream_options:{include_usage:true} into streaming chat requests so Azure returns token counts in the final SSE chunk
 │   ├── ThreadIdCapturingClient.cs       # AsyncLocal<string?> holder for AG-UI threadId; populated by request middleware
-│   └── UsageCapturingChatClient.cs      # DelegatingChatClient — captures token usage from streaming response; writes usage:{threadId}:latest to Redis
+│   └── UsageCapturingChatClient.cs      # DelegatingChatClient — captures token usage from the final streaming chunk; writes usage:{threadId}:latest and usage:latest to Redis in parallel
 ├── Models/
 │   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, AzureBlobStorageSettings, etc.)
 └── HelpdeskAI.AgentHost.csproj     # Project file (.NET 10)
@@ -308,7 +309,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | `POST` | `/agent` | AG-UI streaming endpoint (SSE) |
 | `GET` | `/healthz` | Liveness / readiness probe |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
-| `GET` | `/agent/usage?threadId=` | Token usage for a session — returns `{promptTokens, completionTokens}` from Redis |
+| `GET` | `/agent/usage?threadId=` | Token usage for the most recent response — returns `{promptTokens, completionTokens}` written by `UsageCapturingChatClient` via `IncludeStreamingUsagePolicy` |
 | `GET` | `/api/kb/search?q=...` | Knowledge base search (proxied from frontend `/api/kb`) |
 | `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
 | `GET` | `/api/tickets` | Ticket list proxy → McpServer `/tickets` (supports `?requestedBy=`, `?status=`, `?category=`) |
@@ -486,7 +487,7 @@ cd ../HelpdeskAI.McpServer && dotnet run
 | `Azure.Storage.Blobs` | 12.27.0 | Attachment archival to Blob Storage |
 | `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` (managed identity) |
 | `Azure.Monitor.OpenTelemetry.AspNetCore` | 1.4.0 | Application Insights telemetry |
-| `StackExchange.Redis` | 2.11.8 | Chat history + attachment staging |
+| `StackExchange.Redis` | 2.12.1 | Chat history + attachment staging |
 | `AspNetCore.HealthChecks.Redis` | 9.0.0 | Redis liveness check at `/healthz` |
 
 ---
