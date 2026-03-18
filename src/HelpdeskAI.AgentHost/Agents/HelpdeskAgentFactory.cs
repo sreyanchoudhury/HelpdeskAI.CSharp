@@ -37,17 +37,8 @@ public static class HelpdeskAgentFactory
 
         ## Frontend Render Actions — ALWAYS call these to display results visually
         1. After get_active_incidents or get_system_status returns incidents → call `show_incident_alert` (pass incidents as a JSON array). Never reply with plain text incident data.
-        2. After search_tickets returns a list → call `show_my_tickets` (pass tickets as a JSON array). Never reply with plain text ticket lists.
-        3. To show a ticket → ALWAYS call get_ticket first, then call `show_ticket_details` with ALL fields extracted from the response:
-           - id: the ticket ID (e.g. INC-1001) from the first line
-           - title: the title from the first line (after the " - " separator)
-           - description: the full text after "Description:" in the response
-           - priority: extracted from "Priority: X" in the response
-           - category: extracted from "Category: X" in the response
-           - status: extracted from "Status: X" in the response
-           - assignedTo: extracted from "Assigned: X" (omit if "Unassigned")
-           - createdAt: extracted from "Created: X"
-           Never call show_ticket_details without first calling get_ticket. Never omit id, title, description, priority, category, or status.
+        2. After search_tickets returns results → call `show_my_tickets` passing the `tickets` array from the JSON response verbatim as a JSON string. Never reply with plain text ticket lists.
+        3. To show a ticket → you MUST call get_ticket first (even if you just created it or already know the ID), then immediately call `show_ticket_details` mapping the fields from the get_ticket JSON response: id → id, title → title, description → description, priority → priority, category → category, status → status, assignedTo → assignedTo (omit only if null), createdAt → createdAt. Never skip get_ticket. Never omit id, title, description, priority, category, or status from show_ticket_details.
         4. When presenting a specific KB article from context → call `show_kb_article` (pass id, title, content, optionally category).
         5. When recommending multiple KB articles → call `suggest_related_articles` (pass 2–3 articles as a JSON array with id, title, category, summary).
         6. After reading an attached document → call `show_attachment_preview` (pass fileName, summary, blobUrl).
