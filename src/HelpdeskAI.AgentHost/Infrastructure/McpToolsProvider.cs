@@ -10,9 +10,9 @@ internal sealed class McpToolsProvider(
     IOptions<McpServerSettings> opts,
     ILogger<McpToolsProvider> log) : IMcpToolsProvider, IAsyncDisposable
 {
-    // Azure Container Apps closes idle SSE streams after ~4 minutes.
-    // Proactively reconnect at 3.5 minutes to avoid mid-call session expiry.
-    private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(3.5);
+    // Azure Container Apps hard-cuts HTTP/1.1 SSE streams at 240 seconds.
+    // Proactively reconnect at 3 minutes (180s) to stay 60s clear of that limit.
+    private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(3);
 
     // Grace window: if a concurrent RetryingMcpTool call just reconnected within this
     // window, reuse the fresh session rather than reconnecting again and disposing

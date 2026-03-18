@@ -16,6 +16,7 @@ using StackExchange.Redis;
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
 
+
 builder.Services.Configure<AzureOpenAiSettings>(cfg.GetSection("AzureOpenAI"));
 builder.Services.Configure<AzureAiSearchSettings>(cfg.GetSection("AzureAISearch"));
 builder.Services.Configure<McpServerSettings>(cfg.GetSection("McpServer"));

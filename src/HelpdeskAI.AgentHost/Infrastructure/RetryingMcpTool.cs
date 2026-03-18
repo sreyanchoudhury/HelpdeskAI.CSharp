@@ -52,6 +52,11 @@ internal sealed class RetryingMcpTool : DelegatingAIFunction
         // Any HTTP transport failure (connection refused, reset, 400/404 from expired session).
         if (ex is HttpRequestException) return true;
 
+        // Internal HttpClient timeout: the GET SSE channel was cut (e.g. Azure 240s ingress
+        // limit) while a tool call was in-flight; the outer CT is still live, so this is a
+        // transport failure, not a user-initiated cancellation.
+        if (ex is TaskCanceledException or OperationCanceledException) return true;
+
         // Transport in invalid state (e.g. disposed SSE stream).
         if (ex is InvalidOperationException ioe &&
             (ioe.Message.Contains("transport", StringComparison.OrdinalIgnoreCase) ||
