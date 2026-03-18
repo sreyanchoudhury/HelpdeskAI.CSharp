@@ -133,9 +133,13 @@ Create a new IT support ticket.
 }
 ```
 
-**Returns:** Confirmation with ticket ID
-```
-Ticket created: INC-1004 | High | Network | VPN Connection Issues
+**Returns:** Full ticket JSON (same shape as `get_ticket`, minus comments)
+```json
+{
+  "id": "INC-1004", "title": "VPN Connection Issues", "status": "open",
+  "priority": "high", "category": "network", "description": "...",
+  "requestedBy": "user@contoso.com", "assignedTo": null, "createdAt": "..."
+}
 ```
 
 #### `get_ticket`

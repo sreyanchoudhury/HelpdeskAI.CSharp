@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using HelpdeskAI.McpServer.Models;
 using HelpdeskAI.McpServer.Services;
 using Microsoft.Extensions.Logging;
@@ -25,7 +26,18 @@ public static class TicketTools
             if (!Enum.TryParse<TicketPriority>(priority, true, out var p)) p = TicketPriority.Medium;
             if (!Enum.TryParse<TicketCategory>(category, true, out var c)) c = TicketCategory.Other;
             var t = svc.CreateTicket(title, description, p, c, requestedBy);
-            return $"Ticket created: {t.Id} | {t.Priority} | {t.Category} | {t.Title}";
+            return JsonSerializer.Serialize(new
+            {
+                id          = t.Id,
+                title       = t.Title,
+                status      = t.Status.ToString().ToLowerInvariant(),
+                priority    = t.Priority.ToString().ToLowerInvariant(),
+                category    = t.Category.ToString().ToLowerInvariant(),
+                description = t.Description,
+                requestedBy = t.RequestedBy,
+                assignedTo  = t.AssignedTo,
+                createdAt   = t.CreatedAt,
+            });
         }
         catch (Exception ex)
         {
@@ -35,7 +47,7 @@ public static class TicketTools
     }
 
     [McpServerTool(Name = "get_ticket")]
-    [Description("Returns full details and all comments for a ticket by ID (e.g. INC-1001).")]
+    [Description("Returns full details and all comments for a ticket by ID (e.g. INC-1001). Returns JSON.")]
     public static string GetTicket(
         TicketService svc,
         ILoggerFactory loggerFactory,
@@ -44,34 +56,39 @@ public static class TicketTools
         try
         {
             var t = svc.GetById(ticketId);
-            if (t is null) return $"Not found: {ticketId}";
-            string comments;
+            if (t is null) return $"{{\"error\":\"Not found: {ticketId}\"}}";
+            List<object> comments;
             lock (t)
             {
-                comments = t.Comments.Count == 0
-                    ? "  (none)"
-                    : string.Join("\n", t.Comments.Select(c => $"  [{c.PostedAt:g}] {c.Author}: {c.Message}"));
+                comments = t.Comments
+                    .Select(c => (object)new { postedAt = c.PostedAt, author = c.Author, message = c.Message, isInternal = c.IsInternal })
+                    .ToList();
             }
-            return $"""
-            {t.Id} - {t.Title}
-            Status: {t.Status} | Priority: {t.Priority} | Category: {t.Category}
-            Requested by: {t.RequestedBy} | Assigned: {t.AssignedTo ?? "Unassigned"}
-            Created: {t.CreatedAt:R} | Updated: {t.UpdatedAt:R}
-            Resolution: {t.Resolution ?? "N/A"}
-            Description: {t.Description}
-            Comments:
-            {comments}
-            """;
+            return JsonSerializer.Serialize(new
+            {
+                id          = t.Id,
+                title       = t.Title,
+                status      = t.Status.ToString().ToLowerInvariant(),
+                priority    = t.Priority.ToString().ToLowerInvariant(),
+                category    = t.Category.ToString().ToLowerInvariant(),
+                description = t.Description,
+                requestedBy = t.RequestedBy,
+                assignedTo  = t.AssignedTo,
+                createdAt   = t.CreatedAt,
+                updatedAt   = t.UpdatedAt,
+                resolution  = t.Resolution,
+                comments,
+            });
         }
         catch (Exception ex)
         {
             loggerFactory.CreateLogger("TicketTools").LogError(ex, "get_ticket failed for ticketId={TicketId}", ticketId);
-            return $"Failed to retrieve ticket {ticketId}: {ex.Message}";
+            return $"{{\"error\":\"Failed to retrieve ticket {ticketId}: {ex.Message}\"}}";
         }
     }
 
     [McpServerTool(Name = "search_tickets")]
-    [Description("Searches tickets by email, status, or category. Returns up to 15 results.")]
+    [Description("Searches tickets by email, status, or category. Returns up to 15 results as JSON.")]
     public static string SearchTickets(
         TicketService svc,
         ILoggerFactory loggerFactory,
@@ -84,15 +101,23 @@ public static class TicketTools
             TicketStatus? s = status is { Length: > 0 } && Enum.TryParse<TicketStatus>(status, true, out var sv) ? sv : null;
             TicketCategory? c = category is { Length: > 0 } && Enum.TryParse<TicketCategory>(category, true, out var cv) ? cv : null;
             var results = svc.Search(requestedBy, s, c);
-            return results.Count == 0
-                ? "No tickets found."
-                : $"Found {results.Count}:\n" + string.Join("\n", results.Select(t =>
-                    $"  {t.Id} | {t.Status,-12} | {t.Priority,-8} | {t.Title}"));
+            return JsonSerializer.Serialize(new
+            {
+                count   = results.Count,
+                tickets = results.Select(t => new
+                {
+                    id       = t.Id,
+                    title    = t.Title,
+                    status   = t.Status.ToString().ToLowerInvariant(),
+                    priority = t.Priority.ToString().ToLowerInvariant(),
+                    category = t.Category.ToString().ToLowerInvariant(),
+                }),
+            });
         }
         catch (Exception ex)
         {
             loggerFactory.CreateLogger("TicketTools").LogError(ex, "search_tickets failed");
-            return $"Failed to search tickets: {ex.Message}";
+            return $"{{\"error\":\"Failed to search tickets: {ex.Message}\"}}";
         }
     }
 
