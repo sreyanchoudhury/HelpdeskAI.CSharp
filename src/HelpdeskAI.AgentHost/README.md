@@ -39,6 +39,13 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 For Azure deployment, set these values via Azure App Service/Container App settings or Key Vault. Never commit real secrets.
 
+> **Azure Container Apps — HTTP/2 ingress:**
+> `appsettings.json` sets `Kestrel.EndpointDefaults.Protocols = Http1AndHttp2`, enabling h2c (HTTP/2 cleartext).
+> The AgentHost Container App ingress is configured with `transport: http2`, which removes Azure's 240-second
+> request timeout on HTTP/1.1. This is required for long agentic conversations that stream SSE responses
+> over multiple LLM turns without being cut mid-flight. Local development is unaffected — Kestrel falls back
+> to HTTP/1.1 automatically when the client doesn't negotiate HTTP/2.
+
 ---
 ## Architecture
 
