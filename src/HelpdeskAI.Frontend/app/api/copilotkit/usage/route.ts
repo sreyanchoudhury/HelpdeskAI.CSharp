@@ -4,10 +4,10 @@ const agentBase = (process.env.AGENT_URL ?? "http://localhost:5200/agent").repla
 
 export async function GET(req: NextRequest) {
   const threadId = req.nextUrl.searchParams.get("threadId");
-  if (!threadId) return NextResponse.json(null, { status: 400 });
+  const qs = threadId ? `?threadId=${encodeURIComponent(threadId)}` : "";
 
   try {
-    const res = await fetch(`${agentBase}/agent/usage?threadId=${encodeURIComponent(threadId)}`);
+    const res = await fetch(`${agentBase}/agent/usage${qs}`);
     if (!res.ok) return NextResponse.json(null, { status: res.status });
     return NextResponse.json(await res.json());
   } catch {

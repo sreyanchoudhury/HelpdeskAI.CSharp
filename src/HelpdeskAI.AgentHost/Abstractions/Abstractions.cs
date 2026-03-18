@@ -5,9 +5,9 @@ namespace HelpdeskAI.AgentHost.Abstractions;
 /// <summary>Thin Redis wrapper - only class that touches StackExchange.Redis types.</summary>
 public interface IRedisService
 {
-	Task<string?> GetAsync(string key);
-	Task SetAsync(string key, string value, TimeSpan ttl);
-	Task DeleteAsync(string key);
+    Task<string?> GetAsync(string key);
+    Task SetAsync(string key, string value, TimeSpan ttl);
+    Task DeleteAsync(string key);
 }
 
 /// <summary>RAG retrieval - returns a formatted context block or null if no results.</summary>

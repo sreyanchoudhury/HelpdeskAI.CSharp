@@ -6,11 +6,7 @@
 import { HttpAgent } from "@ag-ui/client";
 import { NextRequest } from "next/server";
 
-
-
-
 const agentUrl = process.env.AGENT_URL ?? "http://localhost:5200/agent";
-
 
 // HttpAgent implements the AG-UI protocol; the CopilotRuntime agents map expects a
 // CopilotKitAgent shape, but the runtime accepts any object with the AG-UI call interface.
@@ -24,7 +20,7 @@ const runtime = new CopilotRuntime({
   },
 });
 
-function buildHandler(req: NextRequest) {
+async function buildHandler(req: NextRequest) {
   const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
     runtime,
     serviceAdapter,

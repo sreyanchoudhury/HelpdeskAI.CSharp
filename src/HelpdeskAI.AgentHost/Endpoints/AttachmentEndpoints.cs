@@ -43,20 +43,20 @@ internal static class AttachmentEndpoints
             return Results.BadRequest(new { error = "No file provided" });
 
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var isTxt      = ext == ".txt" || file.ContentType.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase);
+        var isTxt = ext == ".txt" || file.ContentType.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase);
         var isDocIntel = ext is ".pdf" or ".docx";
-        var isImage    = ext is ".png" or ".jpg" or ".jpeg";
+        var isImage = ext is ".png" or ".jpg" or ".jpeg";
 
         if (!isTxt && !isDocIntel && !isImage)
             return Results.BadRequest(new { error = $"Unsupported file type '{ext}'. Supported: .txt, .pdf, .docx, .png, .jpg, .jpeg" });
 
         var sessionId = request.Headers.TryGetValue("X-Session-Id", out var sid) && !string.IsNullOrWhiteSpace(sid)
             ? sid.ToString()
-            : "alex.johnson:dev-session";
+            : "dev-session";
 
         string? extractedText = null;
-        string? imageBase64   = null;
-        string? blobUrl       = null;
+        string? imageBase64 = null;
+        string? blobUrl = null;
         var kind = AttachmentKind.Text;
 
         // ── Process content ───────────────────────────────────────────────────
@@ -99,13 +99,13 @@ internal static class AttachmentEndpoints
 
         var attachment = new ProcessedAttachment
         {
-            FileName      = file.FileName,
-            ContentType   = file.ContentType,
-            Kind          = kind,
+            FileName = file.FileName,
+            ContentType = file.ContentType,
+            Kind = kind,
             ExtractedText = extractedText,
-            ImageBase64   = imageBase64,
-            BlobUrl       = blobUrl,
-            ProcessedAt   = DateTimeOffset.UtcNow
+            ImageBase64 = imageBase64,
+            BlobUrl = blobUrl,
+            ProcessedAt = DateTimeOffset.UtcNow
         };
 
         await attachmentStore.SaveAsync(sessionId, [attachment], ct);
@@ -114,9 +114,9 @@ internal static class AttachmentEndpoints
 
         return Results.Ok(new
         {
-            fileName    = attachment.FileName,
+            fileName = attachment.FileName,
             contentType = attachment.ContentType,
-            blobUrl     = attachment.BlobUrl,
+            blobUrl = attachment.BlobUrl,
             processedAt = attachment.ProcessedAt
         });
     }

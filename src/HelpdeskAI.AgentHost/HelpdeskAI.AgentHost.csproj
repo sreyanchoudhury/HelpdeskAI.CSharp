@@ -27,12 +27,13 @@
     <PackageReference Include="Azure.Search.Documents" Version="11.8.0-beta.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
     <PackageReference Include="Azure.Identity" Version="1.19.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.4.0" />
 
     <!-- LAYER 4 - MCP client -->
     <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
 
     <!-- Infrastructure -->
-    <PackageReference Include="StackExchange.Redis" Version="2.11.8" />
+    <PackageReference Include="StackExchange.Redis" Version="2.12.1" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0-preview.2.26159.112" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
   </ItemGroup>

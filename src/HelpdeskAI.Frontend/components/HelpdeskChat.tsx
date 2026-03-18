@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
 import { CopilotChat, CopilotKitCSSProperties, type InputProps } from "@copilotkit/react-ui";
 import { useCopilotContext } from "@copilotkit/react-core";
 import "@copilotkit/react-ui/styles.css";
@@ -428,9 +428,9 @@ function SettingsPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {([
               ["App",      "HelpdeskAI"],
-              ["Frontend", "Next.js 15 + CopilotKit"],
-              ["Agent",    "Microsoft Agents Framework (rc4)"],
-              ["AI Model", "Azure OpenAI (GPT-4o)"],
+              ["Frontend", "Next.js 16 + CopilotKit 1.54"],
+              ["Agent",    "Microsoft Agents Framework"],
+              ["AI Model", "Azure OpenAI (GPT-4.1 mini)"],
               ["Search",   "Azure AI Search (semantic)"],
             ] as [string, string][]).map(([label, value]) => (
               <div key={label} style={{ display: "flex", gap: 12, fontSize: 12 }}>
@@ -465,21 +465,27 @@ const AttachmentContext = createContext<AttachmentContextValue>({
 function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
   const { attachedFiles, onAdd, onRemove, onRetry, clearAll, onSendStarted, onResponseComplete, onResponseReset } = useContext(AttachmentContext);
   const [text, setText] = useState("");
+  // Drives textarea overflow via React state so reconciliation never fights the value.
+  const [textOverflow, setTextOverflow] = useState<"hidden" | "auto">("hidden");
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevInProgress = useRef(false);
 
-  // Detect inProgress transitions to signal parent
+  // Stable refs for callbacks — avoids re-running the effect when callbacks are recreated.
+  const onResponseCompleteRef = useRef(onResponseComplete);
+  const onResponseResetRef    = useRef(onResponseReset);
+  onResponseCompleteRef.current = onResponseComplete;
+  onResponseResetRef.current    = onResponseReset;
+
+  // Detect inProgress transitions to signal parent.
   useEffect(() => {
     if (prevInProgress.current && !inProgress) {
-      // true → false: turn complete
-      onResponseComplete();
+      onResponseCompleteRef.current();
     } else if (!prevInProgress.current && inProgress) {
-      // false → true: new turn starting (multi-turn) — clear stale stats and re-arm
-      onResponseReset();
+      onResponseResetRef.current();
     }
     prevInProgress.current = inProgress;
-  }, [inProgress, onResponseComplete, onResponseReset]);
+  }, [inProgress]);
 
   const isUploading = attachedFiles.some(f => f.uploading);
   const readyFiles = attachedFiles.filter(f => !f.uploading && !f.error);
@@ -516,7 +522,9 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
     setText(e.target.value);
     const ta = e.target;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+    const scrollH = ta.scrollHeight;
+    ta.style.height = `${Math.min(scrollH, 160)}px`;
+    setTextOverflow(scrollH > 160 ? "auto" : "hidden");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -567,7 +575,7 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
           onKeyDown={handleKeyDown}
           disabled={inputDisabled}
           rows={1}
-          style={{ overflow: "hidden", opacity: inputDisabled ? 0.5 : 1 }}
+          style={{ overflowY: textOverflow, opacity: inputDisabled ? 0.5 : 1 }}
         />
 
         {/* Controls: paperclip ← spacer → send/stop */}
@@ -613,38 +621,6 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
   );
 }
 
-// ── Agent instructions ────────────────────────────────────────────────────────────────
-const AGENT_INSTRUCTIONS = `You are an IT helpdesk assistant for Alex Johnson (Senior Developer, Engineering, Kolkata Office).
-Email: ${DEMO_USER}
-
-## MCP tools (fetch data from backend)
-- get_system_status / get_active_incidents / check_impact_for_team: check IT service health
-- create_ticket / get_ticket / search_tickets / update_ticket_status / add_ticket_comment: manage support tickets
-
-## Attached documents
-If the user has attached a file, it will appear as an '## Attached Document: {filename}' section in your context.
-1. Always acknowledge and read any attached document before answering.
-2. After reading it, call show_attachment_preview with a one-sentence summary of its contents.
-3. Use the document's content to answer the user's query.
-
-## Frontend render actions — MUST use these to display results visually
-- show_attachment_preview: ALWAYS call this after reading an attached document. Pass fileName, summary, and blobUrl.
-- show_incident_alert: ALWAYS call this after get_active_incidents or get_system_status returns any incidents. Pass incidents as a JSON array. Never reply with plain text incident data.
-- show_my_tickets: ALWAYS call this after search_tickets returns a list of tickets. Pass tickets as a JSON array. Never reply with plain text ticket lists.
-- show_ticket_details: ALWAYS call after get_ticket to display the full ticket as a card. Pass id, title, description, priority, category, status, and optionally assignedTo and createdAt.
-- show_kb_article: Call when presenting a specific KB article from context. Pass id, title, content, and optionally category.
-- suggest_related_articles: Call when recommending 2–3 relevant KB articles. Pass articles as a JSON array with id, title, category, and summary.
-- create_ticket: Call when the user wants to log or track an issue.
-
-## Rules
-1. When asked about incidents, outages, or system status — call get_active_incidents THEN call show_incident_alert with the results.
-2. When asked to list tickets — call search_tickets THEN call show_my_tickets with the results.
-3. When asked about a specific ticket — call get_ticket THEN call show_ticket_details with the result.
-4. Always check get_system_status before troubleshooting — there may be an active incident causing the issue.
-5. When presenting a KB article from context, call show_kb_article to render it as a card.
-6. When recommending multiple KB articles, call suggest_related_articles with 2–3 options.
-7. Even if you provide a text explanation, still call the render action so results appear as a card.
-8. When a document is attached, read and acknowledge it before responding to the user's question.`;
 
 export function HelpdeskChat() {
   const [page, setPage]       = useState<Page>("chat");
@@ -660,69 +636,40 @@ export function HelpdeskChat() {
   const waitingRef = useRef(false);
   const [lastStats, setLastStats] = useState<{ elapsedMs: number; promptTokens: number; completionTokens: number } | null>(null);
 
-  const fetchStats = (retryDelay = 1000) => {
+  // Use a ref so onResponseComplete (captured with [] deps) always calls the latest closure.
+  // fetchStatsRef.current is reassigned each render to capture the latest refs/setters.
+  const fetchStatsRef = useRef<(retryDelay?: number) => void>(null!);
+  fetchStatsRef.current = (retryDelay = 1000) => {
     const tid = threadIdRef.current;
-    if (!tid || !waitingRef.current) return;
-    fetch(`/api/copilotkit/usage?threadId=${encodeURIComponent(tid)}`)
+    if (!waitingRef.current) return;
+    const url = tid
+      ? `/api/copilotkit/usage?threadId=${encodeURIComponent(tid)}`
+      : `/api/copilotkit/usage`;
+    // Retry on both null data (backend not ready yet) and network errors.
+    const scheduleRetry = () => {
+      if (waitingRef.current && retryDelay <= 4000)
+        setTimeout(() => fetchStatsRef.current(retryDelay * 2), retryDelay);
+    };
+    fetch(url)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.promptTokens) {
           setLastStats({ elapsedMs: Date.now() - sendTimeRef.current, ...data });
           waitingRef.current = false;
-        } else if (waitingRef.current && retryDelay <= 3000) {
-          setTimeout(() => fetchStats(retryDelay * 2), retryDelay);
+        } else {
+          scheduleRetry();
         }
       })
-      .catch(() => {
-        if (waitingRef.current && retryDelay <= 3000) {
-          setTimeout(() => fetchStats(retryDelay * 2), retryDelay);
-        }
-      });
+      .catch(scheduleRetry);
   };
 
-  // Inject stats chip into CopilotKit's controls row (right-aligned via margin-left:auto).
-  // Uses a MutationObserver to re-inject if CopilotKit re-renders and removes the chip
-  // (common after multi-turn/tool-call responses where CopilotKit settles state post-stream).
-  useEffect(() => {
-    document.getElementById("hd-stats-chip")?.remove();
-    if (!lastStats) return;
 
-    const chipText = `⏱ ${(lastStats.elapsedMs / 1000).toFixed(1)}s · 📥 ${lastStats.promptTokens} in / 📤 ${lastStats.completionTokens} out`;
-
-    const inject = () => {
-      const all = document.querySelectorAll(".copilotKitMessageControls");
-      const controls = all[all.length - 1];
-      if (!controls) return;
-      const existing = document.getElementById("hd-stats-chip");
-      if (existing?.parentElement === controls) return; // already in the right place
-      existing?.remove();
-      const el = document.createElement("span");
-      el.id = "hd-stats-chip";
-      el.style.cssText = "margin-left:auto;font-size:11px;color:#8892b0;font-family:monospace;letter-spacing:0.02em;white-space:nowrap;padding-top:2px";
-      el.textContent = chipText;
-      controls.appendChild(el);
-    };
-
-    inject();
-
-    const observer = new MutationObserver(() => {
-      const all = document.querySelectorAll(".copilotKitMessageControls");
-      const last = all[all.length - 1];
-      const chip = document.getElementById("hd-stats-chip");
-      // Re-inject if chip is absent OR if it ended up in a stale (non-last) controls element
-      if (!chip || (last && chip.parentElement !== last)) inject();
-    });
-    observer.observe(document.querySelector(".copilotKitMessages") ?? document.body, { childList: true, subtree: true });
-
-    return () => { observer.disconnect(); document.getElementById("hd-stats-chip")?.remove(); };
-  }, [lastStats]);
-
-  const handleTicketCreated = (ticket: Ticket) => {
+  const handleTicketCreated = useCallback((ticket: Ticket) => {
     setTickets(prev => [ticket, ...prev]);
     setRefreshKey(k => k + 1);
-  };
+  }, []);
 
-  const handleAttachFile = async (file: File) => {
+  const handleAttachFile = useCallback(async (file: File) => {
     const placeholder: AttachedFile = {
       name: file.name,
       contentType: file.type || "text/plain",
@@ -738,7 +685,10 @@ export function HelpdeskChat() {
     try {
       const body = new FormData();
       body.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body, signal: controller.signal });
+      // Send thread ID so the upload is keyed to this conversation, not a shared session.
+      const headers: Record<string, string> = {};
+      if (threadIdRef.current) headers["X-Session-Id"] = threadIdRef.current;
+      const res = await fetch("/api/upload", { method: "POST", headers, body, signal: controller.signal });
       clearTimeout(timeoutId);
       if (!res.ok) {
         const text = await res.text();
@@ -763,21 +713,57 @@ export function HelpdeskChat() {
         )
       );
     }
-  };
+  }, []);
 
-  const handleRetryAttachment = (name: string) => {
-    const entry = attachedFiles.find(f => f.name === name);
-    if (!entry?.file) return;
-    const fileToRetry = entry.file;
+  const handleRetryAttachment = useCallback((name: string) => {
+    setAttachedFiles(prev => {
+      const entry = prev.find(f => f.name === name);
+      if (!entry?.file) return prev;
+      const fileToRetry = entry.file;
+      // Schedule the re-upload outside of setState to avoid nested updates.
+      setTimeout(() => handleAttachFile(fileToRetry), 0);
+      return prev.filter(f => f.name !== name);
+    });
+  }, [handleAttachFile]);
+
+  const handleRemoveAttachment = useCallback((name: string) => {
     setAttachedFiles(prev => prev.filter(f => f.name !== name));
-    handleAttachFile(fileToRetry);
-  };
+  }, []);
 
-  const handleRemoveAttachment = (name: string) => {
-    setAttachedFiles(prev => prev.filter(f => f.name !== name));
-  };
+  const clearAllAttachments = useCallback(() => setAttachedFiles([]), []);
 
-  const clearAllAttachments = () => setAttachedFiles([]);
+  // Memoize callbacks before creating the context value below.
+  const onSendStarted = useCallback(() => {
+    sendTimeRef.current = Date.now();
+    setLastStats(null);
+    waitingRef.current = true;
+  }, []);
+
+  const onResponseComplete = useCallback(() => {
+    waitingRef.current = true;  // re-arm before polling — a previous fetchStats round may have set it false
+    fetchStatsRef.current(200);
+  }, []);  // fetchStatsRef is stable — no deps needed
+
+  const onResponseReset = useCallback(() => {
+    setLastStats(null);
+    waitingRef.current = true;
+  }, []);
+
+  // ── Stats chip (rendered in header) ────────────────────────────────────────────
+  // Pure React state — set after each agent response, cleared on next send.
+
+  // Stable context value — only re-created when attachedFiles list changes.
+  const attachmentContextValue = useMemo(() => ({
+    attachedFiles,
+    onAdd: handleAttachFile,
+    onRemove: handleRemoveAttachment,
+    onRetry: handleRetryAttachment,
+    clearAll: clearAllAttachments,
+    onSendStarted,
+    onResponseComplete,
+    onResponseReset,
+  }), [attachedFiles, handleAttachFile, handleRemoveAttachment, handleRetryAttachment,
+      clearAllAttachments, onSendStarted, onResponseComplete, onResponseReset]);
 
   return (
     <div className="hd-shell">
@@ -829,29 +815,40 @@ export function HelpdeskChat() {
             <h1 className="hd-title">{current.label}</h1>
             <p className="hd-subtitle">{current.subtitle}</p>
           </div>
+          {/* Stats chip — lives in the header row so it never floats over chat content */}
+          {lastStats && page === "chat" && (
+            <div
+              style={{
+                marginLeft: "auto",
+                fontSize: 11,
+                color: "#9098b0",
+                fontFamily: "monospace",
+                letterSpacing: "0.02em",
+                whiteSpace: "nowrap",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 6,
+                padding: "4px 12px",
+                pointerEvents: "none",
+                flexShrink: 0,
+              }}
+            >
+              ⏱ {(lastStats.elapsedMs / 1000).toFixed(1)}s &nbsp;·&nbsp; 📥 {lastStats.promptTokens} in / 📤 {lastStats.completionTokens} out
+            </div>
+          )}
         </header>
 
         {page === "chat" && (
-          <AttachmentContext.Provider value={{
-            attachedFiles,
-            onAdd: handleAttachFile,
-            onRemove: handleRemoveAttachment,
-            onRetry: handleRetryAttachment,
-            clearAll: clearAllAttachments,
-            onSendStarted: () => { sendTimeRef.current = Date.now(); setLastStats(null); waitingRef.current = true; },
-            onResponseComplete: () => fetchStats(500),
-            onResponseReset: () => { setLastStats(null); waitingRef.current = true; },
-          }}>
+          <AttachmentContext.Provider value={attachmentContextValue}>
               <HelpdeskActions
                 tickets={tickets}
                 onTicketCreated={handleTicketCreated}
                 attachedFiles={attachedFiles}
               />
 
-              <div className="hd-chat-wrapper" style={{ ...ckTheme }}>
+              <div className="hd-chat-wrapper" style={ckTheme}>
                 <CopilotChat
                   Input={CustomChatInput}
-                  instructions={AGENT_INSTRUCTIONS}
                   labels={{
                     title: "IT Support",
                     initial: "👋 Hi Alex! What IT issue can I help you with today?",

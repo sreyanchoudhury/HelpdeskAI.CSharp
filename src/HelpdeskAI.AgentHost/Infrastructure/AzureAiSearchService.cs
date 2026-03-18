@@ -67,7 +67,16 @@ internal sealed class AzureAiSearchService(
 
             await foreach (var r in results.Value.GetResultsAsync().WithCancellation(ct))
             {
-                var title   = r.Document.TryGetValue("title",   out var t) ? t?.ToString() : "Untitled";
+                // Skip results below the configured relevance threshold.
+                // SemanticSearch.RerankerScore ranges 0–4; MinScore = 0 disables filtering.
+                if (_cfg.MinScore > 0.0 && (r.SemanticSearch?.RerankerScore ?? 0.0) < _cfg.MinScore)
+                {
+                    log.LogDebug("Skipping KB result — reranker score {Score:F2} < threshold {Threshold}",
+                        r.SemanticSearch?.RerankerScore ?? 0.0, _cfg.MinScore);
+                    continue;
+                }
+
+                var title = r.Document.TryGetValue("title", out var t) ? t?.ToString() : "Untitled";
                 var content = r.Document.TryGetValue("content", out var c) ? c?.ToString() : "";
                 var snippet = r.SemanticSearch?.Captions?.FirstOrDefault()?.Text
                               ?? (content?.Length > 400 ? content[..400] + "…" : content);
@@ -90,14 +99,14 @@ internal sealed class AzureAiSearchService(
     public async Task<string> IndexDocumentAsync(
         string title, string content, string? category = null, CancellationToken ct = default)
     {
-        var id  = $"KB-up-{Guid.NewGuid():N}";
+        var id = $"KB-up-{Guid.NewGuid():N}";
         var doc = new SearchDocument
         {
-            ["id"]       = id,
-            ["title"]    = title,
-            ["content"]  = content,
+            ["id"] = id,
+            ["title"] = title,
+            ["content"] = content,
             ["category"] = category ?? "Uploaded",
-            ["tags"]     = new[] { "uploaded" }
+            ["tags"] = new[] { "uploaded" }
         };
         try
         {
@@ -122,15 +131,15 @@ internal sealed class AzureAiSearchService(
                 Select = { "id", "title", "content", "category" }
             };
             var results = await _client.SearchAsync<SearchDocument>("*", options, ct);
-            var items   = new List<KbSearchResult>();
+            var items = new List<KbSearchResult>();
 
             await foreach (var r in results.Value.GetResultsAsync().WithCancellation(ct))
             {
-                var id       = r.Document.TryGetValue("id",       out var ri)  ? ri?.ToString()  ?? ""          : "";
-                var title    = r.Document.TryGetValue("title",    out var rt)  ? rt?.ToString()  ?? "Untitled"   : "Untitled";
-                var content  = r.Document.TryGetValue("content",  out var rc)  ? rc?.ToString()  ?? ""          : "";
-                var category = r.Document.TryGetValue("category", out var rca) ? rca?.ToString()                : null;
-                var snippet  = content.Length > 400 ? content[..400] + "\u2026" : content;
+                var id = r.Document.TryGetValue("id", out var ri) ? ri?.ToString() ?? "" : "";
+                var title = r.Document.TryGetValue("title", out var rt) ? rt?.ToString() ?? "Untitled" : "Untitled";
+                var content = r.Document.TryGetValue("content", out var rc) ? rc?.ToString() ?? "" : "";
+                var category = r.Document.TryGetValue("category", out var rca) ? rca?.ToString() : null;
+                var snippet = content.Length > 400 ? content[..400] + "\u2026" : content;
                 items.Add(new KbSearchResult(id, title, snippet, category));
             }
 
@@ -149,15 +158,15 @@ internal sealed class AzureAiSearchService(
         try
         {
             var results = await _client.SearchAsync<SearchDocument>(query, BuildSearchOptions(), ct);
-            var items   = new List<KbSearchResult>();
+            var items = new List<KbSearchResult>();
 
             await foreach (var r in results.Value.GetResultsAsync().WithCancellation(ct))
             {
-                var id       = r.Document.TryGetValue("id",       out var ri)  ? ri?.ToString()  ?? ""        : "";
-                var title    = r.Document.TryGetValue("title",    out var rt)  ? rt?.ToString()  ?? "Untitled" : "Untitled";
-                var content  = r.Document.TryGetValue("content",  out var rc)  ? rc?.ToString()  ?? ""        : "";
-                var category = r.Document.TryGetValue("category", out var rca) ? rca?.ToString()              : null;
-                var snippet  = r.SemanticSearch?.Captions?.FirstOrDefault()?.Text
+                var id = r.Document.TryGetValue("id", out var ri) ? ri?.ToString() ?? "" : "";
+                var title = r.Document.TryGetValue("title", out var rt) ? rt?.ToString() ?? "Untitled" : "Untitled";
+                var content = r.Document.TryGetValue("content", out var rc) ? rc?.ToString() ?? "" : "";
+                var category = r.Document.TryGetValue("category", out var rca) ? rca?.ToString() : null;
+                var snippet = r.SemanticSearch?.Captions?.FirstOrDefault()?.Text
                                ?? (content.Length > 400 ? content[..400] + "…" : content);
                 items.Add(new KbSearchResult(id, title, snippet, category));
             }

@@ -1,6 +1,6 @@
 ﻿namespace HelpdeskAI.McpServer.Models;
 
-public enum TicketStatus   { Open, InProgress, PendingUser, Resolved, Closed }
+public enum TicketStatus { Open, InProgress, PendingUser, Resolved, Closed }
 public enum TicketPriority { Low, Medium, High, Critical }
 public enum TicketCategory { Hardware, Software, Network, Access, Email, VPN, Other }
 
