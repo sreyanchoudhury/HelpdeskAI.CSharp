@@ -1,6 +1,6 @@
 ﻿# HelpdeskAI
 
-An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events.
+An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events. Each response shows a `⏱ latency · 📥 in / 📤 out` token stats chip in the header.
 
 <table>
   <tr>
