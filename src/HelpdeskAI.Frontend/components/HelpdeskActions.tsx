@@ -528,8 +528,12 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
     render: ({ status, args }) => {
       let parsed: Array<{ id: string; title: string; priority: string; status: string; category?: string }> = [];
       try {
-        const raw = args.tickets as string;
-        parsed = Array.isArray(raw) ? raw : JSON.parse(raw);
+        const raw = args.tickets as unknown;
+        const intermediate = Array.isArray(raw) ? raw
+          : typeof raw === "string" ? JSON.parse(raw)
+          : raw;
+        // Agent may pass the full search_tickets response {count, tickets:[...]} instead of just the array
+        parsed = Array.isArray(intermediate) ? intermediate : ((intermediate as { tickets?: unknown[] })?.tickets ?? []) as typeof parsed;
       } catch {
         parsed = [];
       }
