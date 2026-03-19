@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using HelpdeskAI.AgentHost.Abstractions;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 namespace HelpdeskAI.AgentHost.Infrastructure;
 
@@ -7,6 +9,8 @@ namespace HelpdeskAI.AgentHost.Infrastructure;
 /// Delegates to an MCP AIFunction and automatically reconnects + retries once on any
 /// MCP transport or session error (HTTP failures, dropped SSE connections, session expiry).
 /// Metadata (Name, Description, schema) always comes from the original inner function.
+/// Emits structured audit logs (toolName, attempt, outcome, durationMs) picked up by
+/// Azure Monitor / OpenTelemetry as customDimensions in App Insights traces.
 /// </summary>
 internal sealed class RetryingMcpTool : DelegatingAIFunction
 {
@@ -14,31 +18,61 @@ internal sealed class RetryingMcpTool : DelegatingAIFunction
     private AIFunction _current;
     private readonly IMcpToolsProvider _provider;
     private readonly string _toolName;
+    private readonly ILogger _logger;
 
-    internal RetryingMcpTool(AIFunction inner, IMcpToolsProvider provider) : base(inner)
+    internal RetryingMcpTool(AIFunction inner, IMcpToolsProvider provider, ILogger logger) : base(inner)
     {
         _current = inner;
         _provider = provider;
         _toolName = inner.Name;
+        _logger = logger;
     }
 
     protected override async ValueTask<object?> InvokeCoreAsync(
         AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
+        var sw = Stopwatch.StartNew();
+        // BeginScope properties surface as customDimensions.toolName in App Insights.
+        using var scope = _logger.BeginScope(new { toolName = _toolName });
+
         try
         {
-            return await _current.InvokeAsync(arguments, cancellationToken);
+            var result = await _current.InvokeAsync(arguments, cancellationToken);
+            _logger.LogInformation(
+                "Tool call succeeded — attempt: {Attempt}, outcome: {Outcome}, durationMs: {DurationMs}.",
+                1, "success", sw.ElapsedMilliseconds);
+            return result;
         }
         catch (Exception ex)
             when (!cancellationToken.IsCancellationRequested && IsMcpTransportError(ex))
         {
             // MCP session expired or transport dropped — reconnect and retry once.
             // The McpToolsProvider.RefreshAsync disposes the stale client and creates a
-            // fresh MCP session; GetToolsAsync also proactively refreshes at 3.5 min.
+            // fresh MCP session; GetToolsAsync also proactively refreshes at 3 min.
+            _logger.LogWarning(ex,
+                "Tool call transport error — attempt: {Attempt}, outcome: {Outcome}, durationMs: {DurationMs}. Reconnecting.",
+                1, "transport_error", sw.ElapsedMilliseconds);
+
+            sw.Restart();
             var freshTools = await _provider.RefreshAsync(cancellationToken);
             var replacement = freshTools.FirstOrDefault(t => t.Name == _toolName);
             if (replacement is not null) _current = replacement;
-            return await _current.InvokeAsync(arguments, cancellationToken);
+
+            try
+            {
+                var result = await _current.InvokeAsync(arguments, cancellationToken);
+                _logger.LogInformation(
+                    "Tool call succeeded — attempt: {Attempt}, outcome: {Outcome}, durationMs: {DurationMs}.",
+                    2, "success_after_retry", sw.ElapsedMilliseconds);
+                return result;
+            }
+            catch (Exception retryEx)
+            {
+                _logger.LogError(retryEx,
+                    "Tool call failed after retry — attempt: {Attempt}, outcome: {Outcome}, durationMs: {DurationMs}.",
+                    2, "failure", sw.ElapsedMilliseconds);
+                throw;
+            }
         }
     }
 

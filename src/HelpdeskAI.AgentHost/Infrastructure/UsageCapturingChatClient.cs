@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HelpdeskAI.AgentHost.Abstractions;
 using HelpdeskAI.AgentHost.Models;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace HelpdeskAI.AgentHost.Infrastructure;
@@ -15,11 +16,14 @@ namespace HelpdeskAI.AgentHost.Infrastructure;
 /// and write it directly to Redis while the streaming response is still open.
 /// Writing inside the generator (before the HTTP response closes) avoids a race
 /// condition where the frontend fetches /agent/usage before StoreChatHistoryAsync runs.
+/// Also emits structured token-count traces picked up by Azure Monitor as
+/// customDimensions (PromptTokens, CompletionTokens) for Phase 1d KQL baseline queries.
 /// </summary>
 internal sealed class UsageCapturingChatClient(
     IChatClient inner,
     IRedisService redis,
-    IOptions<ConversationSettings> settings) : DelegatingChatClient(inner)
+    IOptions<ConversationSettings> settings,
+    ILogger<UsageCapturingChatClient> logger) : DelegatingChatClient(inner)
 {
     private readonly ConversationSettings _settings = settings.Value;
 
@@ -64,6 +68,12 @@ internal sealed class UsageCapturingChatClient(
     {
         var json = JsonSerializer.Serialize(new { promptTokens, completionTokens });
         var tid = ThreadIdContext.Current;
+
+        // Structured trace — surfaces as customDimensions.PromptTokens /
+        // CompletionTokens in App Insights for Phase 1d KQL baseline queries.
+        logger.LogInformation(
+            "Token usage — PromptTokens: {PromptTokens}, CompletionTokens: {CompletionTokens}, ThreadId: {ThreadId}.",
+            promptTokens, completionTokens, tid ?? "(none)");
 
         // Write thread-specific and global-fallback keys in parallel.
         // Always write usage:latest so the frontend can fall back to it when the

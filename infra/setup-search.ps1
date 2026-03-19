@@ -74,13 +74,18 @@ if (-not (Test-Path $seedPath)) {
     exit 1
 }
 
-$documents = Get-Content $seedPath -Raw
+$documents = Get-Content $seedPath -Raw -Encoding UTF8
+
+# Send as explicit UTF-8 bytes so that multi-byte characters (em-dashes, etc.)
+# are transmitted correctly regardless of the host PowerShell code page.
+$headers["Content-Type"] = "application/json; charset=utf-8"
+$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($documents)
 
 Invoke-RestMethod `
-    -Uri     "$endpoint/indexes/helpdesk-kb/docs/index?api-version=$apiVersion" `
-    -Method  POST `
-    -Headers $headers `
-    -Body    $documents | Out-Null
+    -Uri         "$endpoint/indexes/helpdesk-kb/docs/index?api-version=$apiVersion" `
+    -Method      POST `
+    -Headers     $headers `
+    -Body        $bodyBytes | Out-Null
 
 $count = ($documents | ConvertFrom-Json).value.Count
 Write-Host "  OK -- $count articles uploaded." -ForegroundColor Green
