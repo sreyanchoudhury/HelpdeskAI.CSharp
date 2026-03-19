@@ -1,35 +1,47 @@
 {
   "_readme": [
-    "Phase 1d performance baseline — captured after Phase 1a audit logging is deployed.",
-    "Fill the zero values below by running the KQL queries in docs/baseline/kql-queries.md",
-    "against the App Insights instance after >= 20 agent turns.",
-    "Regression rule (Phase 2+): if p95AgentTurnMs increases > 20% or avgPromptTokens",
-    "increases > 200 tokens vs this baseline, a mitigation plan is required before merge."
+    "Phase 1d performance baseline — captured after Phase 1a audit logging deployed.",
+    "Regression rule (Phase 2+): if p95AgentTurnMs increases > 20% vs this baseline,",
+    "OR avgPromptTokens increases > 200 tokens per turn, a mitigation plan is required",
+    "before any Phase 2+ feature is merged.",
+    "Re-run docs/baseline/kql-queries.md after each release tag to track drift."
   ],
-  "capturedAt": "",
+  "capturedAt": "2026-03-19T07:00:00Z",
+  "sampleSize": {
+    "agentTurns": 26,
+    "tokenUsageSamples": 24,
+    "toolCallSamples": 8
+  },
   "environment": "dev",
-  "appInsightsName": "helpdeskaiapp-dev-ai-*",
+  "appInsightsName": "helpdeskaiapp-dev-ai-vlfb75zl",
   "agentTurnLatencyMs": {
-    "p50": 0,
-    "p95": 0,
-    "p99": 0
+    "_note": "POST /agent only — excludes /agent/usage health pings",
+    "p50": 5485,
+    "p95": 13224,
+    "p99": 13224
   },
   "tokenUsagePerTurn": {
-    "avgPromptTokens": 0,
-    "p95PromptTokens": 0,
-    "avgCompletionTokens": 0
+    "_note": "Per LLM call; multi-step turns (e.g. create+show ticket) produce multiple samples",
+    "avgPromptTokens": 5866,
+    "p95PromptTokens": 10331,
+    "avgCompletionTokens": 122,
+    "p95CompletionTokens": 256
   },
   "perToolLatencyMs": {
-    "_note": "Populated after first eval run — one entry per MCP tool name.",
-    "create_ticket":           { "p50": 0, "p95": 0 },
-    "get_ticket":              { "p50": 0, "p95": 0 },
-    "search_tickets":          { "p50": 0, "p95": 0 },
-    "update_ticket_status":    { "p50": 0, "p95": 0 },
-    "add_ticket_comment":      { "p50": 0, "p95": 0 },
-    "assign_ticket":           { "p50": 0, "p95": 0 },
-    "get_system_status":       { "p50": 0, "p95": 0 },
-    "get_active_incidents":    { "p50": 0, "p95": 0 },
-    "check_impact_for_team":   { "p50": 0, "p95": 0 },
-    "index_kb_article":        { "p50": 0, "p95": 0 }
+    "_note": "DurationMs = wall-clock time inside RetryingMcpTool (MCP HTTP round-trip). Populated from Phase 1 test session.",
+    "create_ticket":           { "p50": 2,   "p95": 2   },
+    "get_ticket":              { "p50": 0,   "p95": 0   },
+    "search_tickets":          { "p50": 0,   "p95": 0   },
+    "update_ticket_status":    { "p50": 2,   "p95": 4   },
+    "add_ticket_comment":      { "p50": 0,   "p95": 0   },
+    "assign_ticket":           { "p50": 0,   "p95": 0   },
+    "get_system_status":       { "p50": 0,   "p95": 0   },
+    "get_active_incidents":    { "p50": 0,   "p95": 0   },
+    "check_impact_for_team":   { "p50": 0,   "p95": 0   },
+    "index_kb_article":        { "p50": 496, "p95": 496 }
+  },
+  "regressionThresholds": {
+    "p95AgentTurnLatencyMaxIncreasePct": 20,
+    "avgPromptTokensMaxIncrease": 200
   }
 }

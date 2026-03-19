@@ -38,6 +38,14 @@ public interface IMcpToolsProvider
     /// Call when tool invocations fail with "Session not found" after a McpServer restart.
     /// </summary>
     Task<IReadOnlyList<AIFunction>> RefreshAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the cached AIFunction for <paramref name="name"/> without acquiring a lock.
+    /// Used by RetryingMcpTool to resolve the live function at invocation time, so a
+    /// session refresh by any one tool automatically updates all sibling tool wrappers.
+    /// Returns null if the cache is empty (startup not complete) or the name isn't found.
+    /// </summary>
+    AIFunction? GetCachedToolOrDefault(string name);
 }
 
 /// <summary>Uploads a file stream to Blob Storage and returns the blob URL.</summary>

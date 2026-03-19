@@ -368,7 +368,7 @@ resource alertErrorRate 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
     severity: 2
     enabled: true
     skipQueryValidation: true   // workspace may not have data at deploy time
-    scopes: [ logAnalytics.id ]
+    scopes: [ appInsights.id ]
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
     criteria: {
@@ -408,7 +408,7 @@ resource alertP95Latency 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
     severity: 2
     enabled: true
     skipQueryValidation: true   // workspace may not have data at deploy time
-    scopes: [ logAnalytics.id ]
+    scopes: [ appInsights.id ]
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
     criteria: {
@@ -447,7 +447,7 @@ resource alertRedisConnectivity 'Microsoft.Insights/scheduledQueryRules@2022-06-
     severity: 1
     enabled: true
     skipQueryValidation: true   // workspace may not have data at deploy time
-    scopes: [ logAnalytics.id ]
+    scopes: [ appInsights.id ]
     evaluationFrequency: 'PT5M'
     windowSize: 'PT5M'
     criteria: {
