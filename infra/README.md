@@ -99,14 +99,35 @@ This runs an Azure deployment preview without provisioning any resources.
 
 ---
 
+## Monitoring & Observability
+
+All telemetry flows through Azure Monitor OpenTelemetry into Application Insights.
+Three alert rules are deployed as `scheduledQueryRules` in `app-deploy/apps.bicep`:
+
+| Alert | Threshold | Severity |
+|-------|-----------|----------|
+| Error rate | > 1% HTTP failures over 15 min | Sev 2 |
+| p95 latency | > 10 s on `/agent` over 15 min | Sev 2 |
+| Redis connectivity | ≥ 3 Redis error traces in 5 min | Sev 1 |
+
+**Full guide — navigation, KQL queries, alert rules, regression checks:**
+→ [`infra/monitoring.md`](monitoring.md)
+
+**Performance baseline (Phase 1d captured numbers + regression thresholds):**
+→ [`docs/baseline/metrics-baseline.json`](../docs/baseline/metrics-baseline.json)
+
+---
+
 ## File Reference
 
 | File | Purpose |
 |------|---------|
-| `main.bicep` | Bicep infrastructure template (82 lines) |
+| `main.bicep` | Bicep infrastructure template (OpenAI + AI Search) |
+| `app-deploy/apps.bicep` | Full app stack (Container Apps, Redis, alert rules) |
 | `deploy.ps1` | PowerShell deployment orchestration script |
-| `seed-data.json` | Knowledge base articles (5 sample IT KB documents) |
-| `setup-search.ps1` | Standalone KB index setup (if you need to re-create the index) |
+| `seed-data.json` | Knowledge base articles seeded into AI Search at setup |
+| `setup-search.ps1` | Standalone KB index setup / re-seeding script |
+| `monitoring.md` | KQL query reference, alert rules, regression checks |
 
 ---
 

@@ -124,6 +124,14 @@ internal sealed class McpToolsProvider(
         _connectedAt = DateTimeOffset.UtcNow;
     }
 
+    /// <summary>
+    /// Lock-free read of the cached tool list. Reading a managed reference is atomic in .NET;
+    /// the worst case is returning a tool from the previous session, which RetryingMcpTool
+    /// handles by retrying via RefreshAsync. Returns null when the cache is uninitialised.
+    /// </summary>
+    public AIFunction? GetCachedToolOrDefault(string name) =>
+        _tools?.FirstOrDefault(t => t.Name == name);
+
     public async ValueTask DisposeAsync()
     {
         _lock.Dispose();
