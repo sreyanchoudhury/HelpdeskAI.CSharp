@@ -48,10 +48,20 @@ public interface IMcpToolsProvider
     AIFunction? GetCachedToolOrDefault(string name);
 }
 
-/// <summary>Uploads a file stream to Blob Storage and returns the blob URL.</summary>
+/// <summary>Streams a blob back to the caller with its content type.</summary>
+public sealed record BlobDownload(Stream Content, string ContentType);
+
+/// <summary>
+/// Uploads a file stream to Blob Storage and returns the blob name (not the unsigned URI).
+/// Use the authenticated <c>GET /api/attachments/{blobName}</c> proxy endpoint to serve downloads.
+/// </summary>
 public interface IBlobStorageService
 {
+    /// <summary>Uploads the stream and returns the blob name (e.g. <c>{guid}/{fileName}</c>).</summary>
     Task<string> UploadAsync(string fileName, Stream content, string contentType, CancellationToken ct = default);
+
+    /// <summary>Downloads the blob identified by <paramref name="blobName"/> via Managed Identity.</summary>
+    Task<BlobDownload> DownloadAsync(string blobName, CancellationToken ct = default);
 }
 
 /// <summary>

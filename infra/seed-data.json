@@ -1,204 +1,464 @@
-{
-  "value": [
-    {
-      "@search.action": "upload",
-      "id": "KB-0001",
-      "title": "VPN Connection Troubleshooting Guide",
-      "category": "VPN",
-      "tags": ["vpn", "cisco anyconnect", "network", "authentication", "windows"],
-      "content": "VPN Troubleshooting\n\nStep 1 - Reinstall AnyConnect\nUninstall via Add/Remove Programs, download the latest installer from https://itportal/vpn, right-click the installer and choose Run as Administrator.\n\nStep 2 - Reset network adapters\nDevice Manager > Network Adapters > right-click every Cisco adapter > Disable, then Enable.\n\nStep 3 - Flush DNS and reset Winsock\nRun in an elevated command prompt:\n  netsh int ip reset\n  netsh winsock reset\n  ipconfig /flushdns\nRestart after running all three commands.\n\nStep 4 - Check credentials\nEnsure your AD password is current at https://password.contoso.com. MFA tokens expire after 30 seconds — tap 'Refresh' in the Authenticator app if the code is about to expire before you type it.\n\nCommon error codes:\n- Reason 412 — VPN client terminated. Reinstall AnyConnect.\n- Reason 433 — VPN was terminated locally. Check your firewall or antivirus is not blocking AnyConnect.\n- Authentication failed — Password may be expired; check https://password.contoso.com.\n\nIf still failing: collect DART logs (AnyConnect tray icon > Help > Collect Logs) and attach to the ticket. Include your username and the exact error message."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0002",
-      "title": "Outlook Email Sync Issues",
-      "category": "Email",
-      "tags": ["outlook", "email", "sync", "exchange", "ost", "calendar", "office 365"],
-      "content": "Outlook Not Syncing\n\n1. Send/Receive All — Press F9 or go to Send/Receive tab > Send/Receive All Folders.\n2. Work Offline toggle — Send/Receive tab > check 'Work Offline' is NOT enabled (button should not appear pressed).\n3. Rebuild OST — Close Outlook. Navigate to %localappdata%\\Microsoft\\Outlook\\ and rename any .ost file to .bak. Reopen Outlook; it will rebuild from the server (10–30 min for large mailboxes).\n4. Create a new profile — Control Panel > Mail > Show Profiles > Add > set as default. Remove the old profile only after the new one works.\n5. Test AutoConfiguration — Hold Ctrl, right-click the Outlook tray icon > Test Email AutoConfiguration. Ensure all three checks pass.\n\nOutlook shows 'Disconnected' or 'Trying to connect'\n- Run Outlook in Safe Mode: Win+R > outlook.exe /safe. If it connects in Safe Mode, a COM add-in is blocking it.\n- Repair Office: Control Panel > Programs > Microsoft 365 Apps > Change > Quick Repair (online repair if Quick Repair does not help).\n\nCalendar not syncing\n- Remove the account from Outlook mobile and re-add it to force a full calendar sync.\n- Shared calendar permissions may have changed — ask the calendar owner to re-share.\n\nError 0x8004010F — OST path issue. Go to File > Account Settings > Data Files and confirm the .ost path exists on disk."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0003",
-      "title": "System Access Request Process",
-      "category": "Access",
-      "tags": ["access", "sharepoint", "permissions", "request", "active directory", "groups"],
-      "content": "Requesting Access to Systems and Resources\n\nStandard access (SLA: 2 business days)\nSubmit a ticket with: resource name (e.g. SharePoint site URL or application name), access level (Read / Contribute / Owner), business justification, and your manager's email address. Your manager receives an approval email; once approved IT provisions access via the appropriate AD security group.\n\nPrivileged access (admin rights, production systems, financial data)\nRequires CISO approval in addition to manager sign-off. Allow up to 5 business days. Access is time-bound (90 days maximum) and logged.\n\nEmergency access (< 4 hours)\nCall ext. 5000. Out of hours: +1-800-IT-HELP. Provide employee ID and manager's name for identity verification. Emergency access is audited and expires after 24 hours.\n\nSelf-service password reset\nhttps://aka.ms/sspr — requires pre-registered MFA. No ticket needed.\n\nApplication access (e.g. SAP, Salesforce, custom LOB apps)\nManager submits an access request in ServiceNow with cost centre code. Licence cost is charged to the department. Allow 3 business days.\n\nRemoving access\nManagers must submit a Remove Access ticket when an employee changes role or leaves. Leavers' accounts are disabled on their last working day and deleted after 90 days per data retention policy."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0004",
-      "title": "Laptop Hardware Issues Self-Service Guide",
-      "category": "Hardware",
-      "tags": ["hardware", "laptop", "battery", "screen", "keyboard", "replacement", "display", "performance"],
-      "content": "Hardware Troubleshooting\n\nSlow Performance\nRestart the laptop. Open Task Manager (Ctrl+Shift+Esc) and check the CPU and Memory columns — identify any process consistently above 50%. Ensure at least 10 GB of free disk space (Settings > System > Storage). Run Disk Cleanup if below threshold.\n\nBattery not charging\nRun: powercfg /batteryreport (output at C:\\battery-report.html). Under 40% design capacity qualifies for free warranty replacement if the machine is under 3 years old. Under 80% health — submit a Hardware Replacement ticket including the battery report.\n\nDisplay problems\n- Press Win+P to cycle display modes (PC screen only / Duplicate / Extend / Second screen only).\n- Update display drivers: Device Manager > Display Adapters > Update driver.\n- Broken or cracked screen — accidental damage is covered if your department has IT Insurance. Bring your laptop to Room 204, Building B with the asset tag number. Walk-in SLA: next business day repair or loan device.\n\nKeyboard / trackpad unresponsive\nUse an external USB keyboard temporarily. Check Device Manager for yellow exclamation marks under Keyboards or HID devices. Roll back the keyboard driver if recently updated.\n\nStorage / SSD failure\nRun: wmic diskdrive get status in Command Prompt. Any result other than 'OK' means imminent failure. Raise a Critical ticket immediately — 48-hour hardware replacement SLA applies. Back up to OneDrive urgently.\n\nLoan devices\nAvailable from Room 204, Building B for up to 5 business days. Bring your employee ID. Confirm OneDrive shows a green tick before surrendering your original device."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0005",
-      "title": "Network Connectivity Troubleshooting",
-      "category": "Network",
-      "tags": ["network", "wifi", "ethernet", "proxy", "dns", "slow", "internet", "connectivity"],
-      "content": "Network Troubleshooting\n\nNo internet connection\nRun: ipconfig /release then ipconfig /renew. A valid IP should be in the 10.x.x.x range. If you get 169.254.x.x the DHCP server is unreachable — try a different port or cable. Flush DNS: ipconfig /flushdns. Test connectivity: ping 8.8.8.8.\n\nWiFi dropping frequently\nForget the SSID and reconnect. Prefer CONTOSO-5G (5 GHz, faster, shorter range) over CONTOSO (2.4 GHz, longer range but congested). Update the WiFi adapter driver via Device Manager. Check https://status.company.com for known outages before raising a ticket.\n\nSlow internet speed\nRun a speed test at https://fast.com while connected to ethernet. Expected: ≥ 100 Mbps download, ≥ 50 Mbps upload on corporate LAN. If WiFi is significantly slower, move closer to the access point or switch to ethernet.\n\nProxy configuration\nSettings > Network & Internet > Proxy > Manual proxy:\n  Address: http://proxy.contoso.com  Port: 8080\nBypass list: localhost, 127.0.0.1, *.contoso.com, 10.0.0.0/8\nFor developer tools set the environment variable:\n  HTTPS_PROXY=http://proxy.contoso.com:8080\n  NO_PROXY=localhost,127.0.0.1,*.contoso.com\n\nDNS settings\nPrimary: 10.0.0.10  Secondary: 10.0.0.11\nTest: nslookup contoso.com 10.0.0.10\nIf DNS lookups fail on VPN, ensure 'Use default gateway on remote network' is checked in the VPN adapter settings."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0006",
-      "title": "Printer Setup and Printing Problems",
-      "category": "Printing",
-      "tags": ["printer", "printing", "driver", "queue", "scan", "stuck", "offline", "network printer"],
-      "content": "Printer Troubleshooting\n\nPrinter shows Offline\nRight-click the printer in Settings > Printers > uncheck 'Use Printer Offline'. Still offline: remove and re-add the printer.\n\nStuck print queue\nOpen Services (services.msc) > stop Print Spooler. Navigate to C:\\Windows\\System32\\spool\\PRINTERS and delete all files inside (do not delete the folder). Start Print Spooler again. Retry your print job.\n\nInstall a network printer\nSettings > Bluetooth & devices > Printers > Add device. If it does not appear, click 'Add manually' and enter the printer IP from the label on the device (e.g. 10.1.2.45). Download the correct driver from https://itportal/printers matching the printer model and OS.\n\nPrint quality issues\nLaser printer — remove the toner cartridge, gently rock it side-to-side 4–5 times, reinsert. If streaks or faded lines persist, raise a ticket including the printer asset tag and floor/room number so IT can replace the toner.\n\nScanning to email not working\n1. Confirm the device is on the corporate network (not guest WiFi).\n2. Check your email address is registered on the MFD: https://itportal/mfd.\n3. SMTP relay settings on the MFD: smtp.contoso.com, port 25, no authentication.\n4. Check your spam folder — scan-to-email messages are sometimes caught by filters.\n\nPrinting from remote session or VDI\nEnsure 'Printers' is ticked under Local Resources in the RDP client before connecting. For Azure Virtual Desktop, install the Universal Print driver from the IT portal on your local machine."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0007",
-      "title": "Password Reset and Account Lockout",
-      "category": "Access",
-      "tags": ["password", "reset", "locked", "account lockout", "active directory", "self service", "sspr", "mfa"],
-      "content": "Password Reset and Account Unlock\n\nSelf-service reset (fastest — no ticket needed)\nGo to https://aka.ms/sspr and follow the prompts. Requires MFA to be pre-registered at https://aka.ms/mfasetup. Password change takes effect within 5 minutes across all systems including VPN and email.\n\nAccount locked out\nAfter 5 failed login attempts, your account locks for 30 minutes automatically. Either wait and retry, or use SSPR to unlock immediately without the wait.\n\nPassword requirements\n- Minimum 14 characters\n- At least one uppercase letter, one number, one special character\n- Cannot reuse any of your last 24 passwords\n- Expires every 180 days — reminder emails sent at 14, 7, and 1 day before expiry\n\nForced reset after IT intervention\nIf IT resets your password you are prompted to set a new one at first login. You cannot reuse the temporary password. Set it immediately — the temporary password expires after 24 hours.\n\nNo access to SSPR (new device or MFA not yet registered)\nCall IT Service Desk: ext. 5000 or +1-800-IT-HELP. Identity verification required: employee ID number and confirmation from your manager (via a separate call or email to IT).\n\nService account passwords\nMust be changed via a Change Request ticket — never via SSPR. Coordinate with all application owners to update service connections before resetting, to avoid application outages."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0008",
-      "title": "Microsoft Teams Troubleshooting",
-      "category": "Collaboration",
-      "tags": ["teams", "microsoft teams", "meeting", "audio", "video", "camera", "chat", "calls", "screen share"],
-      "content": "Microsoft Teams Issues\n\nTeams not loading or showing a blank screen\nQuit Teams completely (right-click system tray icon > Quit). Delete the cache folder: %appdata%\\Microsoft\\Teams (delete all sub-folders except 'Downloads'). Relaunch Teams.\n\nAudio problems in meetings\nClick the three dots (…) in the meeting > Device settings. Confirm the correct speaker and microphone are selected. Run the built-in audio test: Teams Settings > Calls > 'Make a test call'.\n\nCamera not working\n- Windows: Settings > Privacy > Camera > allow Microsoft Teams.\n- Check Device Manager — confirm the camera is enabled and has no yellow error markers.\n- External webcam: try a different USB port (prefer USB 3.0); avoid USB hubs.\n\nScreen sharing shows a black screen\n- Windows: try sharing a specific application window instead of the whole desktop, especially on multi-monitor setups.\n- macOS: System Settings > Privacy & Security > Screen Recording > enable for Microsoft Teams. Restart Teams after granting permission.\n\nTeams calls dropping or choppy audio/video\nRun the Microsoft 365 Network Connectivity Test: https://connectivity.office.com. Prefer wired ethernet over WiFi for video calls. Target: < 150 ms latency, < 1% packet loss to Microsoft 365 endpoints.\n\nMissing from a Team or channel\nAsk the Team Owner to re-add you. Owners are listed under the Team name > Manage team > Members tab. If the Team itself is missing, check the Teams admin centre — it may have been archived or deleted."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0009",
-      "title": "Multi-Factor Authentication (MFA) Setup and Issues",
-      "category": "Security",
-      "tags": ["mfa", "multi-factor", "authenticator", "2fa", "phone", "verification", "microsoft authenticator", "token"],
-      "content": "MFA Setup and Troubleshooting\n\nSet up MFA for the first time\nGo to https://aka.ms/mfasetup. Sign in with your corporate account. Click 'Add method', choose Microsoft Authenticator (recommended — push notifications are faster than SMS OTP). Follow the QR code scan steps in the Authenticator app. Add a backup method (e.g. SMS) in case you lose phone access.\n\nGot a new phone\nDO NOT delete the old Authenticator entry before the new one is confirmed working. On your new phone: install Microsoft Authenticator, go to https://aka.ms/mfasetup on a browser, add the new phone as a second method and verify the push notification works, then remove the old phone entry.\n\nMFA prompt not arriving\n- Check signal and mobile data.\n- In the Authenticator app, tap the account and pull down to refresh.\n- Switch from push notification to OTP code — tap 'Use verification code' on the login page instead.\n- If using SMS, confirm the registered number at https://aka.ms/mfasetup.\n\nLocked out with no MFA access (lost or broken phone)\nCall IT Service Desk on ext. 5000. Provide your employee ID and manager's name. IT can issue a Temporary Access Pass (10-minute validity). Re-register MFA immediately after logging in — do not close the browser.\n\nUnexpected MFA prompts / MFA fatigue attack\nIf you receive MFA push requests you did not initiate, tap DENY every time and immediately call the Security team on ext. 5911. Do not tap Approve even by accident — this may indicate your password has been compromised. Change your password via SSPR straight away."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0010",
-      "title": "OneDrive and SharePoint Sync Issues",
-      "category": "Storage",
-      "tags": ["onedrive", "sharepoint", "sync", "cloud storage", "files", "backup", "folder", "shared drive"],
-      "content": "OneDrive and SharePoint Sync Troubleshooting\n\nOneDrive stuck syncing or showing a persistent spinner\nClick the OneDrive cloud tray icon > Settings > Account > Unlink this PC. Sign back in with your corporate account. OneDrive re-syncs automatically; existing local files are preserved.\n\nFiles show a red X icon\n- Right-click the file > OneDrive > Always keep on this device.\n- Path length: Windows has a 260-character path limit. If exceeded, shorten folder names or move the file closer to the root.\n- Illegal characters in file names are not supported: \\ / : * ? \" < > |\n\nSharePoint library not syncing to File Explorer\nIn SharePoint Online, open the document library > click Sync. Each library must be synced individually. The total number of synced files per device should not exceed 300,000.\n\nStorage quota exceeded\nCheck current usage: https://portal.office.com/account > Storage. Archive old or large files to the Departmental Archive SharePoint site. Request a quota increase via the IT Portal — manager approval required for increases above 1 TB.\n\nKnown Folder Move (Desktop / Documents / Pictures backup)\nConfirm Known Folder Move is enabled: OneDrive tray icon > Settings > Backup > Manage backup. Without this, your Desktop and Documents are NOT backed up to the cloud.\n\nAccess denied on a SharePoint site\nClick the 'Request access' link on the site. Alternatively, ask the Site Owner to grant you permission directly. Site Owners are listed under Site Settings > Site permissions > check 'Site Owners' group."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0011",
-      "title": "Software Installation and Licence Requests",
-      "category": "Software",
-      "tags": ["software", "install", "licence", "application", "request", "portal", "admin rights", "approved software"],
-      "content": "Software Installation and Licence Management\n\nInstalling approved software (no admin rights needed)\nAll approved software is available in the IT Self-Service Portal at https://itportal/software. Search for the application and click Install. Deployment completes within 15–30 minutes via SCCM/Intune.\n\nRequesting software not yet in the portal\nRaise a Software Request ticket. Include: application name and version, vendor website, business justification, estimated cost, and your manager's email for approval. Security review: 5 business days. Paid software requires additional procurement and legal review.\n\nTemporary admin rights for manual installation\nAdmin rights are not granted permanently to end users. Submit a Temporary Admin Rights request for a 4-hour window. An IT engineer will shadow the session remotely via Quick Assist. Access is automatically revoked after the window expires.\n\nMicrosoft 365 / Office apps\nAvailable at https://portal.office.com > Install apps. Supports up to 5 devices per licence. If activation fails: sign out of all Office apps > run the Sign-in Reset tool from the IT portal > sign back in with your corporate account.\n\nSoftware crashes or will not launch\n1. Quick Repair: Control Panel > Programs > right-click the app > Change > Quick Repair.\n2. If Quick Repair fails: uninstall and reinstall from the IT portal.\n3. Check Windows Event Viewer > Windows Logs > Application for error codes. Include the Event ID and Source in your ticket — this speeds up diagnosis significantly."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0012",
-      "title": "Windows Update and Patch Management",
-      "category": "Windows",
-      "tags": ["windows update", "patch", "update", "wsus", "restart", "blue screen", "bsod", "rollback"],
-      "content": "Windows Update and Patch Management\n\nUpdates not downloading or installing\nSettings > Windows Update > Check for updates. If updates download but fail to install:\n  sfc /scannow (repair system files)\n  DISM /Online /Cleanup-Image /RestoreHealth (repair Windows image)\nRestart and retry. Include the Windows Update error code (e.g. 0x80070002) in your ticket.\n\nComputer stuck on 'Configuring Windows Updates' at shutdown\nWait at least 30 minutes — complex cumulative updates can take this long on spinning hard drives. If still stuck after 30 min, hold the power button for 10 seconds to force off. On next boot, Windows will automatically roll back the failed update.\n\nUpdate caused a blue screen or application breakage\nBoot to Safe Mode: hold Shift > Restart > Troubleshoot > Advanced Options > Startup Settings > Restart > press F4. Go to Settings > Windows Update > View update history > Uninstall updates. Remove the most recent update and restart normally.\n\nCorporate patch schedule\nCorporate managed devices receive patches via WSUS/Intune — Patch Tuesday plus 7 days (third Tuesday of each month). You receive a notification with a 72-hour deferral window. Critical security patches cannot be deferred more than 24 hours. Persistent non-compliance will result in network quarantine.\n\nForce a policy refresh\nIf your machine has not received updates for 30+ days: gpupdate /force in an elevated prompt, then wuauclt /detectnow. Contact IT if the machine is still out of date after 24 hours."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0013",
-      "title": "Remote Desktop and VDI Access",
-      "category": "Remote Access",
-      "tags": ["remote desktop", "rdp", "vdi", "citrix", "avd", "azure virtual desktop", "remote work", "terminal server"],
-      "content": "Remote Desktop and Virtual Desktop Access\n\nConnecting via RDP\nRun mstsc.exe. Enter the hostname or IP of the target machine (must be on corporate network or VPN). Username format: CONTOSO\\yourusername. The target machine must have 'Allow remote connections' enabled in System Properties, and you must be in the Remote Desktop Users AD group.\n\nRDP connection refused (error 0x204 or CredSSP)\n- Confirm VPN is connected.\n- Verify the target machine is powered on (IT Portal > My Devices shows last-seen timestamp).\n- CredSSP error: both machines must have the same Windows Update level. Apply pending updates on the target machine.\n- TCP 3389 must be open in the firewall — raise a Firewall Rule Request ticket if needed.\n\nAzure Virtual Desktop (AVD)\nAccess via https://aka.ms/avd or install the Windows App from the Microsoft Store. Sign in with your corporate account. Published desktops and RemoteApps are assigned by your manager via a standard access request — allow 2 business days.\n\nCitrix sessions disconnecting frequently\nIn Citrix Workspace > Advanced Settings > Session Reliability > increase reconnect time to 180 seconds. Minimum bandwidth for Citrix HDX: 2 Mbps stable. Prefer wired ethernet. For persistent issues, capture a HDX log: Citrix Director > Session > View session detail.\n\nPrinting from a remote session\nRDP: check 'Printers' under Local Resources before connecting. AVD: install the Universal Print driver from https://itportal/software on the local machine. Citrix: Universal Print Driver is deployed automatically if the printer is added on your local machine."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0014",
-      "title": "Antivirus, Malware and Security Incidents",
-      "category": "Security",
-      "tags": ["antivirus", "malware", "virus", "ransomware", "phishing", "security", "defender", "incident", "suspicious"],
-      "content": "Security Incidents and Antivirus\n\nSuspected malware or ransomware (CRITICAL)\n1. Immediately unplug the ethernet cable and disable WiFi — isolate the machine from the network.\n2. Do NOT power it off — memory forensics may be needed.\n3. Call the Security team on ext. 5911 (24/7 line) NOW.\n4. Do not attempt to clean or quarantine the infection yourself.\n5. Preserve all files and do not open any more applications.\n\nPhishing email received\nDo NOT click any links or open attachments. Use the 'Report Phishing' button in Outlook (Home ribbon) — this forwards the email to the Security team automatically and removes it from your inbox. Also delete it from Deleted Items. If you already clicked a link, call ext. 5911 immediately.\n\nAntivirus alert or quarantine notification\nMicrosoft Defender quarantine notifications are normal when a threat is blocked. Review: Windows Security > Protection history. If a legitimate business file was quarantined (false positive), raise a ticket with the file path, application name, and Defender threat name for whitelisting.\n\nDefender disabled or showing errors\nWindows Security > check each protection area and enable any that are off. If Defender is greyed out, it is managed by Group Policy. Run: Get-MpComputerStatus in PowerShell and paste the output into your ticket.\n\nSuspicious account activity (unexpected logins or MFA prompts)\n1. Change your password immediately via SSPR: https://aka.ms/sspr.\n2. Review recent sign-in activity: https://mysignins.microsoft.com.\n3. Call the Security team on ext. 5911 — do not delay.\nAccount compromises escalate within hours."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0015",
-      "title": "New Employee IT Onboarding Checklist",
-      "category": "Onboarding",
-      "tags": ["onboarding", "new employee", "setup", "first day", "equipment", "account", "checklist", "new starter"],
-      "content": "New Employee IT Onboarding\n\nBefore day one (manager's responsibility)\nSubmit a New Starter request in ServiceNow at least 5 business days before the start date. Required fields: full legal name, job title, department, cost centre code, start date, required software list, equipment type (laptop or desktop), and whether a corporate mobile device is needed.\n\nWhat IT prepares before day one\n- Corporate laptop pre-imaged with Windows 11 and standard approved software\n- Active Directory account: firstname.lastname@contoso.com\n- Microsoft 365 licence assigned (E3 or E5 per department agreement)\n- Building badge access and floor access\n\nDay one — new employee steps\n1. Collect equipment from Room 204, Building B. Bring your offer letter or employee ID.\n2. Power on the laptop and complete Windows Hello setup — set up a PIN and fingerprint.\n3. Sign in to Microsoft 365 at https://portal.office.com.\n4. Register MFA at https://aka.ms/mfasetup — add at least two methods.\n5. Connect to CONTOSO-CORP WiFi with your corporate credentials.\n6. Open the IT Self-Service Portal at https://itportal and install any additional software.\n\nFirst week\n- Request system-specific access (SharePoint, shared mailboxes, LOB applications) via IT tickets with manager approval.\n- Complete mandatory Cyber Security Awareness training in the Learning Portal within 5 business days.\n\nIT contacts\nService Desk: ext. 5000 | it-help@contoso.com | https://itportal"
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0016",
-      "title": "Mobile Device Management and Company Portal",
-      "category": "Mobile",
-      "tags": ["mobile", "mdm", "intune", "company portal", "ios", "android", "corporate email", "byod", "device enrollment"],
-      "content": "Mobile Device Management (MDM) and Company Portal\n\nEnrolling a corporate-issued device\n1. Power on the device and follow the out-of-box setup until the 'Sign in with Microsoft' screen.\n2. Sign in with your corporate account (firstname.lastname@contoso.com).\n3. Complete MFA. The device will auto-enroll in Intune and apply corporate policies (takes ~10 minutes).\n4. Install the Company Portal app if prompted — this shows compliance status and allows access to corporate apps.\n\nEnrolling your personal device (BYOD — Bring Your Own Device)\nBYOD is supported for email and Teams access only. Install the Microsoft Authenticator and Outlook apps from the App Store / Google Play. During Outlook setup choose 'Work or School Account'. Intune will apply a limited policy (enforces device PIN and remote wipe of corporate data only — personal data is untouched).\n\nCompany Portal showing 'Not Compliant'\nCommon compliance requirements:\n- Device PIN or biometric lock must be enabled\n- OS version must meet minimum (iOS 16+, Android 12+, Windows 11 22H2+)\n- Device must not be jailbroken/rooted\nFix each issue flagged, then open Company Portal > Check access to refresh compliance status. Allow 15 minutes for Intune to update. Raise a ticket if compliance does not clear.\n\nAccessing corporate email on mobile\nUse the Outlook mobile app. Personal mail clients (Apple Mail, Gmail app) are not permitted to connect to corporate Exchange. Configure Outlook with your corporate email address; it will prompt for MFA on first login.\n\nRemote wipe (lost or stolen device)\nReport immediately to IT Service Desk: ext. 5000. IT can remotely wipe corporate data. For corporate-issued devices, a full factory reset is performed. For BYOD, only the corporate data container (Outlook, Teams, managed apps) is wiped — personal photos and apps are unaffected."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0017",
-      "title": "Meeting Room and AV Equipment Troubleshooting",
-      "category": "Meeting Rooms",
-      "tags": ["meeting room", "teams room", "projector", "hdmi", "conference", "av", "display", "microphone", "speaker"],
-      "content": "Meeting Room and AV Equipment\n\nTeams Rooms device (touch console) not working\n1. Check the touch console screen — if it shows 'No internet connection', verify the room ethernet cable is plugged in to the dock/codec.\n2. Reboot the Teams Room device: touch console > three dots (…) > Settings > Reboot (PIN: 0000 or check the room card on the door).\n3. If the room PC is unresponsive, press and hold the power button on the compute module behind the display for 10 seconds.\n4. Allow 3–5 minutes for Teams Rooms to restart fully.\n\nProjector or display not showing content\n- Press the source/input button on the remote control or display and cycle to HDMI/DisplayPort.\n- Check the cable is firmly connected at both ends. Try the spare cable in the room cupboard.\n- On your laptop, press Win+P and select Duplicate or Extend.\n- If using a Mac, go to Apple menu > System Settings > Displays > Detect Displays.\n\nWireless presentation (ClickShare / AirPlay)\n- ClickShare: plug the USB button into your laptop; click the button to share your screen. No software needed.\n- AirPlay: ensure your laptop is on CONTOSO-CORP WiFi (not guest). Open Control Centre > Screen Mirroring and select the room display.\n\nRoom audio — no sound or echo\n- Confirm the room speakerphone/bar is set as the audio device in Teams: click the three dots in the meeting > Device settings.\n- Echo is usually caused by a laptop microphone picking up the room speaker — mute your laptop microphone and use only the room equipment.\n- For persistent audio issues, raise a ticket with the room name and your meeting time so IT can review the device logs.\n\nBooking a room\nRooms are bookable via Outlook calendar > New Event > Add a room. Rooms are listed under the building name. If a room appears available but the door shows it is in use, it may have been booked as a walk-in — check the room panel display."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0018",
-      "title": "IT Asset Management and Hardware Requests",
-      "category": "Hardware",
-      "tags": ["asset", "equipment", "request", "replacement", "refresh", "hardware", "it asset", "new device", "loaner", "laptop request"],
-      "content": "IT Asset Management and Hardware Requests\n\nRequesting new equipment\nSubmit a Hardware Request ticket with: equipment type, business justification, and manager approval. Standard lead time is 5–10 business days depending on stock. All hardware requests above £500 require Finance sign-off via the purchase order process.\n\nStandard device refresh\nCorporate laptops are refreshed on a 4-year cycle. You will receive an email when your device is due. IT proactively contacts you 3 months before end-of-life. Do not wait for the machine to fail — request a refresh as soon as you receive the notification.\n\nChecking your asset details\nLog in to the IT Portal at https://itportal > My Devices. You can see your assigned assets, warranty status, operating system version, last check-in date, and compliance status.\n\nReturning equipment (leavers or role change)\nReturn all IT equipment to Room 204, Building B on your last working day. Bring all accessories (charger, dock, bag). IT will check the device back in. Failure to return equipment may result in salary deduction per the Asset Return Policy.\n\nPersonally owned equipment for work\nBYOD is permitted for mobile devices only (see KB-0016). Personal laptops are NOT permitted to connect to the corporate network. If you need a corporate device urgently while waiting for procurement, request a loaner from Room 204.\n\nLoan devices\nUp to 5 business days; extendable with manager approval. Bring employee ID. A loan agreement form must be signed. OneDrive must show a green tick and all work must be saved to the cloud before surrendering your primary device."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0019",
-      "title": "Intune Device Compliance and Conditional Access",
-      "category": "Security",
-      "tags": ["intune", "compliance", "conditional access", "mdm", "device policy", "entra", "azure ad", "managed device", "blocked access"],
-      "content": "Intune Device Compliance and Conditional Access\n\nWhy is my access to Microsoft 365 being blocked?\nConditional Access policies require your device to be Intune-compliant before accessing corporate resources (Exchange, SharePoint, Teams). If your device is marked non-compliant, you will see 'You cannot access this resource from here' or a similar error.\n\nChecking compliance status\n- Windows: Open the Company Portal app > Devices > click your device > 'Check access'.\n- iOS/Android: Open the Company Portal app and tap your device listing.\n- The app will list specific failed policies with remediation steps.\n\nCommon compliance failures and fixes\n\nDevice PIN not set:\n  Windows: Settings > Accounts > Sign-in options > add a PIN.\n  iOS: Settings > Face ID & Passcode.\n  Android: Settings > Security > Screen lock.\n\nOS version too old:\n  Windows: Settings > Windows Update > Check for updates and install all pending updates.\n  iOS/Android: Settings > General > Software Update.\n\nDisk encryption not enabled:\n  Windows: Settings > Privacy & Security > Device encryption > turn on.\n  macOS: System Settings > Privacy & Security > FileVault > turn on.\n\nDevice not enrolled in Intune:\n  Windows: Settings > Accounts > Access work or school > Connect. Sign in with your corporate account.\n\nAfter fixing compliance issues\nOpen Company Portal > Check access. Compliance updates propagate within 15 minutes. If still blocked after 30 minutes, raise a ticket including a screenshot of the Company Portal compliance screen."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0020",
-      "title": "Microsoft 365 Licensing and Application Access",
-      "category": "Software",
-      "tags": ["microsoft 365", "office 365", "licence", "subscription", "e3", "e5", "power bi", "visio", "project", "apps"],
-      "content": "Microsoft 365 Licensing\n\nWhat is included in the standard licence\nAll employees receive a Microsoft 365 E3 licence which includes:\n- Office apps: Word, Excel, PowerPoint, OneNote, Access (Windows only)\n- Email and calendar: Exchange Online (100 GB mailbox)\n- Collaboration: Teams, SharePoint, OneDrive (1 TB storage)\n- Security: Microsoft Defender, Intune device management\n- Identity: Entra ID (Azure AD), MFA, Conditional Access\n\nAdd-on licences (require manager approval and budget code)\n- Microsoft 365 E5: adds advanced security, Power BI Premium, Phone System. Request via IT ticket.\n- Power BI Pro: required for publishing reports and sharing dashboards. Self-service via the Power BI portal (charged to department).\n- Visio Plan 1/2: for professional diagramming. Request via Software Request ticket.\n- Project Plan 1/3: for Microsoft Project desktop or online. Request via Software Request ticket.\n- Microsoft 365 Copilot (AI assistant): currently in pilot. Contact your IT Business Partner to be added to the pilot group.\n\nInstalling Office apps on your devices\nSign in to https://portal.office.com > click Install apps > Microsoft 365 apps. Supports Windows and macOS. Up to 5 PCs or Macs, 5 tablets, and 5 mobile devices per licence.\n\nActivation errors\n'Account not found' or 'Unlicensed product' — sign out of all Office apps, go to https://portal.office.com/account and verify your licence is showing as active, then sign back in. If no licence appears, raise an IT ticket — new users may have a 24-hour propagation delay.\n\nShared licences (conference rooms, shared PCs)\nShared devices use a device-based licence. Do not sign in to Office apps with your personal credentials on shared machines — this deactivates one of your 5 personal device slots."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0021",
-      "title": "Developer Tools and Azure DevOps Access",
-      "category": "Developer",
-      "tags": ["azure devops", "git", "github", "developer", "ide", "visual studio", "vs code", "repository", "pipeline", "build"],
-      "content": "Developer Tools and Azure DevOps\n\nAccessing Azure DevOps\nNavigate to https://dev.azure.com/contoso. Sign in with your corporate account. If you see 'Access denied', you need to be added to the relevant DevOps organisation. Raise an access request ticket specifying: DevOps organisation name, project name, and required permission level (Reader / Contributor / Project Administrator).\n\nGit configuration best practice\nAfter cloning a repo, configure your identity:\n  git config --global user.email \"firstname.lastname@contoso.com\"\n  git config --global user.name \"First Last\"\nUse SSH keys or the Git Credential Manager for authentication — do not hard-code PATs in scripts. To generate a PAT: DevOps > User settings > Personal Access Tokens > New Token (set an expiry date).\n\nSetting up a development machine\nApproved IDEs available in the IT Self-Service Portal: Visual Studio 2022, VS Code, JetBrains toolbox (IntelliJ, Rider, DataGrip), Eclipse. Install via https://itportal/software — no admin rights needed.\nIf you need Docker Desktop, raise a Temporary Admin Rights request for installation, then submit a Software Approval ticket to whitelist it.\n\nCorporate proxy in developer tools\nIf tools cannot reach the internet, configure the proxy:\n  npm: npm config set proxy http://proxy.contoso.com:8080\n  pip: pip install --proxy http://proxy.contoso.com:8080 <package>\n  git: git config --global http.proxy http://proxy.contoso.com:8080\n  VS Code: Settings > Proxy > http://proxy.contoso.com:8080\n\nPipeline failures in Azure DevOps\nFor self-hosted agents: check agent is online in DevOps > Project Settings > Agent Pools. Restart the agent service on the agent machine. For Microsoft-hosted agents: check the Azure DevOps status page at https://status.dev.azure.com.\n\nRepository access denied (403)\nConfirm you have at least 'Contributor' permission on the repo. In Azure DevOps: Project Settings > Repositories > select the repo > Security tab. Contact the project administrator to grant access."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0022",
-      "title": "Data Backup, Recovery and Retention Policy",
-      "category": "Storage",
-      "tags": ["backup", "recovery", "data loss", "restore", "retention", "onedrive", "sharepoint", "recycle bin", "version history"],
-      "content": "Data Backup and Recovery\n\nWhat is automatically backed up\n- OneDrive files: continuously synced to the cloud. 30-day recycle bin. 500 version history entries per file.\n- SharePoint document libraries: 90-day recycle bin. Version history enabled by default.\n- Exchange mailbox: 30-day recoverable items folder (Deleted Items + purged items).\n- Corporate laptops: only files in OneDrive / SharePoint are backed up. Local Desktop / Documents / Downloads are NOT backed up unless Known Folder Move is enabled.\n\nRecovering a deleted file\n1. OneDrive / SharePoint: check the Recycle Bin (left navigation pane). Files deleted more than 30 days ago go to the second-stage recycle bin (site settings > Recycle Bin).\n2. If the file is not in the recycle bin, raise a ticket — IT can restore from site collection backups up to 90 days.\n3. Previous file version: right-click the file in OneDrive/SharePoint > Version history. Select a previous version to restore or download.\n\nRecovering a deleted email\n1. Check the Deleted Items and Junk Email folders.\n2. In Outlook: Folder tab > Recover Deleted Items (shows items purged from Deleted Items for up to 30 days).\n3. If not found, raise a ticket — IT can search the compliance archive.\n\nData retention policy summary\n- General files: 7-year retention (legal requirement)\n- HR records: 7 years post-employment\n- Financial records: 10 years\n- Emails: 3 years active + 7 years archive\nDo not delete business records before their retention period has expired — this may violate legal and regulatory obligations.\n\nData recovery is NOT available for:\n- Files stored only on a local hard drive that has physically failed (no OneDrive sync)\n- Files deleted from personal email accounts\n- Data on decommissioned devices that were not synced before return"
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0023",
-      "title": "Dual and External Monitor Setup",
-      "category": "Hardware",
-      "tags": ["monitor", "display", "dual screen", "external monitor", "hdmi", "displayport", "usb-c", "resolution", "scaling", "dock"],
-      "content": "Setting Up External and Dual Monitors\n\nConnecting a monitor\n- Use the HDMI, DisplayPort, or USB-C port on your laptop or dock. USB-C supports video only if the cable is Thunderbolt 3/4 or USB 3.1 Gen 2 or higher (check the cable label).\n- If using a dock, connect the dock to your laptop with its single USB-C/Thunderbolt cable, then connect monitors to the dock's video outputs.\n\nWindows display settings\nRight-click the desktop > Display settings.\n- Arrange displays: drag the monitor thumbnails to match your physical layout.\n- Multiple displays dropdown: choose Extend (recommended), Duplicate, or Second screen only.\n- Resolution: set each monitor to its native resolution (listed on the monitor label). Common: 1920×1080 (FHD), 2560×1440 (QHD), 3840×2160 (4K).\n- Scale: if text appears too small on a 4K display, set scale to 150% or 200% per monitor.\n\nMonitor not detected\n- Try pressing Win+Ctrl+Shift+B (resets GPU driver — screen flickers briefly).\n- Disconnect and reconnect the cable.\n- On the monitor, press the input/source button and select the correct input (HDMI 1, DP, etc.).\n- Try a different cable — HDMI cables can degrade over time.\n- Connect the monitor directly to the laptop port (bypassing the dock) to isolate whether the dock is the issue.\n\nDock not working (no video, no USB devices)\n- Ensure the dock's power adapter is connected (many docks require external power).\n- Update the dock firmware: check the manufacturer's website or the IT portal for the dock model's firmware update tool.\n- Driver update: Windows Update > Optional updates often includes dock/display adapter drivers.\n\nResolution or refresh rate greyed out\nUpdate the GPU driver via Device Manager > Display Adapters > Update driver. If using Intel, download the Intel Driver & Support Assistant from the IT portal."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0024",
-      "title": "Microsoft Copilot and AI Tools Policy",
-      "category": "Software",
-      "tags": ["copilot", "ai", "microsoft copilot", "chatgpt", "generative ai", "llm", "ai assistant", "policy", "data classification"],
-      "content": "AI Tools and Copilot Usage Policy\n\nApproved AI tools\nThe following AI tools are approved for corporate use:\n- Microsoft 365 Copilot (for users in the pilot group — see KB-0020 to request access)\n- Microsoft Copilot (Bing Chat Enterprise — available to all M365 E3/E5 users; corporate data is protected)\n- GitHub Copilot (for developers — request a licence via Software Request ticket)\n\nData classification rules for AI tools\nNEVER enter the following data into any AI tool (approved or not):\n- Customer PII (names, email addresses, account numbers)\n- Financial data, forecasts, or unreleased results\n- Passwords, API keys, or credentials\n- Classified or confidential intellectual property\n- Personnel records or HR information\nWhen in doubt, apply the highest data classification label to the content and do not input it into an AI tool.\n\nUsing Microsoft 365 Copilot safely\nCopilot in M365 uses your existing Microsoft Graph permissions — it can only access data you already have permission to see. Copilot responses are grounded in your organisation's data and are not used to train Microsoft's models (enterprise data protection is contractually guaranteed).\n\nUnapproved AI tools (ChatGPT, Claude, Gemini via personal accounts, etc.)\nUsing personal-account versions of public AI tools for work purposes is prohibited because corporate data submitted to these tools may be used for model training and is not covered by corporate data protection agreements. Violations are subject to disciplinary action.\n\nReporting an AI-generated error or hallucination\nIf Copilot or another approved AI tool produces factually incorrect output that was used in a business decision, raise an AI Incident ticket. Include: the prompt used, the output received, and the decision it influenced. IT and the AI Governance team will review.\n\nGetting access to Microsoft 365 Copilot\nCopilot requires an add-on licence. Contact your IT Business Partner. Pilot group access is subject to budget approval by your department head."
-    },
-    {
-      "@search.action": "upload",
-      "id": "KB-0025",
-      "title": "IT Service Desk SLAs and Escalation Process",
-      "category": "Helpdesk",
-      "tags": ["sla", "escalation", "priority", "ticket", "service desk", "response time", "resolution", "critical", "major incident"],
-      "content": "IT Service Desk SLAs and Escalation\n\nTicket priority definitions and SLAs\n\nCritical (P1) — Complete business outage or data loss risk\n  Examples: ransomware attack, production system down affecting all users, total network outage\n  Response: 15 minutes | Resolution target: 4 hours\n  How to raise: Call ext. 5911 immediately — do not email or use the portal\n\nHigh (P2) — Significant impact, no workaround\n  Examples: VPN down for a team, email not working for a department, building network outage\n  Response: 30 minutes | Resolution target: 8 hours\n  How to raise: Call ext. 5000 and submit a portal ticket\n\nMedium (P3) — Individual impact, workaround exists\n  Examples: laptop performance degraded, non-critical software broken, printer offline\n  Response: 2 hours | Resolution target: 3 business days\n  How to raise: Submit via https://itportal\n\nLow (P4) — General request or non-urgent query\n  Examples: software installation, access request, hardware refresh query\n  Response: 4 hours | Resolution target: 5 business days\n  How to raise: Submit via https://itportal\n\nEscalating a ticket\nIf your ticket is not progressing within the SLA window:\n1. Reply to the ticket with an escalation note — this triggers a supervisor review automatically.\n2. Call ext. 5000 and quote your ticket number and request escalation to a Team Lead.\n3. For unresolved P1/P2: ask your manager to contact the IT Service Desk Manager at it-manager@contoso.com.\n\nMajor incident communications\nDuring P1 major incidents, IT publishes updates every 30 minutes at https://status.company.com. Subscribe for email/SMS notifications. Do not call the Service Desk during a major incident unless your issue is unrelated — this blocks the response team.\n\nIT Service Desk contact details\nPhone: ext. 5000 (internal) | +1-800-IT-HELP (external/mobile)\nEmail: it-help@contoso.com (P3/P4 only)\nPortal: https://itportal\nSecurity emergencies: ext. 5911 (24/7)"
-    }
-  ]
+﻿{
+    "value":  [
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0001",
+                      "title":  "VPN Connection Troubleshooting Guide",
+                      "category":  "VPN",
+                      "tags":  [
+                                   "vpn",
+                                   "cisco anyconnect",
+                                   "network",
+                                   "authentication",
+                                   "windows"
+                               ],
+                      "content":  "VPN Troubleshooting\n\nStep 1 - Reinstall AnyConnect\nUninstall via Add/Remove Programs, download the latest installer from https://itportal/vpn, right-click the installer and choose Run as Administrator.\n\nStep 2 - Reset network adapters\nDevice Manager \u003e Network Adapters \u003e right-click every Cisco adapter \u003e Disable, then Enable.\n\nStep 3 - Flush DNS and reset Winsock\nRun in an elevated command prompt:\n  netsh int ip reset\n  netsh winsock reset\n  ipconfig /flushdns\nRestart after running all three commands.\n\nStep 4 - Check credentials\nEnsure your AD password is current at https://password.contoso.com. MFA tokens expire after 30 seconds — tap \u0027Refresh\u0027 in the Authenticator app if the code is about to expire before you type it.\n\nCommon error codes:\n- Reason 412 — VPN client terminated. Reinstall AnyConnect.\n- Reason 433 — VPN was terminated locally. Check your firewall or antivirus is not blocking AnyConnect.\n- Authentication failed — Password may be expired; check https://password.contoso.com.\n\nIf still failing: collect DART logs (AnyConnect tray icon \u003e Help \u003e Collect Logs) and attach to the ticket. Include your username and the exact error message.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0002",
+                      "title":  "Outlook Email Sync Issues",
+                      "category":  "Email",
+                      "tags":  [
+                                   "outlook",
+                                   "email",
+                                   "sync",
+                                   "exchange",
+                                   "ost",
+                                   "calendar",
+                                   "office 365"
+                               ],
+                      "content":  "Outlook Not Syncing\n\n1. Send/Receive All — Press F9 or go to Send/Receive tab \u003e Send/Receive All Folders.\n2. Work Offline toggle — Send/Receive tab \u003e check \u0027Work Offline\u0027 is NOT enabled (button should not appear pressed).\n3. Rebuild OST — Close Outlook. Navigate to %localappdata%\\Microsoft\\Outlook\\ and rename any .ost file to .bak. Reopen Outlook; it will rebuild from the server (10–30 min for large mailboxes).\n4. Create a new profile — Control Panel \u003e Mail \u003e Show Profiles \u003e Add \u003e set as default. Remove the old profile only after the new one works.\n5. Test AutoConfiguration — Hold Ctrl, right-click the Outlook tray icon \u003e Test Email AutoConfiguration. Ensure all three checks pass.\n\nOutlook shows \u0027Disconnected\u0027 or \u0027Trying to connect\u0027\n- Run Outlook in Safe Mode: Win+R \u003e outlook.exe /safe. If it connects in Safe Mode, a COM add-in is blocking it.\n- Repair Office: Control Panel \u003e Programs \u003e Microsoft 365 Apps \u003e Change \u003e Quick Repair (online repair if Quick Repair does not help).\n\nCalendar not syncing\n- Remove the account from Outlook mobile and re-add it to force a full calendar sync.\n- Shared calendar permissions may have changed — ask the calendar owner to re-share.\n\nError 0x8004010F — OST path issue. Go to File \u003e Account Settings \u003e Data Files and confirm the .ost path exists on disk.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0003",
+                      "title":  "System Access Request Process",
+                      "category":  "Access",
+                      "tags":  [
+                                   "access",
+                                   "sharepoint",
+                                   "permissions",
+                                   "request",
+                                   "active directory",
+                                   "groups"
+                               ],
+                      "content":  "Requesting Access to Systems and Resources\n\nStandard access (SLA: 2 business days)\nSubmit a ticket with: resource name (e.g. SharePoint site URL or application name), access level (Read / Contribute / Owner), business justification, and your manager\u0027s email address. Your manager receives an approval email; once approved IT provisions access via the appropriate AD security group.\n\nPrivileged access (admin rights, production systems, financial data)\nRequires CISO approval in addition to manager sign-off. Allow up to 5 business days. Access is time-bound (90 days maximum) and logged.\n\nEmergency access (\u003c 4 hours)\nCall ext. 5000. Out of hours: +1-800-IT-HELP. Provide employee ID and manager\u0027s name for identity verification. Emergency access is audited and expires after 24 hours.\n\nSelf-service password reset\nhttps://aka.ms/sspr — requires pre-registered MFA. No ticket needed.\n\nApplication access (e.g. SAP, Salesforce, custom LOB apps)\nManager submits an access request in ServiceNow with cost centre code. Licence cost is charged to the department. Allow 3 business days.\n\nRemoving access\nManagers must submit a Remove Access ticket when an employee changes role or leaves. Leavers\u0027 accounts are disabled on their last working day and deleted after 90 days per data retention policy.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0004",
+                      "title":  "Laptop Hardware Issues Self-Service Guide",
+                      "category":  "Hardware",
+                      "tags":  [
+                                   "hardware",
+                                   "laptop",
+                                   "battery",
+                                   "screen",
+                                   "keyboard",
+                                   "replacement",
+                                   "display",
+                                   "performance"
+                               ],
+                      "content":  "Hardware Troubleshooting\n\nSlow Performance\nRestart the laptop. Open Task Manager (Ctrl+Shift+Esc) and check the CPU and Memory columns — identify any process consistently above 50%. Ensure at least 10 GB of free disk space (Settings \u003e System \u003e Storage). Run Disk Cleanup if below threshold.\n\nBattery not charging\nRun: powercfg /batteryreport (output at C:\\battery-report.html). Under 40% design capacity qualifies for free warranty replacement if the machine is under 3 years old. Under 80% health — submit a Hardware Replacement ticket including the battery report.\n\nDisplay problems\n- Press Win+P to cycle display modes (PC screen only / Duplicate / Extend / Second screen only).\n- Update display drivers: Device Manager \u003e Display Adapters \u003e Update driver.\n- Broken or cracked screen — accidental damage is covered if your department has IT Insurance. Bring your laptop to Room 204, Building B with the asset tag number. Walk-in SLA: next business day repair or loan device.\n\nKeyboard / trackpad unresponsive\nUse an external USB keyboard temporarily. Check Device Manager for yellow exclamation marks under Keyboards or HID devices. Roll back the keyboard driver if recently updated.\n\nStorage / SSD failure\nRun: wmic diskdrive get status in Command Prompt. Any result other than \u0027OK\u0027 means imminent failure. Raise a Critical ticket immediately — 48-hour hardware replacement SLA applies. Back up to OneDrive urgently.\n\nLoan devices\nAvailable from Room 204, Building B for up to 5 business days. Bring your employee ID. Confirm OneDrive shows a green tick before surrendering your original device.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0005",
+                      "title":  "Network Connectivity Troubleshooting",
+                      "category":  "Network",
+                      "tags":  [
+                                   "network",
+                                   "wifi",
+                                   "ethernet",
+                                   "proxy",
+                                   "dns",
+                                   "slow",
+                                   "internet",
+                                   "connectivity"
+                               ],
+                      "content":  "Network Troubleshooting\n\nNo internet connection\nRun: ipconfig /release then ipconfig /renew. A valid IP should be in the 10.x.x.x range. If you get 169.254.x.x the DHCP server is unreachable — try a different port or cable. Flush DNS: ipconfig /flushdns. Test connectivity: ping 8.8.8.8.\n\nWiFi dropping frequently\nForget the SSID and reconnect. Prefer CONTOSO-5G (5 GHz, faster, shorter range) over CONTOSO (2.4 GHz, longer range but congested). Update the WiFi adapter driver via Device Manager. Check https://status.company.com for known outages before raising a ticket.\n\nSlow internet speed\nRun a speed test at https://fast.com while connected to ethernet. Expected: ≥ 100 Mbps download, ≥ 50 Mbps upload on corporate LAN. If WiFi is significantly slower, move closer to the access point or switch to ethernet.\n\nProxy configuration\nSettings \u003e Network \u0026 Internet \u003e Proxy \u003e Manual proxy:\n  Address: http://proxy.contoso.com  Port: 8080\nBypass list: localhost, 127.0.0.1, *.contoso.com, 10.0.0.0/8\nFor developer tools set the environment variable:\n  HTTPS_PROXY=http://proxy.contoso.com:8080\n  NO_PROXY=localhost,127.0.0.1,*.contoso.com\n\nDNS settings\nPrimary: 10.0.0.10  Secondary: 10.0.0.11\nTest: nslookup contoso.com 10.0.0.10\nIf DNS lookups fail on VPN, ensure \u0027Use default gateway on remote network\u0027 is checked in the VPN adapter settings.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0006",
+                      "title":  "Printer Setup and Printing Problems",
+                      "category":  "Printing",
+                      "tags":  [
+                                   "printer",
+                                   "printing",
+                                   "driver",
+                                   "queue",
+                                   "scan",
+                                   "stuck",
+                                   "offline",
+                                   "network printer"
+                               ],
+                      "content":  "Printer Troubleshooting\n\nPrinter shows Offline\nRight-click the printer in Settings \u003e Printers \u003e uncheck \u0027Use Printer Offline\u0027. Still offline: remove and re-add the printer.\n\nStuck print queue\nOpen Services (services.msc) \u003e stop Print Spooler. Navigate to C:\\Windows\\System32\\spool\\PRINTERS and delete all files inside (do not delete the folder). Start Print Spooler again. Retry your print job.\n\nInstall a network printer\nSettings \u003e Bluetooth \u0026 devices \u003e Printers \u003e Add device. If it does not appear, click \u0027Add manually\u0027 and enter the printer IP from the label on the device (e.g. 10.1.2.45). Download the correct driver from https://itportal/printers matching the printer model and OS.\n\nPrint quality issues\nLaser printer — remove the toner cartridge, gently rock it side-to-side 4–5 times, reinsert. If streaks or faded lines persist, raise a ticket including the printer asset tag and floor/room number so IT can replace the toner.\n\nScanning to email not working\n1. Confirm the device is on the corporate network (not guest WiFi).\n2. Check your email address is registered on the MFD: https://itportal/mfd.\n3. SMTP relay settings on the MFD: smtp.contoso.com, port 25, no authentication.\n4. Check your spam folder — scan-to-email messages are sometimes caught by filters.\n\nPrinting from remote session or VDI\nEnsure \u0027Printers\u0027 is ticked under Local Resources in the RDP client before connecting. For Azure Virtual Desktop, install the Universal Print driver from the IT portal on your local machine.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0007",
+                      "title":  "Password Reset and Account Lockout",
+                      "category":  "Access",
+                      "tags":  [
+                                   "password",
+                                   "reset",
+                                   "locked",
+                                   "account lockout",
+                                   "active directory",
+                                   "self service",
+                                   "sspr",
+                                   "mfa"
+                               ],
+                      "content":  "Password Reset and Account Unlock\n\nSelf-service reset (fastest — no ticket needed)\nGo to https://aka.ms/sspr and follow the prompts. Requires MFA to be pre-registered at https://aka.ms/mfasetup. Password change takes effect within 5 minutes across all systems including VPN and email.\n\nAccount locked out\nAfter 5 failed login attempts, your account locks for 30 minutes automatically. Either wait and retry, or use SSPR to unlock immediately without the wait.\n\nPassword requirements\n- Minimum 14 characters\n- At least one uppercase letter, one number, one special character\n- Cannot reuse any of your last 24 passwords\n- Expires every 180 days — reminder emails sent at 14, 7, and 1 day before expiry\n\nForced reset after IT intervention\nIf IT resets your password you are prompted to set a new one at first login. You cannot reuse the temporary password. Set it immediately — the temporary password expires after 24 hours.\n\nNo access to SSPR (new device or MFA not yet registered)\nCall IT Service Desk: ext. 5000 or +1-800-IT-HELP. Identity verification required: employee ID number and confirmation from your manager (via a separate call or email to IT).\n\nService account passwords\nMust be changed via a Change Request ticket — never via SSPR. Coordinate with all application owners to update service connections before resetting, to avoid application outages.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0008",
+                      "title":  "Microsoft Teams Troubleshooting",
+                      "category":  "Collaboration",
+                      "tags":  [
+                                   "teams",
+                                   "microsoft teams",
+                                   "meeting",
+                                   "audio",
+                                   "video",
+                                   "camera",
+                                   "chat",
+                                   "calls",
+                                   "screen share"
+                               ],
+                      "content":  "Microsoft Teams Issues\n\nTeams not loading or showing a blank screen\nQuit Teams completely (right-click system tray icon \u003e Quit). Delete the cache folder: %appdata%\\Microsoft\\Teams (delete all sub-folders except \u0027Downloads\u0027). Relaunch Teams.\n\nAudio problems in meetings\nClick the three dots (…) in the meeting \u003e Device settings. Confirm the correct speaker and microphone are selected. Run the built-in audio test: Teams Settings \u003e Calls \u003e \u0027Make a test call\u0027.\n\nCamera not working\n- Windows: Settings \u003e Privacy \u003e Camera \u003e allow Microsoft Teams.\n- Check Device Manager — confirm the camera is enabled and has no yellow error markers.\n- External webcam: try a different USB port (prefer USB 3.0); avoid USB hubs.\n\nScreen sharing shows a black screen\n- Windows: try sharing a specific application window instead of the whole desktop, especially on multi-monitor setups.\n- macOS: System Settings \u003e Privacy \u0026 Security \u003e Screen Recording \u003e enable for Microsoft Teams. Restart Teams after granting permission.\n\nTeams calls dropping or choppy audio/video\nRun the Microsoft 365 Network Connectivity Test: https://connectivity.office.com. Prefer wired ethernet over WiFi for video calls. Target: \u003c 150 ms latency, \u003c 1% packet loss to Microsoft 365 endpoints.\n\nMissing from a Team or channel\nAsk the Team Owner to re-add you. Owners are listed under the Team name \u003e Manage team \u003e Members tab. If the Team itself is missing, check the Teams admin centre — it may have been archived or deleted.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0009",
+                      "title":  "Multi-Factor Authentication (MFA) Setup and Issues",
+                      "category":  "Security",
+                      "tags":  [
+                                   "mfa",
+                                   "multi-factor",
+                                   "authenticator",
+                                   "2fa",
+                                   "phone",
+                                   "verification",
+                                   "microsoft authenticator",
+                                   "token"
+                               ],
+                      "content":  "MFA Setup and Troubleshooting\n\nSet up MFA for the first time\nGo to https://aka.ms/mfasetup. Sign in with your corporate account. Click \u0027Add method\u0027, choose Microsoft Authenticator (recommended — push notifications are faster than SMS OTP). Follow the QR code scan steps in the Authenticator app. Add a backup method (e.g. SMS) in case you lose phone access.\n\nGot a new phone\nDO NOT delete the old Authenticator entry before the new one is confirmed working. On your new phone: install Microsoft Authenticator, go to https://aka.ms/mfasetup on a browser, add the new phone as a second method and verify the push notification works, then remove the old phone entry.\n\nMFA prompt not arriving\n- Check signal and mobile data.\n- In the Authenticator app, tap the account and pull down to refresh.\n- Switch from push notification to OTP code — tap \u0027Use verification code\u0027 on the login page instead.\n- If using SMS, confirm the registered number at https://aka.ms/mfasetup.\n\nLocked out with no MFA access (lost or broken phone)\nCall IT Service Desk on ext. 5000. Provide your employee ID and manager\u0027s name. IT can issue a Temporary Access Pass (10-minute validity). Re-register MFA immediately after logging in — do not close the browser.\n\nUnexpected MFA prompts / MFA fatigue attack\nIf you receive MFA push requests you did not initiate, tap DENY every time and immediately call the Security team on ext. 5911. Do not tap Approve even by accident — this may indicate your password has been compromised. Change your password via SSPR straight away.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0010",
+                      "title":  "OneDrive and SharePoint Sync Issues",
+                      "category":  "Storage",
+                      "tags":  [
+                                   "onedrive",
+                                   "sharepoint",
+                                   "sync",
+                                   "cloud storage",
+                                   "files",
+                                   "backup",
+                                   "folder",
+                                   "shared drive"
+                               ],
+                      "content":  "OneDrive and SharePoint Sync Troubleshooting\n\nOneDrive stuck syncing or showing a persistent spinner\nClick the OneDrive cloud tray icon \u003e Settings \u003e Account \u003e Unlink this PC. Sign back in with your corporate account. OneDrive re-syncs automatically; existing local files are preserved.\n\nFiles show a red X icon\n- Right-click the file \u003e OneDrive \u003e Always keep on this device.\n- Path length: Windows has a 260-character path limit. If exceeded, shorten folder names or move the file closer to the root.\n- Illegal characters in file names are not supported: \\ / : * ? \" \u003c \u003e |\n\nSharePoint library not syncing to File Explorer\nIn SharePoint Online, open the document library \u003e click Sync. Each library must be synced individually. The total number of synced files per device should not exceed 300,000.\n\nStorage quota exceeded\nCheck current usage: https://portal.office.com/account \u003e Storage. Archive old or large files to the Departmental Archive SharePoint site. Request a quota increase via the IT Portal — manager approval required for increases above 1 TB.\n\nKnown Folder Move (Desktop / Documents / Pictures backup)\nConfirm Known Folder Move is enabled: OneDrive tray icon \u003e Settings \u003e Backup \u003e Manage backup. Without this, your Desktop and Documents are NOT backed up to the cloud.\n\nAccess denied on a SharePoint site\nClick the \u0027Request access\u0027 link on the site. Alternatively, ask the Site Owner to grant you permission directly. Site Owners are listed under Site Settings \u003e Site permissions \u003e check \u0027Site Owners\u0027 group.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0011",
+                      "title":  "Software Installation and Licence Requests",
+                      "category":  "Software",
+                      "tags":  [
+                                   "software",
+                                   "install",
+                                   "licence",
+                                   "application",
+                                   "request",
+                                   "portal",
+                                   "admin rights",
+                                   "approved software"
+                               ],
+                      "content":  "Software Installation and Licence Management\n\nInstalling approved software (no admin rights needed)\nAll approved software is available in the IT Self-Service Portal at https://itportal/software. Search for the application and click Install. Deployment completes within 15–30 minutes via SCCM/Intune.\n\nRequesting software not yet in the portal\nRaise a Software Request ticket. Include: application name and version, vendor website, business justification, estimated cost, and your manager\u0027s email for approval. Security review: 5 business days. Paid software requires additional procurement and legal review.\n\nTemporary admin rights for manual installation\nAdmin rights are not granted permanently to end users. Submit a Temporary Admin Rights request for a 4-hour window. An IT engineer will shadow the session remotely via Quick Assist. Access is automatically revoked after the window expires.\n\nMicrosoft 365 / Office apps\nAvailable at https://portal.office.com \u003e Install apps. Supports up to 5 devices per licence. If activation fails: sign out of all Office apps \u003e run the Sign-in Reset tool from the IT portal \u003e sign back in with your corporate account.\n\nSoftware crashes or will not launch\n1. Quick Repair: Control Panel \u003e Programs \u003e right-click the app \u003e Change \u003e Quick Repair.\n2. If Quick Repair fails: uninstall and reinstall from the IT portal.\n3. Check Windows Event Viewer \u003e Windows Logs \u003e Application for error codes. Include the Event ID and Source in your ticket — this speeds up diagnosis significantly.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0012",
+                      "title":  "Windows Update and Patch Management",
+                      "category":  "Windows",
+                      "tags":  [
+                                   "windows update",
+                                   "patch",
+                                   "update",
+                                   "wsus",
+                                   "restart",
+                                   "blue screen",
+                                   "bsod",
+                                   "rollback"
+                               ],
+                      "content":  "Windows Update and Patch Management\n\nUpdates not downloading or installing\nSettings \u003e Windows Update \u003e Check for updates. If updates download but fail to install:\n  sfc /scannow (repair system files)\n  DISM /Online /Cleanup-Image /RestoreHealth (repair Windows image)\nRestart and retry. Include the Windows Update error code (e.g. 0x80070002) in your ticket.\n\nComputer stuck on \u0027Configuring Windows Updates\u0027 at shutdown\nWait at least 30 minutes — complex cumulative updates can take this long on spinning hard drives. If still stuck after 30 min, hold the power button for 10 seconds to force off. On next boot, Windows will automatically roll back the failed update.\n\nUpdate caused a blue screen or application breakage\nBoot to Safe Mode: hold Shift \u003e Restart \u003e Troubleshoot \u003e Advanced Options \u003e Startup Settings \u003e Restart \u003e press F4. Go to Settings \u003e Windows Update \u003e View update history \u003e Uninstall updates. Remove the most recent update and restart normally.\n\nCorporate patch schedule\nCorporate managed devices receive patches via WSUS/Intune — Patch Tuesday plus 7 days (third Tuesday of each month). You receive a notification with a 72-hour deferral window. Critical security patches cannot be deferred more than 24 hours. Persistent non-compliance will result in network quarantine.\n\nForce a policy refresh\nIf your machine has not received updates for 30+ days: gpupdate /force in an elevated prompt, then wuauclt /detectnow. Contact IT if the machine is still out of date after 24 hours.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0013",
+                      "title":  "Remote Desktop and VDI Access",
+                      "category":  "Remote Access",
+                      "tags":  [
+                                   "remote desktop",
+                                   "rdp",
+                                   "vdi",
+                                   "citrix",
+                                   "avd",
+                                   "azure virtual desktop",
+                                   "remote work",
+                                   "terminal server"
+                               ],
+                      "content":  "Remote Desktop and Virtual Desktop Access\n\nConnecting via RDP\nRun mstsc.exe. Enter the hostname or IP of the target machine (must be on corporate network or VPN). Username format: CONTOSO\\yourusername. The target machine must have \u0027Allow remote connections\u0027 enabled in System Properties, and you must be in the Remote Desktop Users AD group.\n\nRDP connection refused (error 0x204 or CredSSP)\n- Confirm VPN is connected.\n- Verify the target machine is powered on (IT Portal \u003e My Devices shows last-seen timestamp).\n- CredSSP error: both machines must have the same Windows Update level. Apply pending updates on the target machine.\n- TCP 3389 must be open in the firewall — raise a Firewall Rule Request ticket if needed.\n\nAzure Virtual Desktop (AVD)\nAccess via https://aka.ms/avd or install the Windows App from the Microsoft Store. Sign in with your corporate account. Published desktops and RemoteApps are assigned by your manager via a standard access request — allow 2 business days.\n\nCitrix sessions disconnecting frequently\nIn Citrix Workspace \u003e Advanced Settings \u003e Session Reliability \u003e increase reconnect time to 180 seconds. Minimum bandwidth for Citrix HDX: 2 Mbps stable. Prefer wired ethernet. For persistent issues, capture a HDX log: Citrix Director \u003e Session \u003e View session detail.\n\nPrinting from a remote session\nRDP: check \u0027Printers\u0027 under Local Resources before connecting. AVD: install the Universal Print driver from https://itportal/software on the local machine. Citrix: Universal Print Driver is deployed automatically if the printer is added on your local machine.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0014",
+                      "title":  "Antivirus, Malware and Security Incidents",
+                      "category":  "Security",
+                      "tags":  [
+                                   "antivirus",
+                                   "malware",
+                                   "virus",
+                                   "ransomware",
+                                   "phishing",
+                                   "security",
+                                   "defender",
+                                   "incident",
+                                   "suspicious"
+                               ],
+                      "content":  "Security Incidents and Antivirus\n\nSuspected malware or ransomware (CRITICAL)\n1. Immediately unplug the ethernet cable and disable WiFi — isolate the machine from the network.\n2. Do NOT power it off — memory forensics may be needed.\n3. Call the Security team on ext. 5911 (24/7 line) NOW.\n4. Do not attempt to clean or quarantine the infection yourself.\n5. Preserve all files and do not open any more applications.\n\nPhishing email received\nDo NOT click any links or open attachments. Use the \u0027Report Phishing\u0027 button in Outlook (Home ribbon) — this forwards the email to the Security team automatically and removes it from your inbox. Also delete it from Deleted Items. If you already clicked a link, call ext. 5911 immediately.\n\nAntivirus alert or quarantine notification\nMicrosoft Defender quarantine notifications are normal when a threat is blocked. Review: Windows Security \u003e Protection history. If a legitimate business file was quarantined (false positive), raise a ticket with the file path, application name, and Defender threat name for whitelisting.\n\nDefender disabled or showing errors\nWindows Security \u003e check each protection area and enable any that are off. If Defender is greyed out, it is managed by Group Policy. Run: Get-MpComputerStatus in PowerShell and paste the output into your ticket.\n\nSuspicious account activity (unexpected logins or MFA prompts)\n1. Change your password immediately via SSPR: https://aka.ms/sspr.\n2. Review recent sign-in activity: https://mysignins.microsoft.com.\n3. Call the Security team on ext. 5911 — do not delay.\nAccount compromises escalate within hours.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0015",
+                      "title":  "New Employee IT Onboarding Checklist",
+                      "category":  "Onboarding",
+                      "tags":  [
+                                   "onboarding",
+                                   "new employee",
+                                   "setup",
+                                   "first day",
+                                   "equipment",
+                                   "account",
+                                   "checklist",
+                                   "new starter"
+                               ],
+                      "content":  "New Employee IT Onboarding\n\nBefore day one (manager\u0027s responsibility)\nSubmit a New Starter request in ServiceNow at least 5 business days before the start date. Required fields: full legal name, job title, department, cost centre code, start date, required software list, equipment type (laptop or desktop), and whether a corporate mobile device is needed.\n\nWhat IT prepares before day one\n- Corporate laptop pre-imaged with Windows 11 and standard approved software\n- Active Directory account: firstname.lastname@contoso.com\n- Microsoft 365 licence assigned (E3 or E5 per department agreement)\n- Building badge access and floor access\n\nDay one — new employee steps\n1. Collect equipment from Room 204, Building B. Bring your offer letter or employee ID.\n2. Power on the laptop and complete Windows Hello setup — set up a PIN and fingerprint.\n3. Sign in to Microsoft 365 at https://portal.office.com.\n4. Register MFA at https://aka.ms/mfasetup — add at least two methods.\n5. Connect to CONTOSO-CORP WiFi with your corporate credentials.\n6. Open the IT Self-Service Portal at https://itportal and install any additional software.\n\nFirst week\n- Request system-specific access (SharePoint, shared mailboxes, LOB applications) via IT tickets with manager approval.\n- Complete mandatory Cyber Security Awareness training in the Learning Portal within 5 business days.\n\nIT contacts\nService Desk: ext. 5000 | it-help@contoso.com | https://itportal",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0016",
+                      "title":  "Mobile Device Management and Company Portal",
+                      "category":  "Mobile",
+                      "tags":  [
+                                   "mobile",
+                                   "mdm",
+                                   "intune",
+                                   "company portal",
+                                   "ios",
+                                   "android",
+                                   "corporate email",
+                                   "byod",
+                                   "device enrollment"
+                               ],
+                      "content":  "Mobile Device Management (MDM) and Company Portal\n\nEnrolling a corporate-issued device\n1. Power on the device and follow the out-of-box setup until the \u0027Sign in with Microsoft\u0027 screen.\n2. Sign in with your corporate account (firstname.lastname@contoso.com).\n3. Complete MFA. The device will auto-enroll in Intune and apply corporate policies (takes ~10 minutes).\n4. Install the Company Portal app if prompted — this shows compliance status and allows access to corporate apps.\n\nEnrolling your personal device (BYOD — Bring Your Own Device)\nBYOD is supported for email and Teams access only. Install the Microsoft Authenticator and Outlook apps from the App Store / Google Play. During Outlook setup choose \u0027Work or School Account\u0027. Intune will apply a limited policy (enforces device PIN and remote wipe of corporate data only — personal data is untouched).\n\nCompany Portal showing \u0027Not Compliant\u0027\nCommon compliance requirements:\n- Device PIN or biometric lock must be enabled\n- OS version must meet minimum (iOS 16+, Android 12+, Windows 11 22H2+)\n- Device must not be jailbroken/rooted\nFix each issue flagged, then open Company Portal \u003e Check access to refresh compliance status. Allow 15 minutes for Intune to update. Raise a ticket if compliance does not clear.\n\nAccessing corporate email on mobile\nUse the Outlook mobile app. Personal mail clients (Apple Mail, Gmail app) are not permitted to connect to corporate Exchange. Configure Outlook with your corporate email address; it will prompt for MFA on first login.\n\nRemote wipe (lost or stolen device)\nReport immediately to IT Service Desk: ext. 5000. IT can remotely wipe corporate data. For corporate-issued devices, a full factory reset is performed. For BYOD, only the corporate data container (Outlook, Teams, managed apps) is wiped — personal photos and apps are unaffected.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0017",
+                      "title":  "Meeting Room and AV Equipment Troubleshooting",
+                      "category":  "Meeting Rooms",
+                      "tags":  [
+                                   "meeting room",
+                                   "teams room",
+                                   "projector",
+                                   "hdmi",
+                                   "conference",
+                                   "av",
+                                   "display",
+                                   "microphone",
+                                   "speaker"
+                               ],
+                      "content":  "Meeting Room and AV Equipment\n\nTeams Rooms device (touch console) not working\n1. Check the touch console screen — if it shows \u0027No internet connection\u0027, verify the room ethernet cable is plugged in to the dock/codec.\n2. Reboot the Teams Room device: touch console \u003e three dots (…) \u003e Settings \u003e Reboot (PIN: 0000 or check the room card on the door).\n3. If the room PC is unresponsive, press and hold the power button on the compute module behind the display for 10 seconds.\n4. Allow 3–5 minutes for Teams Rooms to restart fully.\n\nProjector or display not showing content\n- Press the source/input button on the remote control or display and cycle to HDMI/DisplayPort.\n- Check the cable is firmly connected at both ends. Try the spare cable in the room cupboard.\n- On your laptop, press Win+P and select Duplicate or Extend.\n- If using a Mac, go to Apple menu \u003e System Settings \u003e Displays \u003e Detect Displays.\n\nWireless presentation (ClickShare / AirPlay)\n- ClickShare: plug the USB button into your laptop; click the button to share your screen. No software needed.\n- AirPlay: ensure your laptop is on CONTOSO-CORP WiFi (not guest). Open Control Centre \u003e Screen Mirroring and select the room display.\n\nRoom audio — no sound or echo\n- Confirm the room speakerphone/bar is set as the audio device in Teams: click the three dots in the meeting \u003e Device settings.\n- Echo is usually caused by a laptop microphone picking up the room speaker — mute your laptop microphone and use only the room equipment.\n- For persistent audio issues, raise a ticket with the room name and your meeting time so IT can review the device logs.\n\nBooking a room\nRooms are bookable via Outlook calendar \u003e New Event \u003e Add a room. Rooms are listed under the building name. If a room appears available but the door shows it is in use, it may have been booked as a walk-in — check the room panel display.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0018",
+                      "title":  "IT Asset Management and Hardware Requests",
+                      "category":  "Hardware",
+                      "tags":  [
+                                   "asset",
+                                   "equipment",
+                                   "request",
+                                   "replacement",
+                                   "refresh",
+                                   "hardware",
+                                   "it asset",
+                                   "new device",
+                                   "loaner",
+                                   "laptop request"
+                               ],
+                      "content":  "IT Asset Management and Hardware Requests\n\nRequesting new equipment\nSubmit a Hardware Request ticket with: equipment type, business justification, and manager approval. Standard lead time is 5–10 business days depending on stock. All hardware requests above £500 require Finance sign-off via the purchase order process.\n\nStandard device refresh\nCorporate laptops are refreshed on a 4-year cycle. You will receive an email when your device is due. IT proactively contacts you 3 months before end-of-life. Do not wait for the machine to fail — request a refresh as soon as you receive the notification.\n\nChecking your asset details\nLog in to the IT Portal at https://itportal \u003e My Devices. You can see your assigned assets, warranty status, operating system version, last check-in date, and compliance status.\n\nReturning equipment (leavers or role change)\nReturn all IT equipment to Room 204, Building B on your last working day. Bring all accessories (charger, dock, bag). IT will check the device back in. Failure to return equipment may result in salary deduction per the Asset Return Policy.\n\nPersonally owned equipment for work\nBYOD is permitted for mobile devices only (see KB-0016). Personal laptops are NOT permitted to connect to the corporate network. If you need a corporate device urgently while waiting for procurement, request a loaner from Room 204.\n\nLoan devices\nUp to 5 business days; extendable with manager approval. Bring employee ID. A loan agreement form must be signed. OneDrive must show a green tick and all work must be saved to the cloud before surrendering your primary device.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0019",
+                      "title":  "Intune Device Compliance and Conditional Access",
+                      "category":  "Security",
+                      "tags":  [
+                                   "intune",
+                                   "compliance",
+                                   "conditional access",
+                                   "mdm",
+                                   "device policy",
+                                   "entra",
+                                   "azure ad",
+                                   "managed device",
+                                   "blocked access"
+                               ],
+                      "content":  "Intune Device Compliance and Conditional Access\n\nWhy is my access to Microsoft 365 being blocked?\nConditional Access policies require your device to be Intune-compliant before accessing corporate resources (Exchange, SharePoint, Teams). If your device is marked non-compliant, you will see \u0027You cannot access this resource from here\u0027 or a similar error.\n\nChecking compliance status\n- Windows: Open the Company Portal app \u003e Devices \u003e click your device \u003e \u0027Check access\u0027.\n- iOS/Android: Open the Company Portal app and tap your device listing.\n- The app will list specific failed policies with remediation steps.\n\nCommon compliance failures and fixes\n\nDevice PIN not set:\n  Windows: Settings \u003e Accounts \u003e Sign-in options \u003e add a PIN.\n  iOS: Settings \u003e Face ID \u0026 Passcode.\n  Android: Settings \u003e Security \u003e Screen lock.\n\nOS version too old:\n  Windows: Settings \u003e Windows Update \u003e Check for updates and install all pending updates.\n  iOS/Android: Settings \u003e General \u003e Software Update.\n\nDisk encryption not enabled:\n  Windows: Settings \u003e Privacy \u0026 Security \u003e Device encryption \u003e turn on.\n  macOS: System Settings \u003e Privacy \u0026 Security \u003e FileVault \u003e turn on.\n\nDevice not enrolled in Intune:\n  Windows: Settings \u003e Accounts \u003e Access work or school \u003e Connect. Sign in with your corporate account.\n\nAfter fixing compliance issues\nOpen Company Portal \u003e Check access. Compliance updates propagate within 15 minutes. If still blocked after 30 minutes, raise a ticket including a screenshot of the Company Portal compliance screen.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0020",
+                      "title":  "Microsoft 365 Licensing and Application Access",
+                      "category":  "Software",
+                      "tags":  [
+                                   "microsoft 365",
+                                   "office 365",
+                                   "licence",
+                                   "subscription",
+                                   "e3",
+                                   "e5",
+                                   "power bi",
+                                   "visio",
+                                   "project",
+                                   "apps"
+                               ],
+                      "content":  "Microsoft 365 Licensing\n\nWhat is included in the standard licence\nAll employees receive a Microsoft 365 E3 licence which includes:\n- Office apps: Word, Excel, PowerPoint, OneNote, Access (Windows only)\n- Email and calendar: Exchange Online (100 GB mailbox)\n- Collaboration: Teams, SharePoint, OneDrive (1 TB storage)\n- Security: Microsoft Defender, Intune device management\n- Identity: Entra ID (Azure AD), MFA, Conditional Access\n\nAdd-on licences (require manager approval and budget code)\n- Microsoft 365 E5: adds advanced security, Power BI Premium, Phone System. Request via IT ticket.\n- Power BI Pro: required for publishing reports and sharing dashboards. Self-service via the Power BI portal (charged to department).\n- Visio Plan 1/2: for professional diagramming. Request via Software Request ticket.\n- Project Plan 1/3: for Microsoft Project desktop or online. Request via Software Request ticket.\n- Microsoft 365 Copilot (AI assistant): currently in pilot. Contact your IT Business Partner to be added to the pilot group.\n\nInstalling Office apps on your devices\nSign in to https://portal.office.com \u003e click Install apps \u003e Microsoft 365 apps. Supports Windows and macOS. Up to 5 PCs or Macs, 5 tablets, and 5 mobile devices per licence.\n\nActivation errors\n\u0027Account not found\u0027 or \u0027Unlicensed product\u0027 — sign out of all Office apps, go to https://portal.office.com/account and verify your licence is showing as active, then sign back in. If no licence appears, raise an IT ticket — new users may have a 24-hour propagation delay.\n\nShared licences (conference rooms, shared PCs)\nShared devices use a device-based licence. Do not sign in to Office apps with your personal credentials on shared machines — this deactivates one of your 5 personal device slots.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0021",
+                      "title":  "Developer Tools and Azure DevOps Access",
+                      "category":  "Developer",
+                      "tags":  [
+                                   "azure devops",
+                                   "git",
+                                   "github",
+                                   "developer",
+                                   "ide",
+                                   "visual studio",
+                                   "vs code",
+                                   "repository",
+                                   "pipeline",
+                                   "build"
+                               ],
+                      "content":  "Developer Tools and Azure DevOps\n\nAccessing Azure DevOps\nNavigate to https://dev.azure.com/contoso. Sign in with your corporate account. If you see \u0027Access denied\u0027, you need to be added to the relevant DevOps organisation. Raise an access request ticket specifying: DevOps organisation name, project name, and required permission level (Reader / Contributor / Project Administrator).\n\nGit configuration best practice\nAfter cloning a repo, configure your identity:\n  git config --global user.email \"firstname.lastname@contoso.com\"\n  git config --global user.name \"First Last\"\nUse SSH keys or the Git Credential Manager for authentication — do not hard-code PATs in scripts. To generate a PAT: DevOps \u003e User settings \u003e Personal Access Tokens \u003e New Token (set an expiry date).\n\nSetting up a development machine\nApproved IDEs available in the IT Self-Service Portal: Visual Studio 2022, VS Code, JetBrains toolbox (IntelliJ, Rider, DataGrip), Eclipse. Install via https://itportal/software — no admin rights needed.\nIf you need Docker Desktop, raise a Temporary Admin Rights request for installation, then submit a Software Approval ticket to whitelist it.\n\nCorporate proxy in developer tools\nIf tools cannot reach the internet, configure the proxy:\n  npm: npm config set proxy http://proxy.contoso.com:8080\n  pip: pip install --proxy http://proxy.contoso.com:8080 \u003cpackage\u003e\n  git: git config --global http.proxy http://proxy.contoso.com:8080\n  VS Code: Settings \u003e Proxy \u003e http://proxy.contoso.com:8080\n\nPipeline failures in Azure DevOps\nFor self-hosted agents: check agent is online in DevOps \u003e Project Settings \u003e Agent Pools. Restart the agent service on the agent machine. For Microsoft-hosted agents: check the Azure DevOps status page at https://status.dev.azure.com.\n\nRepository access denied (403)\nConfirm you have at least \u0027Contributor\u0027 permission on the repo. In Azure DevOps: Project Settings \u003e Repositories \u003e select the repo \u003e Security tab. Contact the project administrator to grant access.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0022",
+                      "title":  "Data Backup, Recovery and Retention Policy",
+                      "category":  "Storage",
+                      "tags":  [
+                                   "backup",
+                                   "recovery",
+                                   "data loss",
+                                   "restore",
+                                   "retention",
+                                   "onedrive",
+                                   "sharepoint",
+                                   "recycle bin",
+                                   "version history"
+                               ],
+                      "content":  "Data Backup and Recovery\n\nWhat is automatically backed up\n- OneDrive files: continuously synced to the cloud. 30-day recycle bin. 500 version history entries per file.\n- SharePoint document libraries: 90-day recycle bin. Version history enabled by default.\n- Exchange mailbox: 30-day recoverable items folder (Deleted Items + purged items).\n- Corporate laptops: only files in OneDrive / SharePoint are backed up. Local Desktop / Documents / Downloads are NOT backed up unless Known Folder Move is enabled.\n\nRecovering a deleted file\n1. OneDrive / SharePoint: check the Recycle Bin (left navigation pane). Files deleted more than 30 days ago go to the second-stage recycle bin (site settings \u003e Recycle Bin).\n2. If the file is not in the recycle bin, raise a ticket — IT can restore from site collection backups up to 90 days.\n3. Previous file version: right-click the file in OneDrive/SharePoint \u003e Version history. Select a previous version to restore or download.\n\nRecovering a deleted email\n1. Check the Deleted Items and Junk Email folders.\n2. In Outlook: Folder tab \u003e Recover Deleted Items (shows items purged from Deleted Items for up to 30 days).\n3. If not found, raise a ticket — IT can search the compliance archive.\n\nData retention policy summary\n- General files: 7-year retention (legal requirement)\n- HR records: 7 years post-employment\n- Financial records: 10 years\n- Emails: 3 years active + 7 years archive\nDo not delete business records before their retention period has expired — this may violate legal and regulatory obligations.\n\nData recovery is NOT available for:\n- Files stored only on a local hard drive that has physically failed (no OneDrive sync)\n- Files deleted from personal email accounts\n- Data on decommissioned devices that were not synced before return",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0023",
+                      "title":  "Dual and External Monitor Setup",
+                      "category":  "Hardware",
+                      "tags":  [
+                                   "monitor",
+                                   "display",
+                                   "dual screen",
+                                   "external monitor",
+                                   "hdmi",
+                                   "displayport",
+                                   "usb-c",
+                                   "resolution",
+                                   "scaling",
+                                   "dock"
+                               ],
+                      "content":  "Setting Up External and Dual Monitors\n\nConnecting a monitor\n- Use the HDMI, DisplayPort, or USB-C port on your laptop or dock. USB-C supports video only if the cable is Thunderbolt 3/4 or USB 3.1 Gen 2 or higher (check the cable label).\n- If using a dock, connect the dock to your laptop with its single USB-C/Thunderbolt cable, then connect monitors to the dock\u0027s video outputs.\n\nWindows display settings\nRight-click the desktop \u003e Display settings.\n- Arrange displays: drag the monitor thumbnails to match your physical layout.\n- Multiple displays dropdown: choose Extend (recommended), Duplicate, or Second screen only.\n- Resolution: set each monitor to its native resolution (listed on the monitor label). Common: 1920×1080 (FHD), 2560×1440 (QHD), 3840×2160 (4K).\n- Scale: if text appears too small on a 4K display, set scale to 150% or 200% per monitor.\n\nMonitor not detected\n- Try pressing Win+Ctrl+Shift+B (resets GPU driver — screen flickers briefly).\n- Disconnect and reconnect the cable.\n- On the monitor, press the input/source button and select the correct input (HDMI 1, DP, etc.).\n- Try a different cable — HDMI cables can degrade over time.\n- Connect the monitor directly to the laptop port (bypassing the dock) to isolate whether the dock is the issue.\n\nDock not working (no video, no USB devices)\n- Ensure the dock\u0027s power adapter is connected (many docks require external power).\n- Update the dock firmware: check the manufacturer\u0027s website or the IT portal for the dock model\u0027s firmware update tool.\n- Driver update: Windows Update \u003e Optional updates often includes dock/display adapter drivers.\n\nResolution or refresh rate greyed out\nUpdate the GPU driver via Device Manager \u003e Display Adapters \u003e Update driver. If using Intel, download the Intel Driver \u0026 Support Assistant from the IT portal.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0024",
+                      "title":  "Microsoft Copilot and AI Tools Policy",
+                      "category":  "Software",
+                      "tags":  [
+                                   "copilot",
+                                   "ai",
+                                   "microsoft copilot",
+                                   "chatgpt",
+                                   "generative ai",
+                                   "llm",
+                                   "ai assistant",
+                                   "policy",
+                                   "data classification"
+                               ],
+                      "content":  "AI Tools and Copilot Usage Policy\n\nApproved AI tools\nThe following AI tools are approved for corporate use:\n- Microsoft 365 Copilot (for users in the pilot group — see KB-0020 to request access)\n- Microsoft Copilot (Bing Chat Enterprise — available to all M365 E3/E5 users; corporate data is protected)\n- GitHub Copilot (for developers — request a licence via Software Request ticket)\n\nData classification rules for AI tools\nNEVER enter the following data into any AI tool (approved or not):\n- Customer PII (names, email addresses, account numbers)\n- Financial data, forecasts, or unreleased results\n- Passwords, API keys, or credentials\n- Classified or confidential intellectual property\n- Personnel records or HR information\nWhen in doubt, apply the highest data classification label to the content and do not input it into an AI tool.\n\nUsing Microsoft 365 Copilot safely\nCopilot in M365 uses your existing Microsoft Graph permissions — it can only access data you already have permission to see. Copilot responses are grounded in your organisation\u0027s data and are not used to train Microsoft\u0027s models (enterprise data protection is contractually guaranteed).\n\nUnapproved AI tools (ChatGPT, Claude, Gemini via personal accounts, etc.)\nUsing personal-account versions of public AI tools for work purposes is prohibited because corporate data submitted to these tools may be used for model training and is not covered by corporate data protection agreements. Violations are subject to disciplinary action.\n\nReporting an AI-generated error or hallucination\nIf Copilot or another approved AI tool produces factually incorrect output that was used in a business decision, raise an AI Incident ticket. Include: the prompt used, the output received, and the decision it influenced. IT and the AI Governance team will review.\n\nGetting access to Microsoft 365 Copilot\nCopilot requires an add-on licence. Contact your IT Business Partner. Pilot group access is subject to budget approval by your department head.",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  },
+                  {
+                      "@search.action":  "upload",
+                      "id":  "KB-0025",
+                      "title":  "IT Service Desk SLAs and Escalation Process",
+                      "category":  "Helpdesk",
+                      "tags":  [
+                                   "sla",
+                                   "escalation",
+                                   "priority",
+                                   "ticket",
+                                   "service desk",
+                                   "response time",
+                                   "resolution",
+                                   "critical",
+                                   "major incident"
+                               ],
+                      "content":  "IT Service Desk SLAs and Escalation\n\nTicket priority definitions and SLAs\n\nCritical (P1) — Complete business outage or data loss risk\n  Examples: ransomware attack, production system down affecting all users, total network outage\n  Response: 15 minutes | Resolution target: 4 hours\n  How to raise: Call ext. 5911 immediately — do not email or use the portal\n\nHigh (P2) — Significant impact, no workaround\n  Examples: VPN down for a team, email not working for a department, building network outage\n  Response: 30 minutes | Resolution target: 8 hours\n  How to raise: Call ext. 5000 and submit a portal ticket\n\nMedium (P3) — Individual impact, workaround exists\n  Examples: laptop performance degraded, non-critical software broken, printer offline\n  Response: 2 hours | Resolution target: 3 business days\n  How to raise: Submit via https://itportal\n\nLow (P4) — General request or non-urgent query\n  Examples: software installation, access request, hardware refresh query\n  Response: 4 hours | Resolution target: 5 business days\n  How to raise: Submit via https://itportal\n\nEscalating a ticket\nIf your ticket is not progressing within the SLA window:\n1. Reply to the ticket with an escalation note — this triggers a supervisor review automatically.\n2. Call ext. 5000 and quote your ticket number and request escalation to a Team Lead.\n3. For unresolved P1/P2: ask your manager to contact the IT Service Desk Manager at it-manager@contoso.com.\n\nMajor incident communications\nDuring P1 major incidents, IT publishes updates every 30 minutes at https://status.company.com. Subscribe for email/SMS notifications. Do not call the Service Desk during a major incident unless your issue is unrelated — this blocks the response team.\n\nIT Service Desk contact details\nPhone: ext. 5000 (internal) | +1-800-IT-HELP (external/mobile)\nEmail: it-help@contoso.com (P3/P4 only)\nPortal: https://itportal\nSecurity emergencies: ext. 5911 (24/7)",
+                      "indexedAt":  "2026-01-15T00:00:00Z"
+                  }
+              ]
 }

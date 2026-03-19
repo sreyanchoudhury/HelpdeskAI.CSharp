@@ -128,7 +128,8 @@ internal sealed class AzureAiSearchService(
             var options = new SearchOptions
             {
                 Size = top,
-                Select = { "id", "title", "content", "category" }
+                Select = { "id", "title", "content", "category", "indexedAt" },
+                OrderBy = { "indexedAt desc" }
             };
             var results = await _client.SearchAsync<SearchDocument>("*", options, ct);
             var items = new List<KbSearchResult>();

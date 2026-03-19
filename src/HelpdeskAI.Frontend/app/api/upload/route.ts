@@ -29,8 +29,12 @@ async function handleUpload(req: NextRequest) {
   }
 
   // Session ID forwarded from the frontend (X-Session-Id = CopilotKit threadId).
-  // Falls back to "dev-session" when running locally without a thread ID.
-  const sessionId = req.headers.get("X-Session-Id") || "dev-session";
+  // Required — without it, the attachment would be staged under a shared key and
+  // could leak into another user's next agent turn.
+  const sessionId = req.headers.get("X-Session-Id");
+  if (!sessionId) {
+    return NextResponse.json({ error: "X-Session-Id header is required" }, { status: 400 });
+  }
 
   // Forward to AgentHost
   const forwardForm = new FormData();
