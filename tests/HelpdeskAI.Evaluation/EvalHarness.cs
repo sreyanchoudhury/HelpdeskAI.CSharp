@@ -42,6 +42,30 @@ internal static class EvalHarness
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HelpdeskAI", "EvalResults");
 
+    // ── Pre-flight guard ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Call at the top of every <c>[ClassInitialize]</c>.
+    /// Marks all tests in the class as <see cref="Assert.Inconclusive"/> with clear
+    /// setup instructions if any required environment variable is missing, instead of
+    /// letting them explode with a cryptic <see cref="Azure.RequestFailedException"/>.
+    /// </summary>
+    internal static void EnsureConfigured()
+    {
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(OaiApiKey))       missing.Add("EVAL_OPENAI_API_KEY");
+        if (string.IsNullOrWhiteSpace(OaiEndpoint))     missing.Add("EVAL_OPENAI_ENDPOINT");
+        if (string.IsNullOrWhiteSpace(AgentBaseUrl))    missing.Add("EVAL_AGENT_URL");
+
+        if (missing.Count > 0)
+            Assert.Inconclusive(
+                $"Eval tests skipped — set the following environment variables before running: " +
+                $"{string.Join(", ", missing)}. " +
+                $"EVAL_OPENAI_API_KEY and EVAL_OPENAI_ENDPOINT match the values in " +
+                $"appsettings.Development.json; EVAL_AGENT_URL points at the deployed AgentHost " +
+                $"(e.g. https://helpdeskaiapp-dev-agenthost.azurecontainerapps.io).");
+    }
+
     // ── Evaluators ───────────────────────────────────────────────────────────
 
     /// <summary>All evaluators active across every scenario run.</summary>

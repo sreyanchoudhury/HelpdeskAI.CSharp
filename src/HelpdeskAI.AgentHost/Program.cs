@@ -186,7 +186,8 @@ var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, searchProvi
 app.MapAGUI("/agent", agent);
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
-app.MapEvalEndpoints();
+// Eval endpoint is not safe for production — exposes synchronous agent execution without auth.
+if (!app.Environment.IsProduction()) app.MapEvalEndpoints();
 
 app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
 {

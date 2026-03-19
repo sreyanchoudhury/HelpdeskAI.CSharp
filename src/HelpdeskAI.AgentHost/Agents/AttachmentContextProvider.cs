@@ -18,8 +18,10 @@ internal sealed class AttachmentContextProvider(
         CancellationToken cancellationToken = default)
     {
         // Use the request-scoped thread ID so attachments are isolated per conversation.
-        // Falls back to "dev-session" when running locally without a thread ID header.
-        var sessionId = ThreadIdContext.Current is { Length: > 0 } tid ? tid : "dev-session";
+        // No threadId → inject nothing; avoids reading another session's staged attachments.
+        if (ThreadIdContext.Current is not { Length: > 0 } tid)
+            return new AIContext();
+        var sessionId = tid;
 
         IReadOnlyList<ProcessedAttachment> attachments;
         try

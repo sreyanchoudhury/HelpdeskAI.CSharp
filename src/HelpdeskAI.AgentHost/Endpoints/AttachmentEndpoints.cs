@@ -8,11 +8,42 @@ internal static class AttachmentEndpoints
     internal static IEndpointRouteBuilder MapAttachmentEndpoints(this IEndpointRouteBuilder app)
     {
         // POST /api/attachments
-        // Accepts: multipart/form-data with field 'file' + optional header 'X-Session-Id'
+        // Accepts: multipart/form-data with field 'file' + required header 'X-Session-Id'
         // Supported: .txt (StreamReader), .pdf / .docx (Document Intelligence OCR), .png / .jpg / .jpeg (vision)
         // Returns: { fileName, contentType, blobUrl, processedAt }
         app.MapPost("/api/attachments", HandleUploadAsync);
+
+        // GET /api/attachments/{*blobName}
+        // Authenticated proxy — streams the blob via Managed Identity (DefaultAzureCredential).
+        // The container is PublicAccessType.None so unsigned URIs would return 403.
+        app.MapGet("/api/attachments/{*blobName}", HandleDownloadAsync);
+
         return app;
+    }
+
+    private static async Task<IResult> HandleDownloadAsync(
+        string blobName,
+        IBlobStorageService blobService,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct)
+    {
+        var logger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost.Endpoints.AttachmentEndpoints");
+        try
+        {
+            var download = await blobService.DownloadAsync(blobName, ct);
+            logger.LogInformation("Serving attachment blob '{BlobName}' ({ContentType})", blobName, download.ContentType);
+            return Results.Stream(download.Content, download.ContentType,
+                fileDownloadName: Path.GetFileName(blobName));
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+        {
+            return Results.NotFound(new { error = $"Blob '{blobName}' not found." });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to stream blob '{BlobName}'", blobName);
+            return Results.Problem("Failed to retrieve the attachment.", statusCode: 500);
+        }
     }
 
     private static async Task<IResult> HandleUploadAsync(
@@ -50,9 +81,9 @@ internal static class AttachmentEndpoints
         if (!isTxt && !isDocIntel && !isImage)
             return Results.BadRequest(new { error = $"Unsupported file type '{ext}'. Supported: .txt, .pdf, .docx, .png, .jpg, .jpeg" });
 
-        var sessionId = request.Headers.TryGetValue("X-Session-Id", out var sid) && !string.IsNullOrWhiteSpace(sid)
-            ? sid.ToString()
-            : "dev-session";
+        if (!request.Headers.TryGetValue("X-Session-Id", out var sid) || string.IsNullOrWhiteSpace(sid))
+            return Results.BadRequest(new { error = "X-Session-Id header is required." });
+        var sessionId = sid.ToString();
 
         string? extractedText = null;
         string? imageBase64 = null;
@@ -87,10 +118,13 @@ internal static class AttachmentEndpoints
         }
 
         // ── Upload to Blob — best-effort ──────────────────────────────────────
+        // UploadAsync now returns the blob name (not the unsigned Azure URI).
+        // Build an authenticated proxy URL so "View original" links don't 403.
         try
         {
             using var uploadStream = file.OpenReadStream();
-            blobUrl = await blobService.UploadAsync(file.FileName, uploadStream, file.ContentType, ct);
+            var blobName = await blobService.UploadAsync(file.FileName, uploadStream, file.ContentType, ct);
+            blobUrl = $"{request.Scheme}://{request.Host}/api/attachments/{blobName}";
         }
         catch (Exception ex)
         {

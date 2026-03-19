@@ -39,6 +39,7 @@ $schema = @{
         @{ name = "content";  type = "Edm.String";             key = $false; retrievable = $true;  searchable = $true;  analyzer = "en.microsoft" }
         @{ name = "category"; type = "Edm.String";             key = $false; retrievable = $true;  searchable = $true;  filterable = $true }
         @{ name = "tags";     type = "Collection(Edm.String)"; key = $false; retrievable = $true;  searchable = $true;  filterable = $true }
+        @{ name = "indexedAt"; type = "Edm.DateTimeOffset";    key = $false; retrievable = $true;  searchable = $false; sortable = $true; filterable = $true }
     )
     semantic = @{
         configurations = @(

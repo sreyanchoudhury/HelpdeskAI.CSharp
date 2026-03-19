@@ -37,9 +37,10 @@ public sealed class RedisChatHistoryProvider : ChatHistoryProvider
         _sessionState = new ProviderSessionState<ProviderState>(
             stateInitializer: _ => new ProviderState
             {
+                // No threadId → ephemeral per-request key; starts fresh, never crosses session boundaries.
                 RedisKey = ThreadIdContext.Current is { Length: > 0 } tid
                     ? $"messages:{tid}"
-                    : "messages:dev-session"
+                    : $"messages:anon:{Guid.NewGuid():N}"
             },
             stateKey: nameof(RedisChatHistoryProvider),
             jsonSerializerOptions: JsonOptions);

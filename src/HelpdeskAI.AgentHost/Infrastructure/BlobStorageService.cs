@@ -34,7 +34,17 @@ internal sealed class BlobStorageService : IBlobStorageService
         }, ct);
 
         _log.LogInformation("Uploaded attachment blob: {BlobName}", blobName);
-        return blobClient.Uri.ToString();
+        // Return the blob name so callers can construct an authenticated proxy URL.
+        // Do NOT return blobClient.Uri — the container is PublicAccessType.None (unsigned = 403).
+        return blobName;
+    }
+
+    public async Task<BlobDownload> DownloadAsync(string blobName, CancellationToken ct = default)
+    {
+        var blobClient = _container.GetBlobClient(blobName);
+        var response = await blobClient.DownloadStreamingAsync(cancellationToken: ct);
+        var contentType = response.Value.Details.ContentType ?? "application/octet-stream";
+        return new BlobDownload(response.Value.Content, contentType);
     }
 
     private async Task EnsureContainerAsync(CancellationToken ct)

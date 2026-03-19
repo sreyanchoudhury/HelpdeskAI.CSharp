@@ -38,7 +38,8 @@ public sealed class KnowledgeBaseService(
             ["title"] = title,
             ["content"] = content,
             ["category"] = category ?? "Uploaded",
-            ["tags"] = new[] { "agent-indexed" }
+            ["tags"] = new[] { "agent-indexed" },
+            ["indexedAt"] = DateTimeOffset.UtcNow
         };
 
         await _client.MergeOrUploadDocumentsAsync(new[] { doc }, cancellationToken: ct);

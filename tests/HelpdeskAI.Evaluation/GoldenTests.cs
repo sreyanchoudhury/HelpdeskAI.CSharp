@@ -36,6 +36,7 @@ public sealed class GoldenTests
     [ClassInitialize]
     public static void Init(TestContext _)
     {
+        EvalHarness.EnsureConfigured();
         _http      = new HttpClient
         {
             BaseAddress = new Uri(EvalHarness.AgentBaseUrl),
@@ -45,7 +46,7 @@ public sealed class GoldenTests
     }
 
     [ClassCleanup]
-    public static void Cleanup() => _http.Dispose();
+    public static void Cleanup() => _http?.Dispose();
 
     // ── Shared runner ─────────────────────────────────────────────────────────
 
