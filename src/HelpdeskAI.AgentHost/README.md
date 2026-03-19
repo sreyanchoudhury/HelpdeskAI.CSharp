@@ -45,6 +45,13 @@ For Azure deployment, set these values via Azure App Service/Container App setti
 > errors mid-call to reconnect and retry once — ensuring long agentic conversations with many tool calls
 > are never interrupted by Azure's ingress timeout.
 
+> **Structured Audit Logging (Phase 1a):**
+> Every `/agent` request opens a request-level `ILogger.BeginScope(new { threadId })` so all log lines
+> during the turn carry `customDimensions.threadId` in App Insights. Every MCP tool call opens a
+> tool-level scope (`toolName`) and logs `attempt`, `outcome`, and `durationMs` at Info/Warning/Error.
+> Token counts per turn are emitted as structured traces (`PromptTokens`, `CompletionTokens`, `ThreadId`).
+> These feed directly into the Phase 1d KQL baseline queries in `docs/baseline/kql-queries.md`.
+
 ---
 ## Architecture
 
@@ -245,6 +252,7 @@ HelpdeskAI.AgentHost/
 │   └── DynamicToolSelectionProvider.cs  # Per-turn cosine similarity tool selection via embeddings
 ├── Endpoints/
 │   ├── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
+│   ├── EvalEndpoints.cs            # POST /agent/eval — synchronous eval endpoint for test harness
 │   └── TicketEndpoints.cs          # GET /api/tickets — proxy to McpServer /tickets
 ├── Infrastructure/
 │   ├── AGUIHistoryNormalizingClient.cs  # Merges consecutive assistant tool-call messages for OpenAI parallel tool-call compatibility
@@ -255,10 +263,10 @@ HelpdeskAI.AgentHost/
 │   ├── RedisAttachmentStore.cs          # 1-hour one-shot staging store for attachments (load-and-clear on next turn)
 │   ├── RedisChatHistoryProvider.cs      # Per-session chat history keyed by AG-UI threadId
 │   ├── RedisService.cs                  # Low-level IRedisService implementation (StringGet / StringSet / KeyDelete)
-│   ├── RetryingMcpTool.cs               # DelegatingAIFunction wrapper — catches Session not found (HTTP -32001), reconnects, retries once
+│   ├── RetryingMcpTool.cs               # DelegatingAIFunction wrapper — catches Session not found / transport errors, reconnects + retries once; emits structured audit traces (toolName, attempt, outcome, durationMs) picked up by Azure Monitor
 │   ├── IncludeStreamingUsagePolicy.cs   # Azure SDK PipelinePolicy — injects stream_options:{include_usage:true} into streaming chat requests so Azure returns token counts in the final SSE chunk
 │   ├── ThreadIdCapturingClient.cs       # AsyncLocal<string?> holder for AG-UI threadId; populated by request middleware
-│   └── UsageCapturingChatClient.cs      # DelegatingChatClient — captures token usage from the final streaming chunk; writes usage:{threadId}:latest and usage:latest to Redis in parallel
+│   └── UsageCapturingChatClient.cs      # DelegatingChatClient — captures token usage from the final streaming chunk; writes usage:{threadId}:latest and usage:latest to Redis; emits structured traces (PromptTokens, CompletionTokens, ThreadId) for App Insights baseline queries
 ├── Models/
 │   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, AzureBlobStorageSettings, etc.)
 └── HelpdeskAI.AgentHost.csproj     # Project file (.NET 10)
@@ -313,6 +321,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | Method | Path | Role |
 |--------|------|------|
 | `POST` | `/agent` | AG-UI streaming endpoint (SSE) |
+| `POST` | `/agent/eval` | Synchronous eval endpoint for `HelpdeskAI.Evaluation` test harness — returns `{response, promptTokens, completionTokens}` |
 | `GET` | `/healthz` | Liveness / readiness probe |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
 | `GET` | `/agent/usage?threadId=` | Token usage for the most recent response — returns `{promptTokens, completionTokens}` written by `UsageCapturingChatClient` via `IncludeStreamingUsagePolicy` |

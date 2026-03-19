@@ -345,6 +345,132 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+// ─── Monitoring Alerts (Phase 1c) ─────────────────────────────────────────────
+//
+// Three scheduled query rules targeting the shared Log Analytics workspace.
+// API: Microsoft.Insights/scheduledQueryRules@2022-06-15 — chosen over metricAlerts
+// because KQL enables true percentage (for error rate) and percentile arithmetic (for p95).
+// Note: scheduledQueryRules use the resource GROUP location, NOT 'global'.
+//
+// Alert actions: no action group wired yet — alerts are visible in Azure Monitor > Alerts.
+// Add an action group (email/Teams/PagerDuty) by populating the `actions` block below.
+
+// ── Alert 1: Error Rate > 1% ──────────────────────────────────────────────────
+// Fires when the fraction of failed HTTP requests exceeds 1% over a 15-minute window
+// with at least 10 total requests (prevents alert noise on cold-start).
+
+resource alertErrorRate 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
+  name: '${prefix}-alert-error-rate'
+  location: location
+  properties: {
+    displayName: '[${prefix}] Error Rate > 1%'
+    description: 'AgentHost HTTP error rate exceeded 1% over the last 15 minutes.'
+    severity: 2
+    enabled: true
+    scopes: [ logAnalytics.id ]
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT15M'
+    criteria: {
+      allOf: [
+        {
+          query: '''
+            requests
+            | where timestamp > ago(15m)
+            | summarize total = count(), failed = countif(success == false)
+            | where total >= 10
+            | extend errorRate = todouble(failed) / todouble(total)
+            | where errorRate > 0.01
+          '''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          failingPeriods: {
+            numberOfEvaluationPeriods: 1
+            minFailingPeriodsToAlert: 1
+          }
+        }
+      ]
+    }
+  }
+}
+
+// ── Alert 2: p95 Latency > 10 s ───────────────────────────────────────────────
+// Fires when the 95th-percentile request duration for /agent exceeds 10 seconds.
+// Targets only /agent (the SSE endpoint) — not health probes or static assets.
+
+resource alertP95Latency 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
+  name: '${prefix}-alert-p95-latency'
+  location: location
+  properties: {
+    displayName: '[${prefix}] p95 Latency > 10 s'
+    description: 'AgentHost /agent p95 response time exceeded 10 seconds over the last 15 minutes.'
+    severity: 2
+    enabled: true
+    scopes: [ logAnalytics.id ]
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT15M'
+    criteria: {
+      allOf: [
+        {
+          query: '''
+            requests
+            | where timestamp > ago(15m)
+            | where name has "/agent"
+            | summarize p95 = percentile(duration, 95)
+            | where p95 > 10000
+          '''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          failingPeriods: {
+            numberOfEvaluationPeriods: 1
+            minFailingPeriodsToAlert: 1
+          }
+        }
+      ]
+    }
+  }
+}
+
+// ── Alert 3: Redis Connectivity Loss ─────────────────────────────────────────
+// Fires when ≥ 3 Redis-related error traces appear within a 5-minute window.
+// Targets the structured traces emitted by RedisService / RedisChatHistoryProvider.
+
+resource alertRedisConnectivity 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
+  name: '${prefix}-alert-redis-connectivity'
+  location: location
+  properties: {
+    displayName: '[${prefix}] Redis Connectivity Loss'
+    description: '3 or more Redis errors detected in the last 5 minutes — possible connectivity loss.'
+    severity: 1
+    enabled: true
+    scopes: [ logAnalytics.id ]
+    evaluationFrequency: 'PT5M'
+    windowSize: 'PT5M'
+    criteria: {
+      allOf: [
+        {
+          query: '''
+            traces
+            | where timestamp > ago(5m)
+            | where message has "Redis"
+              and message has_any ("failed", "timeout", "refused", "error", "unavailable")
+            | count
+            | where Count >= 3
+          '''
+          timeAggregation: 'Count'
+          operator: 'GreaterThan'
+          threshold: 0
+          failingPeriods: {
+            numberOfEvaluationPeriods: 1
+            minFailingPeriodsToAlert: 1
+          }
+        }
+      ]
+    }
+  }
+}
+
 // ─── Outputs ──────────────────────────────────────────────────────────────────
 
 output acrLoginServer string = acr.properties.loginServer

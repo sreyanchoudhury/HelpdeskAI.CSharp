@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- AI eval tests are integration tests — they call the live AgentHost.      -->
+    <!-- Run with: dotnet test tests/HelpdeskAI.Evaluation                       -->
+    <!-- Set EVAL_AGENT_URL env var to target Azure; defaults to localhost:5200.  -->
+    <!-- Set EVAL_OPENAI_API_KEY to the AzureOpenAI key from appsettings.Dev.json -->
+    <TestTimeout>300000</TestTimeout>
+    <!-- AIEVAL001: evaluators are marked experimental by the SDK — acceptable for a test project. -->
+    <NoWarn>AIEVAL001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"                        Version="17.13.0" />
+    <PackageReference Include="MSTest.TestAdapter"                             Version="3.8.3" />
+    <PackageReference Include="MSTest.TestFramework"                           Version="3.8.3" />
+
+    <!-- AI Evaluation stack — same version as AgentHost's MEAI packages -->
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation"             Version="10.4.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Quality"     Version="10.4.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Reporting"   Version="10.4.0" />
+
+    <!-- Azure OpenAI for building the evaluator IChatClient -->
+    <PackageReference Include="Azure.AI.OpenAI"                                Version="2.8.0-beta.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI"                 Version="10.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy appsettings into output dir so tests can read it at runtime -->
+    <None Update="appsettings.Evaluation.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

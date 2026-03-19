@@ -95,7 +95,8 @@ builder.Services.AddChatClient(azureClient)
     .Use((inner, services) => new UsageCapturingChatClient(
         inner,
         services.GetRequiredService<IRedisService>(),
-        services.GetRequiredService<IOptions<ConversationSettings>>()))
+        services.GetRequiredService<IOptions<ConversationSettings>>(),
+        services.GetRequiredService<ILoggerFactory>().CreateLogger<UsageCapturingChatClient>()))
     .Use((inner, _) => new AGUIHistoryNormalizingClient(inner))
     .UseLogging()
     .UseOpenTelemetry();
@@ -121,8 +122,14 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 app.UseCors();
 
+// Cache ILoggerFactory from DI once — used throughout startup and middleware.
+var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+var agentLogger   = loggerFactory.CreateLogger("HelpdeskAI.AgentHost");
+
 // Populate ThreadIdContext before the request is handled so history providers
 // can key Redis by AG-UI threadId without access to the (always-null) AgentSession.
+// Also opens a request-level BeginScope(threadId) so every log line during the turn
+// carries threadId as customDimensions.threadId in App Insights traces.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/agent") &&
@@ -134,7 +141,14 @@ app.Use(async (context, next) =>
         context.Request.Body.Position = 0;
         using var doc = System.Text.Json.JsonDocument.Parse(body);
         if (doc.RootElement.TryGetProperty("threadId", out var elem))
-            ThreadIdContext.Set(elem.GetString());
+        {
+            var threadId = elem.GetString();
+            ThreadIdContext.Set(threadId);
+            // Scope disposes after next(context) completes — covers the full request pipeline.
+            using var scope = agentLogger.BeginScope(new { threadId });
+            await next(context);
+            return;
+        }
     }
     await next(context);
 });
@@ -145,15 +159,15 @@ var historyProvider = new RedisChatHistoryProvider(
     app.Services.GetRequiredService<IRedisService>(),
     chatClient,
     app.Services.GetRequiredService<IOptions<ConversationSettings>>(),
-    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<RedisChatHistoryProvider>());
+    loggerFactory.CreateLogger<RedisChatHistoryProvider>());
 
 var searchProvider = new AzureAiSearchContextProvider(
     app.Services.GetRequiredService<IKnowledgeSearch>(),
-    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AzureAiSearchContextProvider>());
+    loggerFactory.CreateLogger<AzureAiSearchContextProvider>());
 
 var attachmentProvider = new AttachmentContextProvider(
     app.Services.GetRequiredService<IAttachmentStore>(),
-    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AttachmentContextProvider>());
+    loggerFactory.CreateLogger<AttachmentContextProvider>());
 
 // Tool index is built AFTER the HTTP server starts (via ApplicationStarted) so the
 // startup health probe passes immediately. Chat turns await this task (60 s guard).
@@ -165,13 +179,14 @@ var toolSelectionProvider = new DynamicToolSelectionProvider(
     toolIndexTcs.Task,
     embeddingGenerator,
     topK,
-    app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<DynamicToolSelectionProvider>());
+    loggerFactory.CreateLogger<DynamicToolSelectionProvider>());
 
 var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, searchProvider, attachmentProvider, toolSelectionProvider);
 
 app.MapAGUI("/agent", agent);
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
+app.MapEvalEndpoints();
 
 app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
 {
@@ -195,8 +210,10 @@ app.Lifetime.ApplicationStarted.Register(() =>
             var toolsProvider = app.Services.GetRequiredService<IMcpToolsProvider>();
             var rawTools = await toolsProvider.GetToolsAsync();
             // Wrap each tool so it auto-reconnects on "Session not found" after McpServer restart.
+            // Passes the shared logger so each RetryingMcpTool emits structured audit traces.
+            var retryingToolLogger = loggerFactory.CreateLogger<RetryingMcpTool>();
             var tools = rawTools
-                .Select(t => (AIFunction)new RetryingMcpTool(t, toolsProvider))
+                .Select(t => (AIFunction)new RetryingMcpTool(t, toolsProvider, retryingToolLogger))
                 .ToList();
             var toolDescriptions = tools.Select(t => $"{t.Name}: {t.Description}").ToList();
             var toolEmbeddings = await embeddingGenerator.GenerateAsync(toolDescriptions);
