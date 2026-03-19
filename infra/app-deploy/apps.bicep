@@ -367,6 +367,7 @@ resource alertErrorRate 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
     description: 'AgentHost HTTP error rate exceeded 1% over the last 15 minutes.'
     severity: 2
     enabled: true
+    skipQueryValidation: true   // workspace may not have data at deploy time
     scopes: [ logAnalytics.id ]
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
@@ -406,6 +407,7 @@ resource alertP95Latency 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = {
     description: 'AgentHost /agent p95 response time exceeded 10 seconds over the last 15 minutes.'
     severity: 2
     enabled: true
+    skipQueryValidation: true   // workspace may not have data at deploy time
     scopes: [ logAnalytics.id ]
     evaluationFrequency: 'PT5M'
     windowSize: 'PT15M'
@@ -444,6 +446,7 @@ resource alertRedisConnectivity 'Microsoft.Insights/scheduledQueryRules@2022-06-
     description: '3 or more Redis errors detected in the last 5 minutes — possible connectivity loss.'
     severity: 1
     enabled: true
+    skipQueryValidation: true   // workspace may not have data at deploy time
     scopes: [ logAnalytics.id ]
     evaluationFrequency: 'PT5M'
     windowSize: 'PT5M'
