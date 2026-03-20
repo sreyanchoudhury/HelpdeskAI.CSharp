@@ -1,6 +1,6 @@
 ﻿# HelpdeskAI
 
-An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events. Each response shows a `⏱ latency · 📥 in / 📤 out` token stats chip in the header.
+An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events. Each response shows a `⏱ latency · 📥 in / 📤 out` token stats chip in the header. Phase 2b adds Microsoft Entra SSO on the frontend and bearer-token validation in AgentHost, so the app can run locally or on Azure while authenticating against the same enterprise identity boundary.
 
 <table>
   <tr>

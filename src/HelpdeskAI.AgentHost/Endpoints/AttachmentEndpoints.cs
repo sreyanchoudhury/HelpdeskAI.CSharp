@@ -11,12 +11,12 @@ internal static class AttachmentEndpoints
         // Accepts: multipart/form-data with field 'file' + required header 'X-Session-Id'
         // Supported: .txt (StreamReader), .pdf / .docx (Document Intelligence OCR), .png / .jpg / .jpeg (vision)
         // Returns: { fileName, contentType, blobUrl, processedAt }
-        app.MapPost("/api/attachments", HandleUploadAsync);
+        app.MapPost("/api/attachments", HandleUploadAsync).RequireAuthorization();
 
         // GET /api/attachments/{*blobName}
         // Authenticated proxy — streams the blob via Managed Identity (DefaultAzureCredential).
         // The container is PublicAccessType.None so unsigned URIs would return 403.
-        app.MapGet("/api/attachments/{*blobName}", HandleDownloadAsync);
+        app.MapGet("/api/attachments/{*blobName}", HandleDownloadAsync).RequireAuthorization();
 
         return app;
     }

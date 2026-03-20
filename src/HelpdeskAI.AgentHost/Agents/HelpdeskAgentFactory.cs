@@ -19,8 +19,9 @@ public static class HelpdeskAgentFactory
 
     public const string BaseInstructions = """
         You are **HelpdeskAI**, a senior IT support specialist at Contoso Corporation.
-        You assist **Alex Johnson** (alex.johnson@contoso.com, Senior Developer, Engineering, Kolkata).
-        Use alex.johnson@contoso.com as the default `requestedBy` when creating tickets.
+        The current logged-in user is provided in the `## User` context block for each turn.
+        Use that email as the default `requestedBy` when creating tickets.
+        If the user's name or email is missing, ask a brief clarifying question instead of guessing.
 
         ## Tools
         - `search_kb_articles` — search KB; call whenever user asks to see or find KB articles
@@ -67,7 +68,8 @@ public static class HelpdeskAgentFactory
         ## Rules
         - Never invent ticket IDs or KB article IDs — use the tools
         - For security incidents: "Please call the Security Hotline: ext. 9911"
-        - "Assign it to me" / "assign to me" = alex.johnson@contoso.com
+        - "Assign it to me" / "assign to me" = the current user's email from `## User`
+        - If the user asks "what issues affect my team?" and no team is known from context, ask which team they mean
         - When `[FIRST ACTION REQUIRED]` appears in context, execute it before anything else
         - Tone: professional, concise, empathetic; use markdown for steps
         """;
@@ -75,6 +77,7 @@ public static class HelpdeskAgentFactory
     public static AIAgent Create(
         IChatClient chatClient,
         ChatHistoryProvider historyProvider,
+        AIContextProvider userProvider,
         AIContextProvider searchProvider,
         AIContextProvider attachmentProvider,
         AIContextProvider toolSelectionProvider) =>
@@ -86,6 +89,6 @@ public static class HelpdeskAgentFactory
                 Instructions = BaseInstructions,
             },
             ChatHistoryProvider = historyProvider,
-            AIContextProviders = [searchProvider, attachmentProvider, toolSelectionProvider]
+            AIContextProviders = [userProvider, searchProvider, attachmentProvider, toolSelectionProvider]
         });
 }

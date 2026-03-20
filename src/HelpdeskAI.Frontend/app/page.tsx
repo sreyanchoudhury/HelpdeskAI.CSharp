@@ -2,8 +2,36 @@
 
 import { CopilotKit } from "@copilotkit/react-core";
 import { HelpdeskChat } from "@/components/HelpdeskChat";
+import { useSession } from "next-auth/react";
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0a0b0f",
+      color: "#9098b0",
+      fontSize: 14,
+      fontFamily: "system-ui, sans-serif",
+    }}>
+      {message}
+    </div>
+  );
+}
 
 export default function Home() {
+  const { data: session, status } = useSession();
+
+  if (status === "loading") {
+    return <LoadingScreen message="Loading your HelpdeskAI session..." />;
+  }
+
+  if (!session?.user?.email) {
+    return <LoadingScreen message="Redirecting to Microsoft Entra ID..." />;
+  }
+
   return (
     <CopilotKit
       runtimeUrl="/api/copilotkit"
@@ -29,7 +57,12 @@ export default function Home() {
         console.error("[CopilotKit error]", event);
       }}
     >
-      <HelpdeskChat />
+      <HelpdeskChat
+        currentUser={{
+          name: session.user.name?.trim() || session.user.email,
+          email: session.user.email,
+        }}
+      />
     </CopilotKit>
   );
 }
