@@ -1,26 +1,38 @@
-﻿import {
+import {
   CopilotRuntime,
   ExperimentalEmptyAdapter,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
 import { HttpAgent } from "@ag-ui/client";
 import { NextRequest } from "next/server";
+import { getAuthenticatedUser } from "@/lib/server-auth";
 
 const agentUrl = process.env.AGENT_URL ?? "http://localhost:5200/agent";
-
-// HttpAgent implements the AG-UI protocol; the CopilotRuntime agents map expects a
-// CopilotKitAgent shape, but the runtime accepts any object with the AG-UI call interface.
-const helpdeskAgent = new HttpAgent({ url: agentUrl, agentId: "HelpdeskAgent" }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-
 const serviceAdapter = new ExperimentalEmptyAdapter();
 
-const runtime = new CopilotRuntime({
-  agents: {
-    HelpdeskAgent: helpdeskAgent,
-  },
-});
-
 async function buildHandler(req: NextRequest) {
+  const user = await getAuthenticatedUser(req);
+  if (!user.accessToken) {
+    return new Response(JSON.stringify({ error: "Authentication required" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const helpdeskAgent = new HttpAgent({
+    url: agentUrl,
+    agentId: "HelpdeskAgent",
+    headers: {
+      Authorization: `Bearer ${user.accessToken}`,
+    },
+  }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  const runtime = new CopilotRuntime({
+    agents: {
+      HelpdeskAgent: helpdeskAgent,
+    },
+  });
+
   const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
     runtime,
     serviceAdapter,

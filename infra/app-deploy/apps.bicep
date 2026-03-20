@@ -65,6 +65,21 @@ param docIntelligenceEndpoint string
 @description('Document Intelligence API key')
 param docIntelligenceKey string
 
+// Microsoft Entra ID / NextAuth
+@description('Microsoft Entra tenant ID')
+param azureAdTenantId string = ''
+
+@description('Microsoft Entra app registration client ID')
+param azureAdClientId string = ''
+
+@secure()
+@description('Microsoft Entra app registration client secret')
+param azureAdClientSecret string = ''
+
+@secure()
+@description('NextAuth session secret')
+param nextAuthSecret string = ''
+
 // ─── Derived Names ────────────────────────────────────────────────────────────
 
 var suffix = take(uniqueString(resourceGroup().id, baseName), 8)
@@ -281,6 +296,10 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AzureBlobStorage__ContainerName',        value: blobContainerName }
             { name: 'DocumentIntelligence__Endpoint',         secretRef: 'doc-intel-endpoint' }
             { name: 'DocumentIntelligence__Key',              secretRef: 'doc-intel-key' }
+            { name: 'EntraAuth__TenantId',                    value: azureAdTenantId }
+            { name: 'EntraAuth__ClientId',                    value: azureAdClientId }
+            { name: 'EntraAuth__Audience',                    value: empty(azureAdClientId) ? '' : 'api://${azureAdClientId}' }
+            { name: 'EntraAuth__Authority',                   value: empty(azureAdTenantId) ? '' : 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',  secretRef: 'appinsights-cs' }
           ]
           resources: {
@@ -317,6 +336,8 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       secrets: [
         { name: 'acr-password', value: acr.listCredentials().passwords[0].value }
+        { name: 'nextauth-secret', value: nextAuthSecret }
+        { name: 'azure-ad-client-secret', value: azureAdClientSecret }
       ]
     }
     template: {
@@ -332,6 +353,12 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AGENT_BASE_URL', value: 'https://${agentHostApp.properties.configuration.ingress.fqdn}' }
             // Internal hostname — reachable from other apps within the same Container Apps environment.
             { name: 'MCP_URL',        value: 'http://${names.mcpServer}' }
+            { name: 'NEXTAUTH_URL',   value: 'https://${names.frontend}.${caEnv.properties.defaultDomain}' }
+            { name: 'NEXTAUTH_SECRET', secretRef: 'nextauth-secret' }
+            { name: 'AZURE_AD_CLIENT_ID', value: azureAdClientId }
+            { name: 'AZURE_AD_CLIENT_SECRET', secretRef: 'azure-ad-client-secret' }
+            { name: 'AZURE_AD_TENANT_ID', value: azureAdTenantId }
+            { name: 'AZURE_AD_API_SCOPE', value: empty(azureAdClientId) ? '' : 'api://${azureAdClientId}/access_as_user' }
             { name: 'NODE_ENV',       value: 'production' }
           ]
           resources: {

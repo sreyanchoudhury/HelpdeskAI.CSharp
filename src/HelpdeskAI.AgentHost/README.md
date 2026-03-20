@@ -11,6 +11,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
 - **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticketing, system status monitoring, and KB search/index flows
 - **Applies render-action guidance** — follows `_renderAction` / `_renderArgs` from MCP tool results so the frontend can render structured cards when appropriate
+- **Validates Microsoft Entra bearer tokens** — `/agent` and frontend-facing API routes require a valid access token before user context is derived from claims
 
 ---
 
@@ -29,6 +30,12 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
     "Endpoint": "<YOUR_AZURE_AI_SEARCH_ENDPOINT>",
     "ApiKey": "<YOUR_AZURE_AI_SEARCH_API_KEY>"
   },
+  "EntraAuth": {
+    "TenantId": "<YOUR_ENTRA_TENANT_ID>",
+    "ClientId": "<YOUR_ENTRA_APP_CLIENT_ID>",
+    "Audience": "api://<YOUR_ENTRA_APP_CLIENT_ID>",
+    "Authority": "https://login.microsoftonline.com/<YOUR_ENTRA_TENANT_ID>/v2.0"
+  },
   "ConnectionStrings": {
     "Redis": "localhost:6379"
   },
@@ -39,6 +46,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 ```
 
 For Azure deployment, set these values via Azure App Service/Container App settings or Key Vault. Never commit real secrets.
+For local development, you can still run the app locally while pointing at Azure-hosted dependencies. The main extra requirement for Phase 2b is that the frontend and AgentHost must both be configured for the same Entra app registration and API audience.
 
 > **Azure Container Apps — SSE session management:**
 > Azure Container Apps hard-cuts HTTP/1.1 SSE streams at 240 seconds. The MCP client (`McpToolsProvider`)

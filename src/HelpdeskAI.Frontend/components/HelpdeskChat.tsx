@@ -3,10 +3,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
 import { CopilotChat, CopilotKitCSSProperties, type InputProps } from "@copilotkit/react-ui";
 import { useCopilotContext } from "@copilotkit/react-core";
+import { signOut } from "next-auth/react";
 import "@copilotkit/react-ui/styles.css";
-import { HelpdeskActions, Ticket } from "./HelpdeskActions";
+import { HelpdeskActions, type CurrentUser, Ticket } from "./HelpdeskActions";
 import type { AttachedFile } from "./AttachmentBar";
-import { DEMO_USER, PRIORITY_COLOR, CATEGORY_ICON, KB_CATEGORY_COLOR } from "../lib/constants";
+import { PRIORITY_COLOR, CATEGORY_ICON, KB_CATEGORY_COLOR } from "../lib/constants";
 
 type Page = "chat" | "tickets" | "kb" | "settings";
 
@@ -51,7 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
   Resolved: "Resolved", Closed: "Closed",
 };
 
-function TicketsPage({ agentTickets, refreshKey }: { agentTickets: Ticket[]; refreshKey: number }) {
+function TicketsPage({ agentTickets, refreshKey, currentUser }: { agentTickets: Ticket[]; refreshKey: number; currentUser: CurrentUser }) {
   const [serverTickets, setServerTickets] = useState<ServerTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +65,7 @@ function TicketsPage({ agentTickets, refreshKey }: { agentTickets: Ticket[]; ref
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/tickets?requestedBy=${encodeURIComponent(DEMO_USER)}`)
+    fetch(`/api/tickets?requestedBy=${encodeURIComponent(currentUser.email)}`)
       .then(r => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
       .then((data: ServerTicket[]) => {
         if (!cancelled) { setServerTickets(data); setLoading(false); }
@@ -73,7 +74,7 @@ function TicketsPage({ agentTickets, refreshKey }: { agentTickets: Ticket[]; ref
         if (!cancelled) { setError(String(e)); setLoading(false); }
       });
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [currentUser.email, refreshKey]);
 
   const serverIds = new Set(serverTickets.map(t => t.id));
   const agentOnly: ServerTicket[] = agentTickets
@@ -83,7 +84,7 @@ function TicketsPage({ agentTickets, refreshKey }: { agentTickets: Ticket[]; ref
       status: t.status === "open" ? "Open" : t.status === "in_progress" ? "InProgress" : "Resolved",
       priority: t.priority.charAt(0).toUpperCase() + t.priority.slice(1),
       category: t.category,
-      requestedBy: DEMO_USER,
+      requestedBy: currentUser.email,
       createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
       updatedAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
     }));
@@ -110,7 +111,7 @@ function TicketsPage({ agentTickets, refreshKey }: { agentTickets: Ticket[]; ref
     <div style={{ flex: 1, overflowY: "auto", padding: "16px 32px 24px" }}>
       {/* User context hint */}
       <div style={{ fontSize: 11, color: "#5a6280", marginBottom: 12 }}>
-        Showing tickets for <span style={{ color: "#3d5afe" }}>{DEMO_USER}</span> — click any card to expand details
+        Showing tickets for <span style={{ color: "#3d5afe" }}>{currentUser.email}</span> — click any card to expand details
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 680 }}>
         {display.map(t => {
@@ -307,9 +308,16 @@ function KbPage() {
   );
 }
 
-function SettingsPage() {
+function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [status, setStatus] = useState<{ mcp: string; agent: string; checkedAt?: string } | null>(null);
   const [checking, setChecking] = useState(true);
+  const initials = currentUser.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? "")
+    .join("") || currentUser.email.slice(0, 2).toUpperCase();
+  const tenant = currentUser.email.includes("@") ? currentUser.email.split("@")[1] : "unknown";
 
   const check = () => {
     setChecking(true);
@@ -350,18 +358,18 @@ function SettingsPage() {
               background: "linear-gradient(135deg, #3d5afe, #6366f1)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 18, fontWeight: 700, color: "#fff", flexShrink: 0,
-            }}>AJ</div>
+            }}>{initials}</div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#e8eaf0" }}>Alex Johnson</div>
-              <div style={{ fontSize: 12, color: "#5a6280", marginTop: 2 }}>alex.johnson@contoso.com</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#e8eaf0" }}>{currentUser.name}</div>
+              <div style={{ fontSize: 12, color: "#5a6280", marginTop: 2 }}>{currentUser.email}</div>
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", marginTop: 16 }}>
             {([
-              ["Role",       "Senior Developer"],
-              ["Department", "Engineering"],
-              ["Office",     "Kolkata"],
-              ["Tenant",     "contoso.com"],
+              ["Sign-In",    "Microsoft Entra ID"],
+              ["Session",    "Authenticated"],
+              ["Identity",   "Corporate account"],
+              ["Tenant",     tenant],
             ] as [string, string][]).map(([label, value]) => (
               <div key={label}>
                 <div style={{ fontSize: 10, color: "#5a6280", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</div>
@@ -651,7 +659,7 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
 }
 
 
-export function HelpdeskChat() {
+export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const [page, setPage]       = useState<Page>("chat");
   const [tickets, setTickets]  = useState<Ticket[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -834,6 +842,23 @@ export function HelpdeskChat() {
           ))}
         </nav>
         <div className="hd-sidebar-footer">
+          <button
+            onClick={() => signOut({ callbackUrl: "/signed-out" })}
+            style={{
+              width: "100%",
+              marginBottom: 10,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "transparent",
+              color: "#9098b0",
+              borderRadius: 8,
+              padding: "8px 10px",
+              fontSize: 12,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            Sign out
+          </button>
           <div className="hd-powered">Powered by <strong>Microsoft Agents</strong></div>
         </div>
       </aside>
@@ -873,6 +898,7 @@ export function HelpdeskChat() {
                 tickets={tickets}
                 onTicketCreated={handleTicketCreated}
                 attachedFiles={attachedFiles}
+                currentUser={currentUser}
               />
 
               <div className="hd-chat-wrapper" style={ckTheme}>
@@ -880,7 +906,7 @@ export function HelpdeskChat() {
                   Input={CustomChatInput}
                   labels={{
                     title: "IT Support",
-                    initial: "👋 Hi Alex! What IT issue can I help you with today?",
+                    initial: `Hi ${currentUser.name.split(" ")[0]}! What IT issue can I help you with today?`,
                     placeholder: "Describe your IT issue…",
                   }}
                 />
@@ -888,9 +914,9 @@ export function HelpdeskChat() {
           </AttachmentContext.Provider>
         )}
 
-        {page === "tickets"  && <TicketsPage agentTickets={tickets} refreshKey={refreshKey} />}
+        {page === "tickets"  && <TicketsPage agentTickets={tickets} refreshKey={refreshKey} currentUser={currentUser} />}
         {page === "kb"       && <KbPage />}
-        {page === "settings" && <SettingsPage />}
+        {page === "settings" && <SettingsPage currentUser={currentUser} />}
       </main>
     </div>
   );

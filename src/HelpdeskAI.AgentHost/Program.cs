@@ -1,6 +1,5 @@
-﻿using Azure.AI.OpenAI;
+using Azure.AI.OpenAI;
 using Azure.Identity;
-using System.ClientModel.Primitives;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using HelpdeskAI.AgentHost.Abstractions;
 using HelpdeskAI.AgentHost.Agents;
@@ -8,14 +7,17 @@ using HelpdeskAI.AgentHost.Endpoints;
 using HelpdeskAI.AgentHost.Infrastructure;
 using HelpdeskAI.AgentHost.Models;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
+using System.ClientModel.Primitives;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
-
 
 builder.Services.Configure<AzureOpenAiSettings>(cfg.GetSection("AzureOpenAI"));
 builder.Services.Configure<AzureAiSearchSettings>(cfg.GetSection("AzureAISearch"));
@@ -23,9 +25,40 @@ builder.Services.Configure<McpServerSettings>(cfg.GetSection("McpServer"));
 builder.Services.Configure<ConversationSettings>(cfg.GetSection("Conversation"));
 builder.Services.Configure<AzureBlobStorageSettings>(cfg.GetSection("AzureBlobStorage"));
 builder.Services.Configure<DocumentIntelligenceSettings>(cfg.GetSection("DocumentIntelligence"));
+builder.Services.Configure<EntraAuthSettings>(cfg.GetSection("EntraAuth"));
 
 var aiSettings = cfg.GetSection("AzureOpenAI").Get<AzureOpenAiSettings>()
     ?? throw new InvalidOperationException("AzureOpenAI config section missing");
+var authSettings = cfg.GetSection("EntraAuth").Get<EntraAuthSettings>()
+    ?? throw new InvalidOperationException("EntraAuth config section missing");
+
+if (string.IsNullOrWhiteSpace(authSettings.TenantId) ||
+    string.IsNullOrWhiteSpace(authSettings.ClientId))
+{
+    throw new InvalidOperationException("EntraAuth:TenantId and EntraAuth:ClientId are required.");
+}
+
+var validAudience = !string.IsNullOrWhiteSpace(authSettings.Audience)
+    ? authSettings.Audience
+    : $"api://{authSettings.ClientId}";
+var authority = !string.IsNullOrWhiteSpace(authSettings.Authority)
+    ? authSettings.Authority.TrimEnd('/')
+    : $"https://login.microsoftonline.com/{authSettings.TenantId}/v2.0";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = authority;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidAudiences = new[] { validAudience, authSettings.ClientId }.Distinct(),
+            NameClaimType = "name",
+        };
+    });
+builder.Services.AddAuthorization();
 
 // Attach the streaming-usage policy so Azure returns token counts in the final SSE
 // chunk — MEAI's OpenAIChatClient does not request this flag automatically.
@@ -121,10 +154,17 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Cache ILoggerFactory from DI once — used throughout startup and middleware.
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
-var agentLogger   = loggerFactory.CreateLogger("HelpdeskAI.AgentHost");
+var agentLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost");
+
+static string? GetClaimValue(ClaimsPrincipal user, params string[] claimTypes) =>
+    claimTypes
+        .Select(type => user.FindFirst(type)?.Value)
+        .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
 // Populate ThreadIdContext before the request is handled so history providers
 // can key Redis by AG-UI threadId without access to the (always-null) AgentSession.
@@ -135,21 +175,36 @@ app.Use(async (context, next) =>
     if (context.Request.Path.StartsWithSegments("/agent") &&
         context.Request.Method == "POST")
     {
+        var userName = GetClaimValue(context.User, "name", ClaimTypes.Name);
+        var userEmail = GetClaimValue(context.User, "preferred_username", ClaimTypes.Email, "email");
+        UserContext.Set(userName, userEmail);
+
         context.Request.EnableBuffering();
-        using var reader = new System.IO.StreamReader(context.Request.Body, leaveOpen: true);
+        using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
         var body = await reader.ReadToEndAsync();
         context.Request.Body.Position = 0;
-        using var doc = System.Text.Json.JsonDocument.Parse(body);
-        if (doc.RootElement.TryGetProperty("threadId", out var elem))
+
+        string? threadId = null;
+        try
         {
-            var threadId = elem.GetString();
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("threadId", out var elem))
+            {
+                threadId = elem.GetString();
+            }
+
             ThreadIdContext.Set(threadId);
-            // Scope disposes after next(context) completes — covers the full request pipeline.
-            using var scope = agentLogger.BeginScope(new { threadId });
+            using var scope = agentLogger.BeginScope(new { threadId, userEmail });
             await next(context);
             return;
         }
+        finally
+        {
+            ThreadIdContext.Set(null);
+            UserContext.Clear();
+        }
     }
+
     await next(context);
 });
 
@@ -160,6 +215,8 @@ var historyProvider = new RedisChatHistoryProvider(
     chatClient,
     app.Services.GetRequiredService<IOptions<ConversationSettings>>(),
     loggerFactory.CreateLogger<RedisChatHistoryProvider>());
+
+var userProvider = new UserContextProvider();
 
 var searchProvider = new AzureAiSearchContextProvider(
     app.Services.GetRequiredService<IKnowledgeSearch>(),
@@ -181,9 +238,9 @@ var toolSelectionProvider = new DynamicToolSelectionProvider(
     topK,
     loggerFactory.CreateLogger<DynamicToolSelectionProvider>());
 
-var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, searchProvider, attachmentProvider, toolSelectionProvider);
+var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, userProvider, searchProvider, attachmentProvider, toolSelectionProvider);
 
-app.MapAGUI("/agent", agent);
+app.MapAGUI("/agent", agent).RequireAuthorization();
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
 // Eval endpoint is not safe for production — exposes synchronous agent execution without auth.
@@ -198,7 +255,7 @@ app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
     if (string.IsNullOrEmpty(json))
         json = await redis.GetAsync("usage:latest");
     return string.IsNullOrEmpty(json) ? Results.NotFound() : Results.Content(json, "application/json");
-});
+}).RequireAuthorization();
 
 // Initialise tool index after the HTTP server starts so health probes pass immediately.
 // Chat turns await toolIndexTcs.Task with a 60 s guard inside DynamicToolSelectionProvider.
@@ -251,9 +308,8 @@ app.MapGet("/api/kb/search", async (AzureAiSearchService search, string? q, Canc
         ? await search.SearchStructuredAsync(q, ct)
         : await search.BrowseLatestAsync(5, ct);
     return Results.Ok(results);
-});
+}).RequireAuthorization();
 
 app.MapHealthChecks("/healthz");
 
 await app.RunAsync();
-

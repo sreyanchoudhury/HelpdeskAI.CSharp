@@ -57,6 +57,19 @@ Before you start, ensure you have:
    az account set --subscription "<Subscription ID or Name>"
    ```
 
+7. **Microsoft Entra app registration for frontend + API auth**
+   This is currently a one-time CLI step outside Bicep. The same app registration is used by NextAuth on the frontend and as the API audience AgentHost validates.
+   ```bash
+   az ad app create --display-name "HelpdeskAI" --sign-in-audience AzureADMyOrg \
+     --web-redirect-uris \
+       "https://<frontend-url>/api/auth/callback/azure-ad" \
+       "http://localhost:3000/api/auth/callback/azure-ad"
+
+   az ad sp create --id <appId>
+   az ad app credential reset --id <appId>
+   ```
+   Then expose the API as `api://<appId>`, set access token version to `2`, and define a delegated scope such as `access_as_user`.
+
 ---
 
 ## Deployment
@@ -84,6 +97,7 @@ cd infra
 4. **Creates AI Search index** — `helpdesk-kb` with semantic search config
 5. **Seeds knowledge base** — uploads 5 IT articles from `seed-data.json`
 6. **Generates config** — creates `src/HelpdeskAI.AgentHost/appsettings.Development.json` with credentials
+7. **Reads Entra/NextAuth env vars** — app deployment consumes `AZURE_AD_*` and `NEXTAUTH_SECRET` from the active `azd` environment
 
 **Typical runtime:** 5–10 minutes
 
@@ -124,6 +138,7 @@ Three alert rules are deployed as `scheduledQueryRules` in `app-deploy/apps.bice
 |------|---------|
 | `main.bicep` | Bicep infrastructure template (OpenAI + AI Search) |
 | `app-deploy/apps.bicep` | Full app stack (Container Apps, Redis, alert rules) |
+| `app-deploy/apps.bicepparam` | `azd` environment variable mappings, including Entra/NextAuth settings |
 | `deploy.ps1` | PowerShell deployment orchestration script |
 | `seed-data.json` | Knowledge base articles seeded into AI Search at setup |
 | `setup-search.ps1` | Standalone KB index setup / re-seeding script |

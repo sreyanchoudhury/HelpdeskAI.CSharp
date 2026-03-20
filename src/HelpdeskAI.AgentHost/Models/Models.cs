@@ -56,6 +56,14 @@ public sealed class DocumentIntelligenceSettings
     public string Key { get; set; } = string.Empty;
 }
 
+public sealed class EntraAuthSettings
+{
+    public string TenantId { get; set; } = string.Empty;
+    public string ClientId { get; set; } = string.Empty;
+    public string Audience { get; set; } = string.Empty;
+    public string Authority { get; set; } = string.Empty;
+}
+
 // Attachment models
 
 public enum AttachmentKind { Text, Image }

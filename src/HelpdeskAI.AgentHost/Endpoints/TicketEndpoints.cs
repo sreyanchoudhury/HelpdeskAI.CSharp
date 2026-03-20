@@ -7,7 +7,7 @@ internal static class TicketEndpoints
         // GET /api/tickets
         // Proxies to McpServer GET /tickets — keeps McpServer internal-only.
         // Supports: ?requestedBy=, ?status=, ?category=
-        app.MapGet("/api/tickets", HandleSearchAsync);
+        app.MapGet("/api/tickets", HandleSearchAsync).RequireAuthorization();
         return app;
     }
 

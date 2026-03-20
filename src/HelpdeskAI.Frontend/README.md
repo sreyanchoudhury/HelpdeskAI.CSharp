@@ -11,6 +11,7 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 - **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` in the header row (right-aligned) after each agent response; fetches token counts from `/api/copilotkit/usage`
 - **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
 - **Session management** — maintains conversation history and ticket state
+- **Microsoft Entra SSO** — redirects unauthenticated users through NextAuth and keeps the browser session on the frontend
 - **Model compatibility guidance** — Settings page shows the currently recommended Azure OpenAI chat models for reliable render-action behavior
 - **Responsive design** — mobile-friendly, dark theme, keyboard accessible
 
@@ -22,7 +23,15 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 ### Example .env.local (do not use real secrets)
 
 ```
-MCP_URL=http://localhost:5100/mcp
+AGENT_URL=http://localhost:5200/agent
+AGENT_BASE_URL=http://localhost:5200
+MCP_URL=http://localhost:5100
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=<random-32-plus-char-secret>
+AZURE_AD_CLIENT_ID=<entra-app-client-id>
+AZURE_AD_CLIENT_SECRET=<entra-app-client-secret>
+AZURE_AD_TENANT_ID=<entra-tenant-id>
+AZURE_AD_API_SCOPE=api://<entra-app-client-id>/access_as_user
 ```
 
 For Azure deployment, set these values via Azure App Service/Container App settings. Never commit real secrets.
@@ -225,7 +234,7 @@ Set in `.env.local`:
 | `AGENT_BASE_URL` | `http://localhost:5200` | No `/agent` suffix — used by `/api/kb`, `/api/status`, and `/api/tickets` |
 | `MCP_URL` | `http://127.0.0.1:5100` | McpServer base URL — used by `/api/status` only (tickets now proxied via AgentHost) |
 
-Local frontend development can point these variables at Azure-hosted endpoints directly; you do not need a separate local sandbox environment.
+Local frontend development can point these variables at Azure-hosted endpoints directly; you do not need a separate local sandbox environment. With Phase 2b, the browser signs in through Microsoft Entra, NextAuth keeps the browser session on the frontend, and server-side proxy routes forward a bearer token to AgentHost.
 
 For current model recommendations and render-action caveats, see [`docs/model-compatibility.md`](../../docs/model-compatibility.md).
 

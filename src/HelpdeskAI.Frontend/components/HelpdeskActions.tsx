@@ -3,7 +3,6 @@
 import { useFrontendTool, useCopilotReadable } from "@copilotkit/react-core";
 import type { AttachedFile } from "./AttachmentBar";
 import {
-  DEMO_USER,
   PRIORITY_COLOR, PRIORITY_BG, CATEGORY_ICON,
   HEALTH_COLOR, HEALTH_BG, HEALTH_ICON,
   KB_CATEGORY_COLOR, KB_CAT_ICON,
@@ -24,6 +23,12 @@ interface Props {
   tickets: Ticket[];
   onTicketCreated: (ticket: Ticket) => void;
   attachedFiles: AttachedFile[];
+  currentUser: CurrentUser;
+}
+
+export interface CurrentUser {
+  name: string;
+  email: string;
 }
 
 // ── TicketCard ────────────────────────────────────────────────────────────────
@@ -430,19 +435,15 @@ function RelatedArticlesCard({ articles, status }: {
 }
 
 // ── HelpdeskActions ───────────────────────────────────────────────────────────
-export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Props) {
+export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, currentUser }: Props) {
 
   // ── Readable context ──────────────────────────────────────────────────────
   useCopilotReadable({
     description: "Current logged-in user information",
     value: {
-      name: "Alex Johnson",
-      department: "Engineering",
-      role: "Senior Developer",
-      device: "MacBook Pro 16\" (M3)",
-      os: "macOS Sonoma 14.3",
-      location: "Kolkata Office",
-      email: DEMO_USER,
+      name: currentUser.name,
+      email: currentUser.email,
+      authProvider: "Microsoft Entra ID",
     },
   });
 

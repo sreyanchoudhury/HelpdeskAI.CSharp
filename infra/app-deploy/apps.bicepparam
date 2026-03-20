@@ -32,3 +32,13 @@ param blobConnectionString = readEnvironmentVariable('AZURE_BLOB_CONNECTION_STRI
 // azd env set AZURE_DOCUMENT_INTELLIGENCE_KEY       "<key>"
 param docIntelligenceEndpoint = readEnvironmentVariable('AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT', '')
 param docIntelligenceKey      = readEnvironmentVariable('AZURE_DOCUMENT_INTELLIGENCE_KEY', '')
+
+// ─── Microsoft Entra ID / NextAuth ────────────────────────────────────────────
+// azd env set AZURE_AD_TENANT_ID       "<tenant-id>"
+// azd env set AZURE_AD_CLIENT_ID       "<app-registration-client-id>"
+// azd env set AZURE_AD_CLIENT_SECRET   "<app-registration-client-secret>"
+// azd env set NEXTAUTH_SECRET          "<random-32-plus-char-secret>"
+param azureAdTenantId     = readEnvironmentVariable('AZURE_AD_TENANT_ID', '')
+param azureAdClientId     = readEnvironmentVariable('AZURE_AD_CLIENT_ID', '')
+param azureAdClientSecret = readEnvironmentVariable('AZURE_AD_CLIENT_SECRET', '')
+param nextAuthSecret      = readEnvironmentVariable('NEXTAUTH_SECRET', '')

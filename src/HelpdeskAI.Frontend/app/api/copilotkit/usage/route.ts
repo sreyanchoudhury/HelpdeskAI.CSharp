@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/server-auth";
 
 const agentBase = (process.env.AGENT_URL ?? "http://localhost:5200/agent").replace(/\/agent$/, "");
 
 export async function GET(req: NextRequest) {
+  const user = await getAuthenticatedUser(req);
+  if (!user.accessToken) {
+    return NextResponse.json(null, { status: 401 });
+  }
+
   const threadId = req.nextUrl.searchParams.get("threadId");
   const qs = threadId ? `?threadId=${encodeURIComponent(threadId)}` : "";
 
   try {
-    const res = await fetch(`${agentBase}/agent/usage${qs}`);
+    const res = await fetch(`${agentBase}/agent/usage${qs}`, {
+      headers: { Authorization: `Bearer ${user.accessToken}` },
+    });
     if (!res.ok) return NextResponse.json(null, { status: res.status });
     return NextResponse.json(await res.json());
   } catch {

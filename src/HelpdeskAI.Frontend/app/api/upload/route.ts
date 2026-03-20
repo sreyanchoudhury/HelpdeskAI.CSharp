@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/server-auth";
 
 // AGENT_URL in next.config carries the /agent suffix (for CopilotKit).
 // Strip it so we can reach /api/attachments on the same host.
@@ -15,6 +16,11 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleUpload(req: NextRequest) {
+  const user = await getAuthenticatedUser(req);
+  if (!user.accessToken) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
   const contentType = req.headers.get("content-type") ?? "";
 
   if (!contentType.includes("multipart/form-data")) {
@@ -44,7 +50,10 @@ async function handleUpload(req: NextRequest) {
   try {
     agentResponse = await fetch(`${AGENT_BASE}/api/attachments`, {
       method: "POST",
-      headers: { "X-Session-Id": sessionId },
+      headers: {
+        "X-Session-Id": sessionId,
+        Authorization: `Bearer ${user.accessToken}`,
+      },
       body: forwardForm,
     });
   } catch (err) {
@@ -63,6 +72,18 @@ async function handleUpload(req: NextRequest) {
       { error: `AgentHost error ${agentResponse.status}`, detail: text.slice(0, 200) },
       { status: agentResponse.status >= 400 ? agentResponse.status : 500 }
     );
+  }
+
+  if (body && typeof body === "object" && "blobUrl" in body) {
+    const value = (body as { blobUrl?: unknown }).blobUrl;
+    if (typeof value === "string" && value.length > 0) {
+      try {
+        const blobPath = new URL(value).pathname.replace(/^\/api\/attachments\//, "");
+        (body as { blobUrl?: string }).blobUrl = `/api/attachments/${blobPath}`;
+      } catch {
+        // Leave the original URL intact if it is not a parseable absolute URI.
+      }
+    }
   }
 
   return NextResponse.json(body, { status: agentResponse.status });
