@@ -447,14 +447,6 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   });
 
   useCopilotReadable({
-    description: "Current open support tickets for this user",
-    value: tickets.map(t => ({
-      id: t.id, title: t.title, priority: t.priority,
-      status: t.status, createdAt: t.createdAt.toISOString(),
-    })),
-  });
-
-  useCopilotReadable({
     description: "Files attached by the user in the current message (staged, not yet consumed by the agent)",
     value: attachedFiles
       .filter(f => !f.uploading && !f.error)
@@ -491,7 +483,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles }: Pro
   // ── Action 2: show_incident_alert ─────────────────────────────────────────
   useFrontendTool({
     name: "show_incident_alert",
-    description: "Renders a visual incident alert card in the chat when active IT incidents are found. Call this after get_system_status or get_active_incidents returns degraded or outage services, to present the information clearly to the user instead of plain text.",
+    description: "Renders a visual incident alert card in the chat when active IT incidents are found. Call this immediately after get_system_status, get_active_incidents, or check_impact_for_team returns incidents, instead of only describing them in plain text.",
     parameters: [
       {
         name: "incidents",

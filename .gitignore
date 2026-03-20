@@ -10,3 +10,7 @@ dist/
 .DS_Store
 .next/
 secrets/
+.claude/
+*.tsbuildinfo
+infra/main.json
+infra/app-deploy/apps.json

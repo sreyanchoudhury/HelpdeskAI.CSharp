@@ -73,9 +73,46 @@ resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = {
   }
 }
 
+// Cosmos DB Account for Ticket Persistence (Serverless — no idle cost)
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
+  name: '${prefix}-cosmos-${uniqueSuffix}'
+  location: location
+  kind: 'GlobalDocumentDB'
+  properties: {
+    databaseAccountOfferType: 'Standard'
+    capabilities: [{ name: 'EnableServerless' }]
+    locations: [{ locationName: location, failoverPriority: 0 }]
+    consistencyPolicy: { defaultConsistencyLevel: 'Session' }
+    minimalTlsVersion: 'Tls12'
+  }
+}
+
+resource helpdeskDb 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05-15' = {
+  name: 'helpdeskdb'
+  parent: cosmosAccount
+  properties: {
+    resource: { id: 'helpdeskdb' }
+  }
+}
+
+// Partition key: /id (INC-NNNN) — point reads are always single-partition
+resource ticketsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
+  name: 'tickets'
+  parent: helpdeskDb
+  properties: {
+    resource: {
+      id: 'tickets'
+      partitionKey: { paths: ['/id'], kind: 'Hash' }
+      // Default indexing policy covers all fields; ORDER BY createdAt works without composite index
+    }
+  }
+}
+
 // Outputs
 output resourceGroupName string = resourceGroup().name
 output openAiEndpoint string = openAiAccount.properties.endpoint
 output openAiAccountId string = openAiAccount.id
 output aiSearchEndpoint string = 'https://${aiSearch.name}.search.windows.net'
 output aiSearchResourceId string = aiSearch.id
+output cosmosEndpoint    string = cosmosAccount.properties.documentEndpoint
+output cosmosAccountName string = cosmosAccount.name  // key retrieved in deploy.ps1 via az cosmosdb keys list

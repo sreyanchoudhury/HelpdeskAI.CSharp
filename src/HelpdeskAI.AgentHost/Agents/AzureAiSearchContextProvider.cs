@@ -1,4 +1,4 @@
-﻿using HelpdeskAI.AgentHost.Abstractions;
+using HelpdeskAI.AgentHost.Abstractions;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -21,11 +21,19 @@ internal sealed class AzureAiSearchContextProvider(
         string? ragContext = null;
         try
         {
-            ragContext = await knowledgeSearch.SearchAsync(userQuery, cancellationToken);
+            // Use an independent timeout — not the raw request CT — so a dropped SSE connection
+            // from the previous turn does not cancel RAG context gathering for the next turn.
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
+            ragContext = await knowledgeSearch.SearchAsync(userQuery, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            log.LogDebug("Azure AI Search timed out — skipping RAG context");
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Azure AI Search failed � skipping RAG context");
+            log.LogWarning(ex, "Azure AI Search failed — skipping RAG context");
         }
 
         if (string.IsNullOrWhiteSpace(ragContext))
@@ -37,4 +45,3 @@ internal sealed class AzureAiSearchContextProvider(
         };
     }
 }
-

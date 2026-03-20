@@ -11,6 +11,7 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 - **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` in the header row (right-aligned) after each agent response; fetches token counts from `/api/copilotkit/usage`
 - **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
 - **Session management** — maintains conversation history and ticket state
+- **Model compatibility guidance** — Settings page shows the currently recommended Azure OpenAI chat models for reliable render-action behavior
 - **Responsive design** — mobile-friendly, dark theme, keyboard accessible
 
 ---
@@ -171,14 +172,14 @@ Main UI shell:
 ### `components/HelpdeskActions.tsx`
 
 Copilot integration layer:
-- **`useCopilotReadable()`** — exposes user context and ticket list to agent
+- **`useCopilotReadable()`** — exposes user context and staged attachment context to the agent
 - **Render actions** — 7 custom components rendered by the agent:
   - `show_ticket_created` — ticket confirmation card (after `create_ticket`)
-  - `show_incident_alert` — incident/outage alert card (after `get_active_incidents` / `get_system_status`)
+  - `show_incident_alert` — incident/outage alert card (after `get_active_incidents`, `get_system_status`, or `check_impact_for_team`)
   - `show_my_tickets` — ticket search results list (after `search_tickets`)
   - `show_ticket_details` — full ticket detail card (after `get_ticket`; agent must call `get_ticket` first and pass all fields)
-  - `show_kb_article` — knowledge base article card
-  - `suggest_related_articles` — 2–3 related article suggestions
+  - `show_kb_article` — single knowledge base article card (after `search_kb_articles` returns one strong match)
+  - `suggest_related_articles` — related article suggestions (after `search_kb_articles` returns multiple matches)
   - `show_attachment_preview` — document preview card (after processing an `## Attached Document`)
 - **Chat suggestions** — `useCopilotChatSuggestions()` for follow-up prompts
 
@@ -223,6 +224,10 @@ Set in `.env.local`:
 | `AGENT_URL` | `http://localhost:5200/agent` | Includes `/agent` suffix — used by the copilotkit route **only** |
 | `AGENT_BASE_URL` | `http://localhost:5200` | No `/agent` suffix — used by `/api/kb`, `/api/status`, and `/api/tickets` |
 | `MCP_URL` | `http://127.0.0.1:5100` | McpServer base URL — used by `/api/status` only (tickets now proxied via AgentHost) |
+
+Local frontend development can point these variables at Azure-hosted endpoints directly; you do not need a separate local sandbox environment.
+
+For current model recommendations and render-action caveats, see [`docs/model-compatibility.md`](../../docs/model-compatibility.md).
 
 For production, update `next.config.ts`:
 ```typescript

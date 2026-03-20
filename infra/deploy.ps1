@@ -118,13 +118,16 @@ Write-Step "Extracting deployment outputs..."
 
 $outputs = $deployOutput.properties.outputs
 
-$openAiEndpoint   = $outputs.openAiEndpoint.value
-$aiSearchEndpoint = $outputs.aiSearchEndpoint.value
-$openAiAccountId  = $outputs.openAiAccountId.value
+$openAiEndpoint     = $outputs.openAiEndpoint.value
+$aiSearchEndpoint   = $outputs.aiSearchEndpoint.value
+$openAiAccountId    = $outputs.openAiAccountId.value
 $aiSearchResourceId = $outputs.aiSearchResourceId.value
+$cosmosEndpoint     = $outputs.cosmosEndpoint.value
+$cosmosAccountName  = $outputs.cosmosAccountName.value
 
 Write-Ok "Azure OpenAI endpoint: $openAiEndpoint"
 Write-Ok "AI Search endpoint:    $aiSearchEndpoint"
+Write-Ok "Cosmos DB endpoint:    $cosmosEndpoint"
 
 # Retrieve API keys using Azure CLI
 Write-Step "Retrieving API keys from Azure resources..."
@@ -132,6 +135,7 @@ Write-Step "Retrieving API keys from Azure resources..."
 $openAiApiKey = az cognitiveservices account keys list --name (($openAiAccountId -split '/')[-1]) --resource-group $ResourceGroupName --query "key1" -o tsv
 $aiSearchApiKey = az search admin-key show --resource-group $ResourceGroupName --service-name (($aiSearchResourceId -split '/')[-1]) --query "primaryKey" -o tsv
 
+$cosmosPrimaryKey = az cosmosdb keys list --name $cosmosAccountName --resource-group $ResourceGroupName --query "primaryMasterKey" -o tsv
 Write-Ok "API keys retrieved"
 
 # Create AI Search Index + Seed Data
@@ -212,11 +216,45 @@ $agentSettings = @{
     }
 } | ConvertTo-Json -Depth 10
 
-$settingsPath = Join-Path $PSScriptRoot ".." "src" "HelpdeskAI.AgentHost" "appsettings.Development.json"
+$settingsPath = [System.IO.Path]::Combine($PSScriptRoot, "..", "src", "HelpdeskAI.AgentHost", "appsettings.Development.json")
 $agentSettings | Out-File -FilePath $settingsPath -Encoding UTF8
 
 Write-Ok "Generated: $settingsPath"
 Write-Warn "This file contains API keys -- it is in .gitignore. Never commit secrets!"
+
+# Inject Cosmos env vars into the running McpServer Container App
+# Uses az containerapp update so the image is preserved (no azd deploy needed for env-only changes)
+Write-Step "Injecting Cosmos DB connection into McpServer Container App..."
+
+az containerapp update `
+    --name "${BaseName}-${Environment}-mcpserver" `
+    --resource-group $ResourceGroupName `
+    --set-env-vars `
+        "CosmosDb__Endpoint=$cosmosEndpoint" `
+        "CosmosDb__PrimaryKey=$cosmosPrimaryKey" `
+        "CosmosDb__DatabaseName=helpdeskdb" `
+        "CosmosDb__ContainerName=tickets" `
+    --output none
+
+Write-Ok "McpServer Container App env vars updated"
+
+# Generate McpServer appsettings.Development.json for local dev
+Write-Step "Generating McpServer local development configuration..."
+
+$mcpSettings = @{
+    CosmosDb = @{
+        Endpoint      = $cosmosEndpoint
+        PrimaryKey    = $cosmosPrimaryKey
+        DatabaseName  = "helpdeskdb"
+        ContainerName = "tickets"
+    }
+} | ConvertTo-Json -Depth 5
+
+$mcpSettingsPath = [System.IO.Path]::Combine($PSScriptRoot, "..", "src", "HelpdeskAI.McpServer", "appsettings.Development.json")
+$mcpSettings | Out-File -FilePath $mcpSettingsPath -Encoding UTF8
+
+Write-Ok "Generated: $mcpSettingsPath"
+Write-Warn "This file contains Cosmos keys -- it is in .gitignore. Never commit secrets!"
 
 # Summary
 Write-Host ""

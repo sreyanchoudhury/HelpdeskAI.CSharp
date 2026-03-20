@@ -20,6 +20,7 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ### Local Development
 - Uses `appsettings.json` (or `appsettings.Development.json`) for backend services and `.env.local` for the frontend.
+- Local development can use either locally running dependencies or Azure-hosted service endpoints directly; a separate local sandbox stack is not required.
 - Example (do not use real secrets in code):
   - `src/HelpdeskAI.AgentHost/appsettings.json`:
     - `"AzureOpenAI:ApiKey": "<YOUR_AZURE_OPENAI_API_KEY>"`
@@ -113,8 +114,8 @@ flowchart TD
     subgraph MCPSERVER["🔧  McpServer  ·  .NET 10  ·  :5100"]
         MS1["TicketTools<br/>create · get · search · update · comment · assign"]:::mcp
         MS2["SystemStatusTools<br/>get_system_status · get_active_incidents · check_impact_for_team"]:::mcp
-        MS3[("In-memory store<br/>+ seed data")]:::mcp
-        MS4["KnowledgeBaseTools<br/>index_kb_article  →  Azure AI Search"]:::mcp
+        MS3[("Cosmos DB tickets<br/>+ seeded demo records")]:::mcp
+        MS4["KnowledgeBaseTools<br/>search_kb_articles · index_kb_article"]:::mcp
     end
 
     subgraph AZURE["☁️  Azure Services"]
@@ -254,7 +255,7 @@ Takes 5-10 minutes. Then run the three services locally (see **Quick Start**).
 
 | Project | Port | Role | Startup |
 |---------|------|------|---------|
-| **HelpdeskAI.Mcp­Server** | 5100 | MCP tool server (tickets, system status) | `dotnet run` in `src/HelpdeskAI.McpServer/` |
+| **HelpdeskAI.Mcp­Server** | 5100 | MCP tool server (tickets, system status, KB search/index) | `dotnet run` in `src/HelpdeskAI.McpServer/` |
 | **HelpdeskAI.Agent­Host** | 5200 | AG-UI agent (OpenAI, RAG, Redis) | `dotnet run` in `src/HelpdeskAI.AgentHost/` |
 | **Frontend (Next.js)** | 3000 | React frontend with CopilotKit | `npm install && npm run dev` in `src/HelpdeskAI.Frontend/` |
 
@@ -388,6 +389,7 @@ npm install
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Azure OpenAI Service](https://learn.microsoft.com/azure/ai-services/openai/)
 - [Azure AI Search](https://learn.microsoft.com/azure/search/)
+- [Model Compatibility Notes](docs/model-compatibility.md)
 
 ---
 
@@ -396,7 +398,7 @@ npm install
 | Project | Port | Role |
 |---------|------|------|
 | `HelpdeskAI.AgentHost` | 5200 | .NET 10 Web API — AG-UI endpoint, agent pipeline, Redis chat history, file attachments, ticket proxy |
-| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — 10 MCP tools (tickets, status, KB) + `GET /tickets` REST (internal-only) |
+| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — 11 MCP tools (tickets, status, KB) + `GET /tickets` REST (internal-only) |
 | `HelpdeskAI.Frontend` | 3000 (dev) | Next.js App Router — React frontend with CopilotKit + 4 API proxy routes |
 
 ---
@@ -849,10 +851,11 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 | `get_active_incidents` | All active incidents with impact and workarounds |
 | `check_impact_for_team` | Team-scoped incident filtering |
 
-**Knowledge Base (1 tool):**
+**Knowledge Base (2 tools):**
 
 | Tool | Description |
 |------|-------------|
+| `search_kb_articles` | Search KB content and return a single best article or related article suggestions |
 | `index_kb_article` | Save an incident resolution or document to Azure AI Search |
 
 ## UI Components
@@ -917,7 +920,7 @@ useCopilotChatSuggestions({
 
 | Area | Current | Recommendation |
 |------|---------|----------------|
-| Ticket storage | In-memory `ConcurrentDictionary` | Connect to ServiceNow / Jira / Azure DevOps |
+| Ticket storage | Cosmos DB-backed demo store | Connect to ServiceNow / Jira / Azure DevOps for production workflow integration |
 | KB storage | In-memory seed data (5 articles) | Index real documents in Azure AI Search |
 | CORS | `AllowAnyOrigin` | Restrict to your domain |
 | AI Search auth | API key only | Add `DefaultAzureCredential` path for managed identity |

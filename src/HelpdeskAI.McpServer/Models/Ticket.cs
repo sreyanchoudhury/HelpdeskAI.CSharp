@@ -1,12 +1,21 @@
-﻿namespace HelpdeskAI.McpServer.Models;
+﻿using System.Text.Json.Serialization;
 
+namespace HelpdeskAI.McpServer.Models;
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TicketStatus { Open, InProgress, PendingUser, Resolved, Closed }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TicketPriority { Low, Medium, High, Critical }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TicketCategory { Hardware, Software, Network, Access, Email, VPN, Other }
 
 public sealed class Ticket
 {
     public string Id { get; init; } = string.Empty;
+    /// <summary>Monotonically-increasing sequence number used to generate INC-NNNN IDs.</summary>
+    public int Seq { get; init; }
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public TicketStatus Status { get; set; } = TicketStatus.Open;
@@ -17,7 +26,7 @@ public sealed class Ticket
     public string? Resolution { get; set; }
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public List<TicketComment> Comments { get; init; } = [];
+    public List<TicketComment> Comments { get; set; } = [];
 }
 
 public sealed class TicketComment
