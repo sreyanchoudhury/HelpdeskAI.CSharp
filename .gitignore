@@ -1,7 +1,9 @@
 bin/
 obj/
 .vs/
+.azure/
 appsettings.Development.json
+src/*/appsettings.Development.json
 node_modules/
 dist/
 .env
