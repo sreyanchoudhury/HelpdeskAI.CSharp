@@ -28,6 +28,34 @@ public sealed class KnowledgeBaseService(
                       Delay = TimeSpan.FromMilliseconds(300), MaxDelay = TimeSpan.FromSeconds(5) }
         });
 
+    public sealed record KbArticle(string Id, string Title, string Content, string? Category);
+
+    public async Task<IReadOnlyList<KbArticle>> SearchAsync(
+        string query, string? category = null, int topK = 5, CancellationToken ct = default)
+    {
+        var options = new SearchOptions
+        {
+            Size   = topK,
+            Select = { "id", "title", "content", "category" },
+            QueryType = SearchQueryType.Simple,
+        };
+        if (category is { Length: > 0 })
+            options.Filter = $"category eq '{category}'";
+
+        var response = await _client.SearchAsync<SearchDocument>(query, options, ct);
+        var results = new List<KbArticle>();
+        await foreach (var result in response.Value.GetResultsAsync())
+        {
+            var doc = result.Document;
+            results.Add(new KbArticle(
+                Id:       doc["id"]?.ToString()       ?? string.Empty,
+                Title:    doc["title"]?.ToString()    ?? string.Empty,
+                Content:  doc["content"]?.ToString()  ?? string.Empty,
+                Category: doc["category"]?.ToString()));
+        }
+        return results;
+    }
+
     public async Task<string> IndexArticleAsync(
         string title, string content, string? category, CancellationToken ct = default)
     {

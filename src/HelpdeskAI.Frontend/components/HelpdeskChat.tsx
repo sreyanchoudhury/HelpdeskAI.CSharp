@@ -430,14 +430,43 @@ function SettingsPage() {
               ["App",      "HelpdeskAI"],
               ["Frontend", "Next.js 16 + CopilotKit 1.54"],
               ["Agent",    "Microsoft Agents Framework"],
-              ["AI Model", "Azure OpenAI (GPT-4.1 mini)"],
-              ["Search",   "Azure AI Search (semantic)"],
+              ["AI Model", "Azure OpenAI (gpt-4o)"],
+              ["Search",   "Azure AI Search (Basic tier)"],
             ] as [string, string][]).map(([label, value]) => (
               <div key={label} style={{ display: "flex", gap: 12, fontSize: 12 }}>
                 <span style={{ color: "#5a6280", minWidth: 72 }}>{label}</span>
                 <span style={{ color: "#9098b0" }}>{value}</span>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Model Requirements */}
+        <div style={{
+          background: "#0f1117", border: "1px solid #3d5afe33",
+          borderLeft: "3px solid #3d5afe",
+          borderRadius: 12, padding: "20px 24px",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#3d5afe", marginBottom: 12 }}>
+            Model Requirements
+          </div>
+          <div style={{ fontSize: 12, color: "#9098b0", lineHeight: 1.7 }}>
+            HelpdeskAI requires a model that supports <span style={{ color: "#e8eaf0" }}>OpenAI-compatible tool calling</span> and reliably follows multi-step agentic instructions.
+          </div>
+          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+            {([
+              ["✅ Recommended", "gpt-4o, gpt-4o-mini, gpt-4-turbo"],
+              ["⚠️  Use with caution", "model-router (unpredictable routing latency)"],
+              ["❌ Not compatible", "Models without tool calling, or those that don't follow agentic instruction chains (e.g. gpt-5.2-chat)"],
+            ] as [string, string][]).map(([label, value]) => (
+              <div key={label} style={{ fontSize: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <span style={{ color: "#5a6280", minWidth: 140, flexShrink: 0 }}>{label}</span>
+                <span style={{ color: "#9098b0" }}>{value}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 11, color: "#5a6280" }}>
+            See <span style={{ color: "#3d5afe", fontFamily: "monospace" }}>docs/model-compatibility.md</span> for full technical details.
           </div>
         </div>
 

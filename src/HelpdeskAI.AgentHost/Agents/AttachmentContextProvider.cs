@@ -47,13 +47,16 @@ internal sealed class AttachmentContextProvider(
                     ? att.ExtractedText[..MaxExtractedTextLength] + "\n\n[Content truncated at 5 000 characters]"
                     : att.ExtractedText;
 
+                var blobArg  = att.BlobUrl is not null ? $", blobUrl=\"{att.BlobUrl}\"" : "";
+                var blobLine = att.BlobUrl is not null ? $"Download URL: {att.BlobUrl}\n" : "";
                 messages.Add(new ChatMessage(ChatRole.System,
-                    $"## Attached Document: {att.FileName}\n\n{text}"));
+                    $"""
+                    ## Attached Document: {att.FileName}
+                    {blobLine}
+                    {text}
 
-                // User-role nudge mirrors image attachment behaviour — ensures the model
-                // reads the attachment before reaching for ticket/incident lookup tools.
-                messages.Add(new ChatMessage(ChatRole.User,
-                    $"I've attached '{att.FileName}' above. Please use it to answer my next message."));
+                    [FIRST ACTION REQUIRED]: call show_attachment_preview(fileName="{att.FileName}", summary="<one sentence about the document above>"{blobArg})
+                    """));
 
                 log.LogInformation(
                     "Injected text attachment '{FileName}' ({Length} chars) into agent context",
@@ -62,10 +65,11 @@ internal sealed class AttachmentContextProvider(
             else if (att.Kind == AttachmentKind.Image && !string.IsNullOrWhiteSpace(att.ImageBase64))
             {
                 var bytes = Convert.FromBase64String(att.ImageBase64);
+                var imageUrlNote = att.BlobUrl is not null ? $" Download URL: {att.BlobUrl}." : "";
                 messages.Add(new ChatMessage(ChatRole.User,
                     new List<AIContent>
                     {
-                        new TextContent($"The user has attached an image named '{att.FileName}'. Please analyze it."),
+                        new TextContent($"The user has attached an image named '{att.FileName}'.{imageUrlNote} Please analyze it."),
                         new DataContent(BinaryData.FromBytes(bytes), att.ContentType)
                     }));
 

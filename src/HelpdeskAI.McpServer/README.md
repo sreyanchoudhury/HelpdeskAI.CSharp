@@ -29,19 +29,39 @@ Hosts **10 MCP tools** over HTTP at `/mcp` in three categories:
 
 ## Configuration
 
-### Example appsettings.json (do not use real secrets)
+### Configuration Keys
+
+| Section | Key | Description |
+|---------|-----|-------------|
+| `AzureAISearch` | `Endpoint`, `ApiKey`, `IndexName`, `TopK` | Azure AI Search for KB articles |
+| `CosmosDb` | `Endpoint`, `PrimaryKey`, `DatabaseName`, `ContainerName` | Cosmos DB for ticket persistence |
+| — | `APPLICATIONINSIGHTS_CONNECTION_STRING` | Azure Monitor / App Insights |
+
+**Local dev:** `appsettings.Development.json` (written automatically by `infra/deploy.ps1`, gitignored).
+
+**Azure (Container App):** env vars injected by `deploy.ps1` via `az containerapp update`.
+
+Example `appsettings.json` shape (no real secrets):
 
 ```json
 {
   "AzureAISearch": {
-    "Endpoint": "<YOUR_AZURE_AI_SEARCH_ENDPOINT>",
-    "ApiKey": "<YOUR_AZURE_AI_SEARCH_API_KEY>"
+    "Endpoint": "<SEARCH_ENDPOINT>",
+    "ApiKey": "<SEARCH_KEY>",
+    "IndexName": "helpdesk-kb",
+    "TopK": 3
   },
-  "APPLICATIONINSIGHTS_CONNECTION_STRING": "<YOUR_APPINSIGHTS_CONNECTION_STRING>"
+  "CosmosDb": {
+    "Endpoint": "<COSMOS_ENDPOINT>",
+    "PrimaryKey": "<COSMOS_KEY>",
+    "DatabaseName": "helpdeskdb",
+    "ContainerName": "tickets"
+  },
+  "APPLICATIONINSIGHTS_CONNECTION_STRING": "<APPINSIGHTS_CS>"
 }
 ```
 
-For Azure deployment, set these values via Azure App Service/Container App settings or Key Vault. Never commit real secrets.
+Never commit real secrets — `appsettings.Development.json` is in `.gitignore`.
 
 ---
 ## Quick Start
@@ -87,7 +107,7 @@ flowchart TD
         TT["TicketTools<br/>create  ·  get  ·  search  ·  update  ·  comment  ·  assign"]:::tool
         SST["SystemStatusTools<br/>health  ·  incidents  ·  impact analysis"]:::tool
         KT["KnowledgeBaseTools<br/>index_kb_article  →  Azure AI Search"]:::tool
-        TS[("TicketService<br/>in-memory  ·  thread-safe")]:::service
+        TS[("TicketService<br/>Azure Cosmos DB  ·  serverless")]:::service
         SS[("SystemStatusService<br/>12 IT services  ·  incidents  ·  workarounds")]:::service
     end
 
@@ -426,24 +446,28 @@ It will be available for retrieval in future helpdesk conversations.
 | INC-1002 | Printer not responding | Critical | InProgress | Hardware |
 | INC-1003 | Email sync issues | Medium | Resolved | Email |
 
-All seed data is loaded on startup from the code (in-memory `ConcurrentDictionary`).
+Seed data is written to Cosmos DB on the **first startup only** (when the container is empty). Subsequent restarts skip seeding and restore the ID counter from `MAX(c.seq)`.
 
 ---
 
 ## Configuration
 
-No configuration needed for local development. The server:
-- Listens on `http://localhost:5100`
-- Exposes MCP tools at `/mcp`
-- Seeds sample data on startup
-- Uses in-memory storage
+The server requires `appsettings.Development.json` for local development (written by `infra/deploy.ps1`).
+It listens on `http://localhost:5100`, exposes MCP tools at `/mcp`, and connects to Azure Cosmos DB.
 
-### Environment Variables (Optional)
+On **first startup** against an empty Cosmos container, 13 realistic seed tickets are written automatically.
+Subsequent restarts skip seeding and resume from where the ID counter left off.
+
+### Environment Variables
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ASPNETCORE_URLS` | `http://localhost:5100` | Server bind URL |
 | `ASPNETCORE_ENVIRONMENT` | `Development` | ASP.NET environment |
+| `CosmosDb__Endpoint` | _(required)_ | Cosmos DB account endpoint URL |
+| `CosmosDb__PrimaryKey` | _(required)_ | Cosmos DB primary master key |
+| `CosmosDb__DatabaseName` | `helpdeskdb` | Database name |
+| `CosmosDb__ContainerName` | `tickets` | Container name (partition key: `/id`) |
 
 ---
 
@@ -457,7 +481,7 @@ HelpdeskAI.McpServer/
 │   └── Ticket.cs               # Ticket DTO
 ├── Services/
 │   ├── KnowledgeBaseService.cs # Azure AI Search client — writes KB articles via index_kb_article
-│   └── TicketService.cs        # In-memory ticket storage + CRUD (thread-safe ConcurrentDictionary)
+│   └── TicketService.cs        # Cosmos DB ticket store — serverless, durable across restarts
 ├── Tools/
 │   ├── KnowledgeBaseTools.cs   # index_kb_article — indexes docs/resolutions into Azure AI Search
 │   ├── TicketTools.cs          # Ticket management MCP tools (create · get · search · update · comment · assign)
@@ -517,14 +541,15 @@ Health check endpoint.
 
 ## Production Deployment
 
-For production use, replace the in-memory `TicketService` with calls to your actual ITSM system:
+Tickets are now persisted in **Azure Cosmos DB** (serverless tier) — no data loss on Container App restarts.
+
+For production ITSM integration, replace the Cosmos-backed `TicketService` with calls to your actual system:
 
 ### Supported Backends
 
 - **ServiceNow** — via official REST API
 - **Jira** — via Jira REST API
 - **Azure DevOps** — via Azure DevOps REST API
-- **Custom database** — SQL Server, PostgreSQL, etc.
 
 ### Changes Required
 

@@ -7,9 +7,10 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 ## What It Does
 
 - **Hosts the AI agent** — AG-UI endpoint at `/agent` (Server-Sent Events streaming)
-- **Integrates Azure OpenAI** — calls `gpt-4.1-mini` for chat completions
+- **Integrates Azure OpenAI** — calls the configured chat deployment for completions; `gpt-4o` and `gpt-4o-mini` are the current recommended choices for reliable render-action follow-through
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
-- **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticket management and system status monitoring
+- **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticketing, system status monitoring, and KB search/index flows
+- **Applies render-action guidance** — follows `_renderAction` / `_renderArgs` from MCP tool results so the frontend can render structured cards when appropriate
 
 ---
 
@@ -390,9 +391,12 @@ The agent has access to these tools via MCP:
 - `check_impact_for_team` — incidents affecting a specific team
 
 **Knowledge Base:**
+- `search_kb_articles` — search KB and return a single article card or related-article suggestions
 - `index_kb_article` — save an incident resolution or document to Azure AI Search for future RAG retrieval
 
 See [src/HelpdeskAI.McpServer/README.md](../HelpdeskAI.McpServer/README.md) for full tool details.
+
+For model-specific render-action behavior, see [docs/model-compatibility.md](../../docs/model-compatibility.md).
 
 ---
 

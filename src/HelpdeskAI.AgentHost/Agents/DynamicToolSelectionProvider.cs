@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 
@@ -16,6 +17,10 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
     private readonly IEmbeddingGenerator<string, Embedding<float>> _embedder;
     private readonly int _topK;
     private readonly ILogger<DynamicToolSelectionProvider> _logger;
+
+    // Cache tool selection per unique user query so we embed + rank exactly once per turn.
+    // Bounded to 200 entries; cleared when full to prevent unbounded growth.
+    private readonly ConcurrentDictionary<string, AIContext> _turnCache = new(StringComparer.Ordinal);
 
     public DynamicToolSelectionProvider(
         Task<IReadOnlyList<(AIFunction Tool, float[] Vector)>> toolIndexTask,
@@ -62,9 +67,20 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
             return new AIContext { Tools = [.. toolIndex.Select(x => x.Tool).Cast<AITool>()] };
         }
 
+        // Return cached selection if this query was already resolved this session.
+        if (_turnCache.TryGetValue(query, out var cachedContext))
+        {
+            _logger.LogDebug("Tool selection cache hit — reusing selection for [{Query}]", query);
+            return cachedContext;
+        }
+
         try
         {
-            var queryVec = (await _embedder.GenerateAsync([query], cancellationToken: ct))
+            // Use an independent timeout so a cancelled request CT from a previous dropped
+            // SSE connection does not prevent tool selection on the next turn.
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(8));
+            var queryVec = (await _embedder.GenerateAsync([query], cancellationToken: cts.Token))
                 [0].Vector.ToArray();
 
             var selected = toolIndex
@@ -74,10 +90,16 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
                 .Select(x => x.Tool)
                 .ToList();
 
-            _logger.LogDebug("Dynamic tools selected for [{Query}]: {Tools}",
+            _logger.LogInformation("Dynamic tools selected for [{Query}]: {Tools}",
                 query, string.Join(", ", selected.Select(t => t.Name)));
 
-            return new AIContext { Tools = [.. selected.Cast<AITool>()] };
+            var result = new AIContext { Tools = [.. selected.Cast<AITool>()] };
+
+            // Bound the cache to prevent unbounded growth across long sessions.
+            if (_turnCache.Count >= 200) _turnCache.Clear();
+            _turnCache[query] = result;
+
+            return result;
         }
         catch (Exception ex)
         {

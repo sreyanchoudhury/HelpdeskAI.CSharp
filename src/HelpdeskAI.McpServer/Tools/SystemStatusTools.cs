@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Text;
+using System.Text.Json;
 using HelpdeskAI.McpServer.Models;
 using ModelContextProtocol.Server;
 
@@ -23,8 +24,7 @@ public static class SystemStatusTools
     [McpServerTool(Name = "get_system_status")]
     [Description("""
         Checks the live health of IT services and infrastructure.
-        Call this proactively whenever a user reports something is not working 
-        check for an active incident BEFORE suggesting manual troubleshooting steps.
+        Call this ONLY when the user explicitly asks about system status, service health, or outages.
         Returns operational status, incident IDs, and estimated resolution times.
         Optionally filter by service name or category.
         """)]
@@ -43,43 +43,47 @@ public static class SystemStatusTools
             results = results.Where(s => s.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
 
         var list = results.OrderBy(s => s.Health).ToList();
-
         if (list.Count == 0)
-            return service is not null ? $"No service found matching '{service}'." : "No services match the filters.";
+            return JsonSerializer.Serialize(new { message = service is not null ? $"No service found matching '{service}'." : "No services match the filters." });
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"IT System Status  {DateTimeOffset.UtcNow:R}");
-        sb.AppendLine(new string('-', SeparatorWidth));
-
-        foreach (var s in list)
+        var items = list.Select(s => new
         {
-            var tag = s.Health switch
-            {
-                ServiceHealth.Operational => "[OK]",
-                ServiceHealth.Degraded => "[DEGRADED]",
-                ServiceHealth.Outage => "[OUTAGE]",
-                ServiceHealth.Maintenance => "[MAINTENANCE]",
-                _ => "[UNKNOWN]",
-            };
-            sb.AppendLine($"{tag} {s.Name} [{s.Category}]");
-            if (s.StatusMessage is not null)
-                sb.AppendLine($"  > {s.StatusMessage}");
-            if (s.IncidentId is not null)
-                sb.AppendLine($"  > Incident {s.IncidentId} | Started: {s.IncidentStarted:t} UTC | ETA: {(s.EstimatedResolve.HasValue ? s.EstimatedResolve.Value.ToString("t") + " UTC" : "TBD")}");
-        }
+            service    = s.Name,
+            status     = s.Health.ToString().ToLowerInvariant(),
+            incidentId = s.IncidentId,
+            message    = s.StatusMessage,
+            workaround = s.Workaround,
+            eta        = s.EstimatedResolve.HasValue ? s.EstimatedResolve.Value.ToString("t") + " UTC" : null,
+        }).ToList();
 
-        var incidents = list.Count(s => s.Health != ServiceHealth.Operational);
-        sb.AppendLine(new string('-', SeparatorWidth));
-        sb.AppendLine($"{list.Count} service(s) checked  {incidents} active incident(s)");
-        return sb.ToString();
+        var activeIncidents = items.Where(i => i.status != "operational").ToList();
+        var result = new
+        {
+            checkedAt     = DateTimeOffset.UtcNow,
+            totalServices = list.Count,
+            activeCount   = activeIncidents.Count,
+            services      = items,
+        };
+
+        if (activeIncidents.Count == 0)
+            return JsonSerializer.Serialize(result);
+
+        return JsonSerializer.Serialize(new
+        {
+            result.checkedAt,
+            result.totalServices,
+            result.activeCount,
+            result.services,
+            _renderAction = "show_incident_alert",
+            _renderArgs   = new { incidents = JsonSerializer.Serialize(activeIncidents) },
+        });
     }
 
     [McpServerTool(Name = "get_active_incidents")]
     [Description("""
         Returns all active IT incidents with full detail: impact description, affected teams,
-        workarounds, and resolution ETAs. Use this when the user asks 'is there an outage?',
-        'what's currently broken?', or when get_system_status shows degraded/outage services
-        and you need the full incident picture to advise the user properly.
+        workarounds, and resolution ETAs.
+        Call ONLY when the user explicitly asks about outages, incidents, or what is currently broken.
         """)]
     public static string GetActiveIncidents()
     {
@@ -89,38 +93,25 @@ public static class SystemStatusTools
             .ToList();
 
         if (incidents.Count == 0)
-            return "No active incidents. All IT systems are fully operational.";
+            return JsonSerializer.Serialize(new { count = 0, message = "All IT systems operational." });
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"Active IT Incidents ({incidents.Count})  {DateTimeOffset.UtcNow:R}");
-        sb.AppendLine(new string('=', SeparatorWidth));
-
-        foreach (var s in incidents)
+        var items = incidents.Select(s => new
         {
-            sb.AppendLine();
-            sb.AppendLine($"[{GetSeverityLabel(s.Health)}] {s.Name}");
-            if (s.IncidentId is not null)
-                sb.AppendLine($"  Incident ID : {s.IncidentId}");
-            sb.AppendLine($"  Category    : {s.Category}");
-            if (s.IncidentStarted.HasValue)
-            {
-                var duration = DateTimeOffset.UtcNow - s.IncidentStarted.Value;
-                sb.AppendLine($"  Started     : {s.IncidentStarted:t} UTC ({(int)duration.TotalMinutes} min ago)");
-            }
-            if (s.EstimatedResolve.HasValue)
-                sb.AppendLine($"  ETA         : {s.EstimatedResolve:t} UTC");
-            if (s.StatusMessage is not null)
-                sb.AppendLine($"  Impact      : {s.StatusMessage}");
-            if (s.AffectedTeams.Length > 0)
-                sb.AppendLine($"  Affects     : {string.Join(", ", s.AffectedTeams)}");
-            if (s.Workaround is not null)
-                sb.AppendLine($"  Workaround  : {s.Workaround}");
-        }
+            service    = s.Name,
+            severity   = GetSeverityLabel(s.Health).ToLowerInvariant(),
+            incidentId = s.IncidentId,
+            message    = s.StatusMessage,
+            workaround = s.Workaround,
+            eta        = s.EstimatedResolve.HasValue ? s.EstimatedResolve.Value.ToString("t") + " UTC" : null,
+        }).ToList();
 
-        sb.AppendLine();
-        sb.AppendLine(new string('=', SeparatorWidth));
-        sb.AppendLine("For live updates, visit: https://status.contoso.com");
-        return sb.ToString();
+        return JsonSerializer.Serialize(new
+        {
+            count         = incidents.Count,
+            incidents     = items,
+            _renderAction = "show_incident_alert",
+            _renderArgs   = new { incidents = JsonSerializer.Serialize(items) },
+        });
     }
 
     [McpServerTool(Name = "check_impact_for_team")]
@@ -144,26 +135,31 @@ public static class SystemStatusTools
             .ToList();
 
         if (affected.Count == 0)
-            return $"No active incidents affecting the {team} team. All relevant systems are operational.";
+            return JsonSerializer.Serialize(new
+            {
+                team,
+                count = 0,
+                message = $"No active incidents affecting the {team} team. All relevant systems are operational."
+            });
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"Active incidents affecting: {team}");
-        sb.AppendLine(new string('-', SeparatorWidth));
-
-        foreach (var s in affected)
+        var items = affected.Select(s => new
         {
-            sb.AppendLine($"[{GetSeverityLabel(s.Health)}] {s.Name}");
-            if (s.StatusMessage is not null)
-                sb.AppendLine($"  {s.StatusMessage}");
-            if (s.Workaround is not null)
-                sb.AppendLine($"  Workaround: {s.Workaround}");
-            if (s.EstimatedResolve.HasValue)
-                sb.AppendLine($"  ETA: {s.EstimatedResolve:t} UTC");
-        }
+            service    = s.Name,
+            severity   = GetSeverityLabel(s.Health).ToLowerInvariant(),
+            incidentId = s.IncidentId,
+            message    = s.StatusMessage,
+            workaround = s.Workaround,
+            eta        = s.EstimatedResolve.HasValue ? s.EstimatedResolve.Value.ToString("t") + " UTC" : null,
+        }).ToList();
 
-        sb.AppendLine(new string('-', SeparatorWidth));
-        sb.AppendLine($"{affected.Count} incident(s) found. Raise a ticket if workarounds are insufficient.");
-        return sb.ToString();
+        return JsonSerializer.Serialize(new
+        {
+            team,
+            count         = items.Count,
+            incidents     = items,
+            _renderAction = "show_incident_alert",
+            _renderArgs   = new { incidents = JsonSerializer.Serialize(items) },
+        });
     }
 
     private static List<ServiceStatus> BuildSeed()
