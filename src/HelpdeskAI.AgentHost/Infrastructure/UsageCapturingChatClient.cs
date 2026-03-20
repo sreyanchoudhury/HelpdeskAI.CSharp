@@ -51,37 +51,23 @@ internal sealed class UsageCapturingChatClient(
             yield return update;
         }
 
-        // Aggregate streaming chunks into ChatResponse to extract usage.
-        // Azure OpenAI includes usage in the last streaming chunk, which MEAI maps here.
-        // Writing to Redis here (before the generator returns) ensures the key exists
-        // by the time the frontend fetches /agent/usage after isLoading goes false.
         var aggregated = updates.ToChatResponse();
         if (aggregated.Usage is { } u)
             await PersistUsageAsync(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0);
     }
 
-    // 2-minute TTL for the global fallback key — short enough to reflect only the
-    // most recent response, long enough to survive the frontend polling window.
-    private static readonly TimeSpan UsageLatestTtl = TimeSpan.FromMinutes(2);
-
     private async Task PersistUsageAsync(long promptTokens, long completionTokens)
     {
-        var json = JsonSerializer.Serialize(new { promptTokens, completionTokens });
         var tid = ThreadIdContext.Current;
 
-        // Structured trace — surfaces as customDimensions.PromptTokens /
-        // CompletionTokens in App Insights for Phase 1d KQL baseline queries.
         logger.LogInformation(
-            "Token usage — PromptTokens: {PromptTokens}, CompletionTokens: {CompletionTokens}, ThreadId: {ThreadId}.",
+            "Token usage - PromptTokens: {PromptTokens}, CompletionTokens: {CompletionTokens}, ThreadId: {ThreadId}.",
             promptTokens, completionTokens, tid ?? "(none)");
 
-        // Write thread-specific and global-fallback keys in parallel.
-        // Always write usage:latest so the frontend can fall back to it when the
-        // CopilotKit context threadId doesn't match the AG-UI threadId.
-        var tasks = new List<Task>(2);
-        if (tid is { Length: > 0 })
-            tasks.Add(redis.SetAsync($"usage:{tid}:latest", json, _settings.ThreadTtl));
-        tasks.Add(redis.SetAsync("usage:latest", json, UsageLatestTtl));
-        await Task.WhenAll(tasks);
+        if (tid is not { Length: > 0 })
+            return;
+
+        var json = JsonSerializer.Serialize(new { promptTokens, completionTokens });
+        await redis.SetAsync($"usage:{tid}:latest", json, _settings.ThreadTtl);
     }
 }

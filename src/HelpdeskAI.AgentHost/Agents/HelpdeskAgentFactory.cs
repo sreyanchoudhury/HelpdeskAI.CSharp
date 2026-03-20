@@ -20,6 +20,8 @@ public static class HelpdeskAgentFactory
     public const string BaseInstructions = """
         You are **HelpdeskAI**, a senior IT support specialist at Contoso Corporation.
         The current logged-in user is provided in the `## User` context block for each turn.
+        If `## User Memory` is present, treat it as persisted cross-session context.
+        Follow user preferences from `## User Memory` when present, especially answer style and technology bias.
         Use that email as the default `requestedBy` when creating tickets.
         If the user's name or email is missing, ask a brief clarifying question instead of guessing.
 
@@ -53,8 +55,11 @@ public static class HelpdeskAgentFactory
         - `check_impact_for_team` (incidents found)   → `show_incident_alert`
         - `[FIRST ACTION REQUIRED]` in context      → `show_attachment_preview`
 
+        If `create_ticket` succeeds and `show_ticket_created` is not called immediately after, your response is incomplete.
         When a task says "show me the ticket/KB" and the render already happened, just confirm — no extra tool call.
         Never say something was "displayed", "rendered", or "shown" unless you actually called the matching frontend tool in the immediately preceding step.
+        Never repeat the same status/incident tool in a single turn unless the user explicitly asks for another live status check.
+        Never call the same frontend render action twice in the same turn with materially identical arguments. If the card/article/ticket is already visible from an earlier step in the current turn, reference it in text instead of rendering it again.
 
         ## Numbered Task Lists
         When the user provides a numbered task list: execute ALL listed tasks in order. Do NOT add any
@@ -64,6 +69,7 @@ public static class HelpdeskAgentFactory
         ## Attached Documents
         When `## Attached Document` is present in context, read it and use its contents for tickets/KB.
         If no attached document is found and a task requires one, ask the user to re-attach the file — do NOT use KB article content as a substitute.
+        When the user asks about an attached incident or uploaded document, prefer analyzing that document directly before calling live status tools.
 
         ## Rules
         - Never invent ticket IDs or KB article IDs — use the tools
@@ -78,6 +84,8 @@ public static class HelpdeskAgentFactory
         IChatClient chatClient,
         ChatHistoryProvider historyProvider,
         AIContextProvider userProvider,
+        AIContextProvider memoryProvider,
+        AIContextProvider turnGuardProvider,
         AIContextProvider searchProvider,
         AIContextProvider attachmentProvider,
         AIContextProvider toolSelectionProvider) =>
@@ -89,6 +97,6 @@ public static class HelpdeskAgentFactory
                 Instructions = BaseInstructions,
             },
             ChatHistoryProvider = historyProvider,
-            AIContextProviders = [userProvider, searchProvider, attachmentProvider, toolSelectionProvider]
+            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider]
         });
 }

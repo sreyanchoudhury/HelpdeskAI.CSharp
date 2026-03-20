@@ -64,6 +64,11 @@ public sealed class EntraAuthSettings
     public string Authority { get; set; } = string.Empty;
 }
 
+public sealed class LongTermMemorySettings
+{
+    public TimeSpan ProfileTtl { get; set; } = TimeSpan.FromDays(90);
+}
+
 // Attachment models
 
 public enum AttachmentKind { Text, Image }

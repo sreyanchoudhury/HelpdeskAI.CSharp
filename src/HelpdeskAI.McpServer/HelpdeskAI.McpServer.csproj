@@ -16,7 +16,7 @@
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.57.1" />
     <!-- Newtonsoft.Json is a runtime dependency of Microsoft.Azure.Cosmos v3 (used by DocumentClient internals).
          Our own serialization uses System.Text.Json via CosmosStjSerializer. -->
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.1.0" />
 
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0-preview.2.26159.112" />

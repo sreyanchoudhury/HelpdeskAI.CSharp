@@ -44,9 +44,17 @@ internal sealed class RetryingMcpTool : DelegatingAIFunction
         // If any sibling tool triggered a RefreshAsync, _provider now holds the new
         // session's functions and we naturally pick up the correct one here.
         var current = _provider.GetCachedToolOrDefault(_toolName) ?? _initialInner;
+        var invocationCount = TurnStateContext.IncrementToolCount(_toolName);
 
         try
         {
+            if (invocationCount > 1)
+            {
+                _logger.LogWarning(
+                    "Tool repeated in the same turn - toolName: {ToolName}, invocationCount: {InvocationCount}.",
+                    _toolName, invocationCount);
+            }
+
             var result = await current.InvokeAsync(arguments, cancellationToken);
             _logger.LogInformation(
                 "Tool call succeeded — toolName: {ToolName}, attempt: {Attempt}, outcome: {Outcome}, durationMs: {DurationMs}.",

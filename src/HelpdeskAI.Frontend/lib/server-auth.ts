@@ -1,11 +1,22 @@
-import { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getServerSession } from "next-auth";
+import type { NextRequest } from "next/server";
+import { authOptions } from "@/lib/auth";
 
-export async function getAuthenticatedUser(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+export async function getAuthenticatedUser(_req?: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const typedSession = session as (typeof session & { accessToken?: string; error?: string }) | null;
+
+  if (!typedSession || typedSession.error) {
+    return {
+      name: null,
+      email: null,
+      accessToken: null,
+    };
+  }
+
   return {
-    name: typeof token?.name === "string" ? token.name : null,
-    email: typeof token?.email === "string" ? token.email : null,
-    accessToken: typeof token?.accessToken === "string" ? token.accessToken : null,
+    name: typeof typedSession.user?.name === "string" ? typedSession.user.name : null,
+    email: typeof typedSession.user?.email === "string" ? typedSession.user.email : null,
+    accessToken: typeof typedSession.accessToken === "string" ? typedSession.accessToken : null,
   };
 }
