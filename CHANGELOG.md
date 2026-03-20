@@ -4,13 +4,13 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
-## [Unreleased] — 2026-03-18
+## [Unreleased] - 2026-03-20
 
 ### Added
 
 - **Response token stats chip** (`HelpdeskChat.tsx`) — renders `⏱ Xs · 📥 N in / 📤 M out` in the header row after each agent response. Uses a `fetchStatsRef` pattern to avoid stale closures, exponential-backoff retry (200 ms → 4 s), and clears on the next send.
 - **`IncludeStreamingUsagePolicy`** (`AgentHost/Infrastructure/`) — `System.ClientModel.Primitives.PipelinePolicy` that injects `stream_options: { include_usage: true }` into every streaming Azure OpenAI chat completion request. Fixes null `aggregated.Usage` in `UsageCapturingChatClient` (Azure omits token counts from streaming SSE unless explicitly requested).
-- **`/agent/usage` endpoint** — `GET /agent/usage?threadId=` returns `{ promptTokens, completionTokens }` from Redis; falls back to `usage:latest` when `threadId` is absent or stale.
+- **`/agent/usage` endpoint** — `GET /agent/usage?threadId=` returns `{ promptTokens, completionTokens }` from the thread-scoped Redis key.
 - **`DynamicToolSelectionProvider`** — per-turn cosine similarity tool selection via `text-embedding-3-small`; injects only the top-K most relevant MCP tools per turn instead of the full set.
 - **`AttachmentContextProvider`** — injects staged attachment text/OCR into each agent turn; scoped per session via `IAttachmentStore` (Redis one-shot staging, 1-hour TTL).
 - **`RetryingMcpTool`** — `DelegatingAIFunction` wrapper; catches MCP `Session not found` (-32001) errors, reconnects, and retries once transparently.
@@ -20,7 +20,7 @@ All notable changes to HelpdeskAI are recorded here.
 
 ### Changed
 
-- **`UsageCapturingChatClient`** — Redis writes for `usage:{threadId}:latest` and `usage:latest` now run in parallel via `Task.WhenAll`. Added named constant `UsageLatestTtl` (2 min) for the global fallback key.
+- **`UsageCapturingChatClient`** — usage capture is now thread-bound only; the global fallback key was removed to avoid cross-session leakage.
 - **Stats chip placement** — moved from a floating `position:absolute` overlay inside `.hd-chat-wrapper` (clipped by `overflow:hidden`) to the header row as a sibling of the page title; no DOM injection, pure React state.
 - **`HelpdeskAgentFactory` system prompt** — added explicit numbered-task-list execution rule (execute ALL steps sequentially in one response; never pause between steps). Added field-by-field mapping for `show_ticket_details`: agent must call `get_ticket` first and extract all fields (id, title, description, priority, category, status, assignedTo, createdAt) from the text response.
 - **`HelpdeskActions`** — 7 render actions (added `show_ticket_details`, `show_kb_article`, `suggest_related_articles`, `show_attachment_preview` alongside the original 3).
@@ -31,7 +31,8 @@ All notable changes to HelpdeskAI are recorded here.
 
 ### Removed
 
-- **`UsageContext.cs`** (`UsageStore` + `UsageSnapshot`) — dead code; completely superseded by direct Redis writes in `UsageCapturingChatClient`. Zero external references confirmed before deletion.
+- **UsageContext.cs** (UsageStore + UsageSnapshot) - dead code; completely superseded by direct Redis writes in UsageCapturingChatClient. Zero external references confirmed before deletion.
+- **DEMO.md** - retired in favor of keeping the richer walkthrough and demo guidance in the root README.md.
 
 ### Fixed
 
@@ -45,3 +46,5 @@ All notable changes to HelpdeskAI are recorded here.
 ## Earlier History
 
 See `git log` for full commit history prior to this changelog.
+
+
