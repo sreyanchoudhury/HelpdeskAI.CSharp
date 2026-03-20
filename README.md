@@ -107,51 +107,39 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 ## Architecture
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#0f1117", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
 flowchart TD
-    classDef fe     fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
-    classDef agent  fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
-    classDef mcp    fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
-    classDef azure  fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
-    classDef redis  fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
-
-    subgraph BROWSER["💻  Browser  ·  React 19 + CopilotKit"]
-        FE1["HelpdeskChat.tsx<br/>sidebar · multi-page UI"]:::fe
-        FE2["HelpdeskActions.tsx<br/>render actions · context"]:::fe
+    subgraph Browser["Browser"]
+        FE1["HelpdeskChat.tsx<br/>chat shell and navigation"]
+        FE2["HelpdeskActions.tsx<br/>render actions and readable context"]
     end
 
-    subgraph AGENTHOST["⚙️  AgentHost  ·  .NET 10  ·  :5200"]
-        AH1["MapAGUI /agent<br/>SSE stream endpoint"]:::agent
-        AH2["ThreadId Middleware<br/>per-session routing"]:::agent
-        AH3["AttachmentContextProvider<br/>upload  ·  OCR  ·  vision"]:::agent
-        AH4["AzureAiSearchContextProvider<br/>RAG  ·  BrowseLatestAsync"]:::agent
-        AH5["McpToolsProvider<br/>MCP HTTP client"]:::agent
-        AH6["RedisChatHistoryProvider<br/>per-session history"]:::agent
+    subgraph AgentHost["AgentHost (.NET 10, :5200)"]
+        AH1["MapAGUI /agent<br/>AG-UI and SSE endpoint"]
+        AH2["Request middleware<br/>thread id, user context, telemetry scope"]
+        AH3["AttachmentContextProvider"]
+        AH4["AzureAiSearchContextProvider"]
+        AH5["McpToolsProvider"]
+        AH6["RedisChatHistoryProvider"]
     end
 
-    subgraph MCPSERVER["🔧  McpServer  ·  .NET 10  ·  :5100"]
-        MS1["TicketTools<br/>create · get · search · update · comment · assign"]:::mcp
-        MS2["SystemStatusTools<br/>get_system_status · get_active_incidents · check_impact_for_team"]:::mcp
-        MS3[("Cosmos DB tickets<br/>+ seeded demo records")]:::mcp
-        MS4["KnowledgeBaseTools<br/>search_kb_articles · index_kb_article"]:::mcp
+    subgraph McpServer["McpServer (.NET 10, :5100)"]
+        MS1["TicketTools"]
+        MS2["SystemStatusTools"]
+        MS3["KnowledgeBaseTools"]
+        COSMOS["Cosmos DB tickets"]
     end
 
-    subgraph AZURE["☁️  Azure Services"]
-        AOA{{"Azure OpenAI<br/>gpt-4.1"}}:::azure
-        AIS{{"Azure AI Search<br/>vector + semantic"}}:::azure
-        ABS{{"Azure Blob Storage<br/>attachments"}}:::azure
-        ADI{{"Document Intelligence<br/>OCR"}}:::azure
+    subgraph Azure["Azure services"]
+        AOA["Azure OpenAI"]
+        AIS["Azure AI Search"]
+        ABS["Azure Blob Storage"]
+        ADI["Document Intelligence"]
+        REDIS["Redis"]
     end
 
-    REDIS[("🔴  Redis<br/>chat history")]:::redis
-
-    style BROWSER   fill:#060e20,stroke:#3d5afe,color:#9098b0
-    style AGENTHOST fill:#0a0315,stroke:#a855f7,color:#9098b0
-    style MCPSERVER fill:#010f0a,stroke:#10b981,color:#9098b0
-    style AZURE     fill:#01080e,stroke:#38bdf8,color:#9098b0
-
-    BROWSER -- "AG-UI  ·  POST /agent + SSE" --> AGENTHOST
-    BROWSER -- "POST /api/attachments" --> AH3
+    FE1 --> FE2
+    Browser -->|POST /agent + SSE| AH1
+    Browser -->|POST /api/attachments| AH3
 
     AH1 --> AH2
     AH2 --> AH3
@@ -159,16 +147,13 @@ flowchart TD
     AH2 --> AH5
     AH2 --> AH6
 
-    AH5 -- "MCP HTTP  ·  POST /mcp" --> MCPSERVER
-    MS1 --> MS3
-    MS2 --> MS3
-    MS4 --> AIS
-
-    AH1 -- "chat completions" --> AOA
-    AH4 -- "semantic search"  --> AIS
-    AH3 -- "upload"           --> ABS
-    AH3 -- "OCR"              --> ADI
-    AH6 -- "read / write"     --> REDIS
+    AH5 -->|MCP HTTP /mcp| McpServer
+    MS1 --> COSMOS
+    AH1 -->|chat completions| AOA
+    AH4 -->|semantic search| AIS
+    AH3 -->|upload| ABS
+    AH3 -->|OCR| ADI
+    AH6 --> REDIS
 ```
 
 ---
@@ -461,30 +446,22 @@ npm install
 > **Note:** Redis persists conversation history both locally and in the Azure Container Apps deployment (where Redis runs as a sidecar container). History survives service restarts within the same Redis instance.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#3d5afe44", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
 flowchart LR
-    classDef fe      fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
-    classDef next    fill:#0d0a1e,stroke:#818cf8,color:#e8eaf0,stroke-width:2px
-    classDef agent   fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
-    classDef mcp     fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
-    classDef redis   fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
-    classDef azure   fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
-
-    U(["💬 User<br/>types message"]):::fe
-    CK["CopilotKit Runtime<br/>/api/copilotkit"]:::next
-    AH["MapAGUI<br/>POST /agent"]:::agent
-    RAG["RAG Injection<br/>Azure AI Search → system msg"]:::azure
-    RH["Redis History<br/>load thread"]:::redis
-    LLM["Azure OpenAI<br/>gpt-4.1"]:::azure
-    MCP["McpToolsProvider<br/>→ tool call → MCP Server"]:::mcp
-    SSE["AG-UI SSE Stream<br/>TextMessage · ToolCall events"]:::agent
-    RP["Redis History<br/>persist thread"]:::redis
-    RA["Render Actions<br/>show_ticket · show_incident"]:::fe
-    R(["🖥️ Browser<br/>UI updated"]):::fe
+    U["User message"]
+    CK["CopilotKit runtime<br/>/api/copilotkit"]
+    AH["AgentHost<br/>POST /agent"]
+    RAG["RAG context injection"]
+    RH["Redis history load"]
+    LLM["Azure OpenAI"]
+    MCP["MCP tools"]
+    SSE["AG-UI SSE stream"]
+    RP["Redis history persist"]
+    RA["Frontend render actions"]
+    R["Browser updated"]
 
     U --> CK --> AH --> RAG --> RH --> LLM
-    LLM -. "tool call" .-> MCP
-    MCP -. "result" .-> LLM
+    LLM -. tool call .-> MCP
+    MCP -. tool result .-> LLM
     LLM --> SSE --> RP
     SSE --> RA --> R
 ```

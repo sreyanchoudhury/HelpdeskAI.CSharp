@@ -100,27 +100,22 @@ Response:
 ## Architecture
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#10b981", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#010f0a", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
 flowchart TD
-    classDef agenthost fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
-    classDef tool      fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
-    classDef service   fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
+    AH["AgentHost (port 5200)<br/>McpToolsProvider + HttpClientTransport"]
 
-    AH(["⚙️  AgentHost  ·  Port 5200<br/>McpToolsProvider  ·  HttpClientTransport"]):::agenthost
-
-    subgraph MCP["🔧  HelpdeskAI.McpServer  ·  Port 5100"]
-        TT["TicketTools<br/>create  ·  get  ·  search  ·  update  ·  comment  ·  assign"]:::tool
-        SST["SystemStatusTools<br/>health  ·  incidents  ·  impact analysis"]:::tool
-        KT["KnowledgeBaseTools<br/>index_kb_article  →  Azure AI Search"]:::tool
-        TS[("TicketService<br/>Azure Cosmos DB  ·  serverless")]:::service
-        SS[("SystemStatusService<br/>12 IT services  ·  incidents  ·  workarounds")]:::service
+    subgraph MCP["HelpdeskAI.McpServer (port 5100)"]
+        TT["TicketTools"]
+        SST["SystemStatusTools"]
+        KT["KnowledgeBaseTools"]
+        TS["TicketService + Cosmos DB"]
+        SS["SystemStatusService"]
+        AIS["Azure AI Search"]
     end
 
-    style MCP fill:#010f0a,stroke:#10b981,color:#9098b0
-
-    AH -- "MCP HTTP  ·  POST /mcp" --> MCP
-    TT  --> TS
+    AH -->|MCP HTTP /mcp| MCP
+    TT --> TS
     SST --> SS
+    KT --> AIS
 ```
 
 ---
