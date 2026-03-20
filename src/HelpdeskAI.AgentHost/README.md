@@ -70,56 +70,47 @@ For local development, you can still run the app locally while pointing at Azure
 ## Architecture
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#a855f7", "lineColor": "#5a6280", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "clusterBkg": "#0a0315", "titleColor": "#9098b0", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
 flowchart TD
-    classDef browser  fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
-    classDef core     fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
-    classDef azure    fill:#020b16,stroke:#38bdf8,color:#e8eaf0,stroke-width:2px
-    classDef redis    fill:#1a0202,stroke:#ef4444,color:#e8eaf0,stroke-width:2px
-    classDef mcp      fill:#011510,stroke:#10b981,color:#e8eaf0,stroke-width:2px
+    BROWSER["Browser / Next.js"]
 
-    BROWSER(["💻  Browser  ·  Next.js  ·  Port 3000"]):::browser
-
-    subgraph AH["⚙️  HelpdeskAI.AgentHost  ·  Port 5200"]
-        AGUI["MapAGUI /agent<br/>AG-UI deserialization  ·  IChatClient pipeline  ·  SSE streaming"]:::core
-        RAG["AzureAiSearchContextProvider<br/>RAG injection before each LLM call"]:::core
-        FI["IChatClient — FunctionInvocation<br/>Tool discovery  ·  Azure OpenAI gpt-4.1-mini"]:::core
-        MCP["McpToolsProvider<br/>→ http://localhost:5100/mcp"]:::core
-        HIST["RedisChatHistoryProvider<br/>per-session  ·  keyed by AG-UI threadId"]:::core
-        ATT["POST /api/attachments<br/>.txt → text   .pdf/.docx → OCR   .png/.jpg → vision<br/>BlobStorageService  ·  RedisAttachmentStore (1-hour staging)"]:::core
-        KB["GET /api/kb/search<br/>AzureAiSearchService"]:::core
-        TKP["GET /api/tickets<br/>proxy → McpServer /tickets (internal)"]:::core
-        DTS["DynamicToolSelectionProvider<br/>text-embedding-3-small  ·  cosine top-K per turn"]:::core
+    subgraph AH["HelpdeskAI.AgentHost (port 5200)"]
+        AGUI["MapAGUI /agent"]
+        RAG["AzureAiSearchContextProvider"]
+        FI["IChatClient + FunctionInvocation"]
+        MCP["McpToolsProvider"]
+        HIST["RedisChatHistoryProvider"]
+        ATT["POST /api/attachments"]
+        KB["GET /api/kb/search"]
+        TKP["GET /api/tickets"]
+        DTS["DynamicToolSelectionProvider"]
     end
 
-    MCPSRV(["🔧  McpServer  ·  Port 5100"]):::mcp
-    AOA{{"Azure OpenAI<br/>gpt-4.1"}}:::azure
-    AIS{{"Azure AI Search"}}:::azure
-    ABS{{"Azure Blob Storage"}}:::azure
-    ADI{{"Document Intelligence"}}:::azure
-    REDIS[("🔴  Redis")]:::redis
+    MCPSRV["McpServer (port 5100)"]
+    AOA["Azure OpenAI"]
+    AIS["Azure AI Search"]
+    ABS["Azure Blob Storage"]
+    ADI["Document Intelligence"]
+    REDIS["Redis"]
 
-    style AH fill:#0a0315,stroke:#a855f7,color:#9098b0
-
-    BROWSER -- "POST /agent  (AG-UI stream)" --> AGUI
-    BROWSER -- "POST /api/attachments"       --> ATT
-    BROWSER -- "GET /api/tickets"            --> TKP
+    BROWSER -->|POST /agent| AGUI
+    BROWSER -->|POST /api/attachments| ATT
+    BROWSER -->|GET /api/tickets| TKP
 
     AGUI --> RAG
     AGUI --> HIST
-    RAG  --> FI
-    FI   --> MCP
-    FI   --> DTS
-    FI   -- "chat completions" --> AOA
-    MCP  -- "MCP / HTTP"       --> MCPSRV
-    DTS  -- "embed query"      --> AOA
-    TKP  -- "GET /tickets"     --> MCPSRV
-    RAG  -- "semantic search"  --> AIS
-    KB   -- "semantic search"  --> AIS
-    ATT  -- "upload"           --> ABS
-    ATT  -- "OCR"              --> ADI
-    ATT  -- "1-hour staging"   --> REDIS
-    HIST -- "read / write"     --> REDIS
+    RAG --> FI
+    FI --> MCP
+    FI --> DTS
+    FI -->|chat completions| AOA
+    MCP -->|MCP HTTP| MCPSRV
+    DTS -->|embed query| AOA
+    TKP -->|GET /tickets| MCPSRV
+    RAG -->|semantic search| AIS
+    KB -->|semantic search| AIS
+    ATT -->|upload| ABS
+    ATT -->|OCR| ADI
+    ATT -->|staging| REDIS
+    HIST -->|read/write| REDIS
 ```
 
 ---
@@ -302,17 +293,13 @@ HelpdeskAI.AgentHost/
 ### Message Flow (one turn)
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#151820", "primaryTextColor": "#e8eaf0", "primaryBorderColor": "#3d5afe", "lineColor": "#3d5afe", "secondaryColor": "#0f1117", "tertiaryColor": "#0a0b0f", "edgeLabelBackground": "#0f1117", "fontFamily": "system-ui, -apple-system, sans-serif"}}}%%
 flowchart LR
-    classDef endpoint fill:#080f24,stroke:#3d5afe,color:#e8eaf0,stroke-width:2px
-    classDef step     fill:#0e0518,stroke:#a855f7,color:#e8eaf0,stroke-width:2px
-
-    S1(["💻  Browser<br/>POST /agent"]):::endpoint
-    S2["①  Deserialize<br/>RunAgentInput"]:::step
-    S3["②  RAG + Tool Selection<br/>AI Search  ·  top-K KB context<br/>DynamicToolSelectionProvider  ·  cosine top-K tools"]:::step
-    S4["③  LLM Reasoning<br/>Tool calls  ·  gpt-4.1 response"]:::step
-    S5["④  SSE Stream<br/>TextMessageStart  ·  chunks  ·  ToolCall events"]:::step
-    S6(["💻  Browser<br/>UI updated"]):::endpoint
+    S1["Browser POST /agent"]
+    S2["Deserialize RunAgentInput"]
+    S3["Inject RAG and tool-selection context"]
+    S4["LLM reasoning and tool calls"]
+    S5["Return AG-UI SSE stream"]
+    S6["Browser updates UI"]
 
     S1 --> S2 --> S3 --> S4 --> S5 --> S6
 ```
