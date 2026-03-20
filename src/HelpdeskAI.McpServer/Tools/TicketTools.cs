@@ -11,7 +11,7 @@ namespace HelpdeskAI.McpServer.Tools;
 public static class TicketTools
 {
     [McpServerTool(Name = "create_ticket")]
-    [Description("Creates a new IT support ticket. Call this when the user reports a new issue that needs tracking.")]
+    [Description("Creates a new IT support ticket. Call this when the user reports a new issue that needs tracking. After success, immediately follow with show_ticket_created using the returned render metadata.")]
     public static async Task<string> CreateTicket(
         TicketService svc,
         ILoggerFactory loggerFactory,

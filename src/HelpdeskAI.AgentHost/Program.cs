@@ -26,6 +26,7 @@ builder.Services.Configure<ConversationSettings>(cfg.GetSection("Conversation"))
 builder.Services.Configure<AzureBlobStorageSettings>(cfg.GetSection("AzureBlobStorage"));
 builder.Services.Configure<DocumentIntelligenceSettings>(cfg.GetSection("DocumentIntelligence"));
 builder.Services.Configure<EntraAuthSettings>(cfg.GetSection("EntraAuth"));
+builder.Services.Configure<LongTermMemorySettings>(cfg.GetSection("LongTermMemory"));
 
 var aiSettings = cfg.GetSection("AzureOpenAI").Get<AzureOpenAiSettings>()
     ?? throw new InvalidOperationException("AzureOpenAI config section missing");
@@ -108,6 +109,7 @@ builder.Services.AddSingleton<IKnowledgeSearch>(sp => sp.GetRequiredService<Azur
 builder.Services.AddSingleton<IKnowledgeIngestion>(sp => sp.GetRequiredService<AzureAiSearchService>());
 builder.Services.AddSingleton<IMcpToolsProvider, McpToolsProvider>();
 builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
+builder.Services.AddSingleton<LongTermMemoryStore>();
 
 // Named HttpClient for internal McpServer calls (base URL derived from MCP endpoint).
 // Standard resilience pipeline: 3 retries with exponential backoff + 30 s total timeout.
@@ -160,11 +162,89 @@ app.UseAuthorization();
 // Cache ILoggerFactory from DI once — used throughout startup and middleware.
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
 var agentLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost");
+var longTermMemoryStore = app.Services.GetRequiredService<LongTermMemoryStore>();
 
 static string? GetClaimValue(ClaimsPrincipal user, params string[] claimTypes) =>
     claimTypes
         .Select(type => user.FindFirst(type)?.Value)
         .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+static string? TryGetThreadId(System.Text.Json.JsonElement root)
+{
+    if (root.TryGetProperty("threadId", out var elem))
+        return elem.GetString();
+    return null;
+}
+
+static string? TryGetLatestUserMessage(System.Text.Json.JsonElement root)
+{
+    if (!root.TryGetProperty("messages", out var messages) || messages.ValueKind != System.Text.Json.JsonValueKind.Array)
+        return null;
+
+    for (var i = messages.GetArrayLength() - 1; i >= 0; i--)
+    {
+        var message = messages[i];
+        if (message.ValueKind != System.Text.Json.JsonValueKind.Object)
+            continue;
+        if (!message.TryGetProperty("role", out var role) || !string.Equals(role.GetString(), "user", StringComparison.OrdinalIgnoreCase))
+            continue;
+        if (!message.TryGetProperty("content", out var content))
+            continue;
+
+        var text = ExtractText(content);
+        if (!string.IsNullOrWhiteSpace(text))
+            return text;
+    }
+
+    return null;
+}
+
+static string? ExtractText(System.Text.Json.JsonElement content)
+{
+    if (content.ValueKind == System.Text.Json.JsonValueKind.String)
+        return content.GetString();
+
+    if (content.ValueKind == System.Text.Json.JsonValueKind.Array)
+    {
+        var parts = new List<string>();
+        foreach (var item in content.EnumerateArray())
+        {
+            var text = ExtractText(item);
+            if (!string.IsNullOrWhiteSpace(text))
+                parts.Add(text);
+        }
+        return parts.Count == 0 ? null : string.Join("\n", parts);
+    }
+
+    if (content.ValueKind == System.Text.Json.JsonValueKind.Object)
+    {
+        if (content.TryGetProperty("text", out var text))
+            return ExtractText(text);
+        if (content.TryGetProperty("content", out var nested))
+            return ExtractText(nested);
+        if (content.TryGetProperty("value", out var value))
+            return ExtractText(value);
+    }
+
+    return null;
+}
+
+static string? TryExtractPreference(string? message)
+{
+    if (string.IsNullOrWhiteSpace(message))
+        return null;
+
+    var text = message.Trim();
+    const string rememberPrefix = "remember that ";
+    if (text.StartsWith(rememberPrefix, StringComparison.OrdinalIgnoreCase))
+        return text[rememberPrefix.Length..].Trim().TrimEnd('.');
+
+    const string rememberPreferencePrefix = "please remember that ";
+    if (text.StartsWith(rememberPreferencePrefix, StringComparison.OrdinalIgnoreCase))
+        return text[rememberPreferencePrefix.Length..].Trim().TrimEnd('.');
+
+    return null;
+}
 
 // Populate ThreadIdContext before the request is handled so history providers
 // can key Redis by AG-UI threadId without access to the (always-null) AgentSession.
@@ -178,6 +258,8 @@ app.Use(async (context, next) =>
         var userName = GetClaimValue(context.User, "name", ClaimTypes.Name);
         var userEmail = GetClaimValue(context.User, "preferred_username", ClaimTypes.Email, "email");
         UserContext.Set(userName, userEmail);
+        if (!string.IsNullOrWhiteSpace(userEmail))
+            await longTermMemoryStore.UpsertProfileAsync(userEmail, userName, context.RequestAborted);
 
         context.Request.EnableBuffering();
         using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
@@ -185,22 +267,27 @@ app.Use(async (context, next) =>
         context.Request.Body.Position = 0;
 
         string? threadId = null;
+        string? latestUserMessage = null;
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("threadId", out var elem))
-            {
-                threadId = elem.GetString();
-            }
+            threadId = TryGetThreadId(doc.RootElement);
+            latestUserMessage = TryGetLatestUserMessage(doc.RootElement);
+            TurnStateContext.SetLastUserMessage(latestUserMessage);
+
+            var rememberedPreference = TryExtractPreference(latestUserMessage);
+            if (!string.IsNullOrWhiteSpace(userEmail) && !string.IsNullOrWhiteSpace(rememberedPreference))
+                await longTermMemoryStore.UpsertPreferenceAsync(userEmail, rememberedPreference, context.RequestAborted);
 
             ThreadIdContext.Set(threadId);
-            using var scope = agentLogger.BeginScope(new { threadId, userEmail });
+            using var scope = agentLogger.BeginScope(new { threadId, userEmail, latestUserMessage });
             await next(context);
             return;
         }
         finally
         {
             ThreadIdContext.Set(null);
+            TurnStateContext.Clear();
             UserContext.Clear();
         }
     }
@@ -217,6 +304,10 @@ var historyProvider = new RedisChatHistoryProvider(
     loggerFactory.CreateLogger<RedisChatHistoryProvider>());
 
 var userProvider = new UserContextProvider();
+var memoryProvider = new LongTermMemoryContextProvider(
+    app.Services.GetRequiredService<LongTermMemoryStore>(),
+    loggerFactory.CreateLogger<LongTermMemoryContextProvider>());
+var turnGuardProvider = new TurnGuardContextProvider();
 
 var searchProvider = new AzureAiSearchContextProvider(
     app.Services.GetRequiredService<IKnowledgeSearch>(),
@@ -238,7 +329,7 @@ var toolSelectionProvider = new DynamicToolSelectionProvider(
     topK,
     loggerFactory.CreateLogger<DynamicToolSelectionProvider>());
 
-var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, userProvider, searchProvider, attachmentProvider, toolSelectionProvider);
+var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider);
 
 app.MapAGUI("/agent", agent).RequireAuthorization();
 app.MapAttachmentEndpoints();
@@ -248,12 +339,9 @@ if (!app.Environment.IsProduction()) app.MapEvalEndpoints();
 
 app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
 {
-    string? json = null;
-    if (!string.IsNullOrEmpty(threadId))
-        json = await redis.GetAsync($"usage:{threadId}:latest");
-    // Fall back to global-latest when threadId is absent or the key doesn't exist.
-    if (string.IsNullOrEmpty(json))
-        json = await redis.GetAsync("usage:latest");
+    if (string.IsNullOrWhiteSpace(threadId))
+        return Results.BadRequest(new { error = "threadId is required" });
+    var json = await redis.GetAsync($"usage:{threadId}:latest");
     return string.IsNullOrEmpty(json) ? Results.NotFound() : Results.Content(json, "application/json");
 }).RequireAuthorization();
 

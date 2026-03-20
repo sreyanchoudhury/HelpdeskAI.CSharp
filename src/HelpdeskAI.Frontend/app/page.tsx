@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import { CopilotKit } from "@copilotkit/react-core";
 import { HelpdeskChat } from "@/components/HelpdeskChat";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 function LoadingScreen({ message }: { message: string }) {
   return (
@@ -23,9 +24,23 @@ function LoadingScreen({ message }: { message: string }) {
 
 export default function Home() {
   const { data: session, status } = useSession();
+  const typedSession = session as (typeof session & { accessToken?: string; error?: string }) | null;
+  const sessionError = typedSession?.error;
+  const accessToken = typedSession?.accessToken;
+  const needsReauth = status === "authenticated" && (!session?.user?.email || !accessToken || !!sessionError);
+
+  useEffect(() => {
+    if (needsReauth) {
+      void signIn("azure-ad", { callbackUrl: "/" });
+    }
+  }, [needsReauth]);
 
   if (status === "loading") {
     return <LoadingScreen message="Loading your HelpdeskAI session..." />;
+  }
+
+  if (needsReauth) {
+    return <LoadingScreen message="Refreshing your Microsoft Entra session..." />;
   }
 
   if (!session?.user?.email) {
