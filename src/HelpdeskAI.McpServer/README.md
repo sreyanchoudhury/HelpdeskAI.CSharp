@@ -101,21 +101,35 @@ Response:
 
 ```mermaid
 flowchart TD
-    AH["AgentHost (port 5200)<br/>McpToolsProvider + HttpClientTransport"]
+    classDef external fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef tool     fill:#059669,stroke:#047857,color:#fff
+    classDef service  fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef db       fill:#475569,stroke:#334155,color:#fff
 
-    subgraph MCP["HelpdeskAI.McpServer (port 5100)"]
-        TT["TicketTools"]
-        SST["SystemStatusTools"]
-        KT["KnowledgeBaseTools"]
-        TS["TicketService + Cosmos DB"]
+    AH(["🤖 AgentHost  ·  port 5200<br/>McpToolsProvider + HttpClientTransport"])
+
+    subgraph MCP["🛠  HelpdeskAI.McpServer  ·  port 5100"]
+        TT["🎫 TicketTools<br/>create · get · search<br/>update · comment · assign"]
+        SST["📊 SystemStatusTools<br/>status · incidents · impact"]
+        KT["📚 KnowledgeBaseTools<br/>search · index"]
+        TS["TicketService"]
         SS["SystemStatusService"]
-        AIS["Azure AI Search"]
+        KBS["KnowledgeBaseService"]
+        COSMOS[("Cosmos DB<br/>serverless")]
+        AIS["Azure AI Search<br/>helpdesk-kb"]
     end
 
     AH -->|MCP HTTP /mcp| MCP
     TT --> TS
     SST --> SS
-    KT --> AIS
+    KT --> KBS
+    TS --> COSMOS
+    KBS --> AIS
+
+    class AH external
+    class TT,SST,KT tool
+    class TS,SS,KBS service
+    class COSMOS,AIS db
 ```
 
 ---
@@ -147,7 +161,7 @@ Create a new IT support ticket.
 {
   title: string                    // Short title (max 80 chars)
   description: string              // Full description including error messages and steps tried
-  priority: "Low" | "Medium" | "High" | "Critical"
+  priority?: "Low" | "Medium" | "High" | "Critical"  // defaults to "Medium"
   category: "Hardware" | "Software" | "Network" | "Access" | "Email" | "VPN" | "Other"
   requestedBy: string              // User's email address
 }

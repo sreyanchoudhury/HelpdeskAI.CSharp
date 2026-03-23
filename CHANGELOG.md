@@ -4,6 +4,28 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-03-23
+
+### Added
+
+- **`docs/model-compatibility.md`** — documents the three model dependency layers (`_renderAction` follow-through, multi-step instruction following, tool calling), the compatibility matrix (gpt-4o ✅, gpt-4o-mini ✅, gpt-4-turbo ✅, model-router ⚠️, gpt-5.2-chat ❌), and configuration instructions for switching models.
+- **Settings page model compatibility card** (`HelpdeskChat.tsx`) — displays the active Azure OpenAI model and a link to `docs/model-compatibility.md`; updates the About card to show `Azure OpenAI (gpt-4o)` and `Azure AI Search (Basic tier)`.
+
+### Changed
+
+- **Chat model switched to `gpt-4o`** — migrated from `model-router` (→ `gpt-5.2-chat` tested and rejected) to `gpt-4o` as the production chat deployment. `gpt-5.2-chat` was found to ignore `_renderAction` instructions embedded in MCP tool results, producing text summaries instead of calling frontend render tools. `gpt-4o` follows `_renderAction` reliably.
+- **`DynamicTools.TopK` raised from 5 → 8** (`appsettings.json`) — ensures all workflow tools including `assign_ticket` are always in the selected tool set for multi-step agentic turns.
+- **`DynamicToolSelectionProvider` turn-cache** — added a `ConcurrentDictionary<string, AIContext>` keyed on the user query string so embedding + ranking runs once per unique query per turn rather than on every intermediate LLM inference step. Cache auto-clears at 200 entries.
+- **`BaseInstructions` render pairing table** (`HelpdeskAgentFactory.cs`) — added an explicit 8-row table mapping each MCP tool to its required frontend render tool (e.g. `create_ticket → show_ticket_created`). Agent reads it at turn start as part of its plan rather than inferring render calls mid-turn.
+- **`BaseInstructions` sequential tool call rule** (`HelpdeskAgentFactory.cs`) — added "Always call tools sequentially, one at a time. Never call multiple tools in parallel." to `## Tool Rules` to prevent parallel invocations where missing optional parameters cause hard exceptions.
+### Fixed
+
+- **`create_ticket` missing `priority` on parallel calls** (`TicketTools.cs`) — `priority` parameter now defaults to `"Medium"` if not provided, preventing a hard `ArgumentException` when gpt-4o calls `create_ticket` in a parallel tool batch without specifying priority.
+- **KB article card not rendering** (`KnowledgeBaseTools.cs`) — `index_kb_article` `_renderArgs` was missing the `content` field (stripped in a previous session for token reduction), causing `show_kb_article` to render a blank card. `content` restored to `_renderArgs`.
+- **`get_active_incidents` auto-called proactively** — render pairing table clarified so the `get_active_incidents → show_incident_alert` entry is not misread as a trigger to call the tool proactively; Tool Rules already constrains it to explicit user requests only.
+
+---
+
 ## [Unreleased] - 2026-03-20
 
 ### Added

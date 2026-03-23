@@ -108,36 +108,44 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ```mermaid
 flowchart TD
-    subgraph Browser["Browser"]
-        FE1["HelpdeskChat.tsx<br/>chat shell and navigation"]
-        FE2["HelpdeskActions.tsx<br/>render actions and readable context"]
+    classDef fe   fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef ah   fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef mcp  fill:#059669,stroke:#047857,color:#fff
+    classDef svc  fill:#d97706,stroke:#b45309,color:#fff
+    classDef db   fill:#475569,stroke:#334155,color:#fff
+
+    subgraph Browser["🌐  Browser"]
+        FE1["HelpdeskChat.tsx<br/>chat · navigation · stats chip"]
+        FE2["HelpdeskActions.tsx<br/>7 render actions · readable context"]
     end
 
-    subgraph AgentHost["AgentHost (.NET 10, :5200)"]
-        AH1["MapAGUI /agent<br/>AG-UI and SSE endpoint"]
-        AH2["Request middleware<br/>thread id, user context, telemetry scope"]
-        AH3["AttachmentContextProvider"]
-        AH4["AzureAiSearchContextProvider"]
-        AH5["McpToolsProvider"]
-        AH6["RedisChatHistoryProvider"]
+    subgraph AgentHost["🤖  AgentHost  ·  :5200"]
+        AH1["📡 MapAGUI /agent<br/>AG-UI · SSE streaming"]
+        AH2["🔐 Request Middleware<br/>Entra auth · thread ID · telemetry"]
+        AH3["📎 AttachmentContextProvider"]
+        AH4["🔍 AzureAiSearchContextProvider<br/>RAG"]
+        AH5["🔧 McpToolsProvider<br/>+ RetryingMcpTool"]
+        AH6["💾 RedisChatHistoryProvider"]
+        AH7["⚡ DynamicToolSelectionProvider<br/>TopK=8 · cosine similarity"]
+        AH8["🧠 LongTermMemoryContextProvider"]
+        AH9["👤 UserContextProvider"]
     end
 
-    subgraph McpServer["McpServer (.NET 10, :5100)"]
-        MS1["TicketTools"]
-        MS2["SystemStatusTools"]
-        MS3["KnowledgeBaseTools"]
-        COSMOS["Cosmos DB tickets"]
+    subgraph McpServer["🛠  McpServer  ·  :5100"]
+        MS1["🎫 TicketTools"]
+        MS2["📊 SystemStatusTools"]
+        MS3["📚 KnowledgeBaseTools"]
+        COSMOS[("Cosmos DB")]
     end
 
-    subgraph Azure["Azure services"]
-        AOA["Azure OpenAI"]
-        AIS["Azure AI Search"]
-        ABS["Azure Blob Storage"]
+    subgraph Azure["☁️  Azure Services"]
+        AOA["Azure OpenAI<br/>gpt-4o · embeddings"]
+        AIS["Azure AI Search<br/>helpdesk-kb"]
+        ABS["Blob Storage"]
         ADI["Document Intelligence"]
-        REDIS["Redis"]
+        REDIS[("Redis<br/>history · LTM · staging")]
     end
 
-    FE1 --> FE2
     Browser -->|POST /agent + SSE| AH1
     Browser -->|POST /api/attachments| AH3
 
@@ -146,14 +154,25 @@ flowchart TD
     AH2 --> AH4
     AH2 --> AH5
     AH2 --> AH6
+    AH2 --> AH7
+    AH2 --> AH8
+    AH2 --> AH9
 
     AH5 -->|MCP HTTP /mcp| McpServer
     MS1 --> COSMOS
     AH1 -->|chat completions| AOA
+    AH7 -->|embed query| AOA
     AH4 -->|semantic search| AIS
     AH3 -->|upload| ABS
     AH3 -->|OCR| ADI
     AH6 --> REDIS
+    AH8 --> REDIS
+
+    class FE1,FE2 fe
+    class AH1,AH2,AH3,AH4,AH5,AH6,AH7,AH8,AH9 ah
+    class MS1,MS2,MS3 mcp
+    class COSMOS,REDIS db
+    class AOA,AIS,ABS,ADI svc
 ```
 
 ---
@@ -191,7 +210,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<your-resource>.openai.azure.com/",
     "ApiKey": "<your-key>",
-    "ChatDeployment": "gpt-4.1-mini"
+    "ChatDeployment": "gpt-4o"
   },
   "AzureAISearch": {
     "Endpoint": "",
@@ -230,7 +249,7 @@ Then run services (same as above).
 ### Azure Prerequisites (if deploying to cloud)
 
 - Active **Azure subscription** with permission to create resources and assign RBAC roles
-- **Azure OpenAI** resource with `gpt-4.1` or `gpt-4o` deployment (or request access at https://aka.ms/oai/access)
+- **Azure OpenAI** resource with a `gpt-4o` deployment (or request access at https://aka.ms/oai/access)
 
 ---
 
@@ -246,21 +265,11 @@ az login
 ```
 
 This provisions:
-- Azure OpenAI (gpt-4.1)
+- Azure OpenAI (gpt-4o)
 - Azure AI Search (Basic tier)
 - Generated `appsettings.Development.json` with credentials
 
 Takes 5-10 minutes. Then run the three services locally (see **Quick Start**).
-
----
-
-## Projects
-
-| Project | Port | Role | Startup |
-|---------|------|------|---------|
-| **HelpdeskAI.Mcp­Server** | 5100 | MCP tool server (tickets, system status, KB search/index) | `dotnet run` in `src/HelpdeskAI.McpServer/` |
-| **HelpdeskAI.Agent­Host** | 5200 | AG-UI agent (OpenAI, RAG, Redis) | `dotnet run` in `src/HelpdeskAI.AgentHost/` |
-| **Frontend (Next.js)** | 3000 | React frontend with CopilotKit | `npm install && npm run dev` in `src/HelpdeskAI.Frontend/` |
 
 ---
 
@@ -284,7 +293,7 @@ Create this file at `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4.1-mini"
+    "ChatDeployment": "gpt-4o"
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
@@ -368,23 +377,6 @@ npm install
 
 ---
 
-## Key Technologies
-
-**Backend:**
-- Microsoft.Extensions.AI (IChatClient, AIFunction)
-- Microsoft.Agents.AI (AG-UI hosting, MAF)
-- Azure.AI.OpenAI (Azure OpenAI SDK)
-- Azure.Search.Documents (AI Search RAG)
-- ModelContextProtocol (MCP 1.0.0)
-
-**Frontend:**
-- React 19 + TypeScript
-- CopilotKit (@copilotkit/react-core)
-- AG-UI (@ag-ui/client)
-- Next.js (dev + build)
-
----
-
 ## Learn More
 
 - [Microsoft Agents AI](https://github.com/microsoft/agents-sdk)
@@ -393,16 +385,6 @@ npm install
 - [Azure OpenAI Service](https://learn.microsoft.com/azure/ai-services/openai/)
 - [Azure AI Search](https://learn.microsoft.com/azure/search/)
 - [Model Compatibility Notes](docs/model-compatibility.md)
-
----
-
-## Projects
-
-| Project | Port | Role |
-|---------|------|------|
-| `HelpdeskAI.AgentHost` | 5200 | .NET 10 Web API — AG-UI endpoint, agent pipeline, Redis chat history, file attachments, ticket proxy |
-| `HelpdeskAI.McpServer` | 5100 | .NET 10 Web API — 11 MCP tools (tickets, status, KB) + `GET /tickets` REST (internal-only) |
-| `HelpdeskAI.Frontend` | 3000 (dev) | Next.js App Router — React frontend with CopilotKit + 4 API proxy routes |
 
 ---
 
@@ -420,7 +402,7 @@ npm install
 | MCP server | `ModelContextProtocol.AspNetCore` | 1.1.0 | `AddMcpServer().WithHttpTransport()` |
 | Azure OpenAI SDK | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
 | Azure AI Search | `Azure.Search.Documents` | 11.8.0-beta.1 | Semantic search / RAG |
-| Redis | `StackExchange.Redis` | 2.11.8 | Chat history Sorted Sets |
+| Redis | `StackExchange.Redis` | 2.12.1 | Chat history Sorted Sets |
 | Azure Blob Storage | `Azure.Storage.Blobs` | 12.27.0 | Attachment archival |
 | Document Intelligence | `Azure.AI.DocumentIntelligence` | 1.0.0 | PDF/DOCX OCR |
 | Azure Identity | `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` |
@@ -447,23 +429,33 @@ npm install
 
 ```mermaid
 flowchart LR
-    U["User message"]
-    CK["CopilotKit runtime<br/>/api/copilotkit"]
-    AH["AgentHost<br/>POST /agent"]
-    RAG["RAG context injection"]
-    RH["Redis history load"]
-    LLM["Azure OpenAI"]
-    MCP["MCP tools"]
-    SSE["AG-UI SSE stream"]
-    RP["Redis history persist"]
-    RA["Frontend render actions"]
-    R["Browser updated"]
+    classDef user   fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef infra  fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef ai     fill:#d97706,stroke:#b45309,color:#fff
+    classDef result fill:#059669,stroke:#047857,color:#fff
 
-    U --> CK --> AH --> RAG --> RH --> LLM
+    U(["👤 User message"])
+    CK["🔄 CopilotKit<br/>/api/copilotkit"]
+    AH["🤖 AgentHost<br/>POST /agent"]
+    CTX["🔍 Context injection<br/>RAG · LTM · user · attachments"]
+    RH["💾 Redis<br/>history load"]
+    LLM(["🧠 Azure OpenAI<br/>gpt-4o"])
+    MCP["🛠 MCP tools<br/>McpServer"]
+    SSE["📡 AG-UI SSE stream"]
+    RP["💾 Redis<br/>history persist"]
+    RA["🎨 Render actions<br/>cards · alerts · KB"]
+    R(["✅ Browser updated"])
+
+    U --> CK --> AH --> CTX --> RH --> LLM
     LLM -. tool call .-> MCP
-    MCP -. tool result .-> LLM
+    MCP -. result .-> LLM
     LLM --> SSE --> RP
     SSE --> RA --> R
+
+    class U,R user
+    class CK,AH,CTX,RH,SSE,RP infra
+    class LLM,MCP ai
+    class RA result
 ```
 
 ### Session Persistence (Local Development Only)
@@ -509,11 +501,11 @@ A `RetryingMcpTool` wrapper catches `Session not found` (HTTP -32001) after McpS
   "AzureOpenAI": {
     "Endpoint":           "https://<resource>.openai.azure.com/",
     "ApiKey":             "",          // leave empty → DefaultAzureCredential (managed identity)
-    "ChatDeployment":     "gpt-4.1-mini",
+    "ChatDeployment":     "gpt-4o",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
-    "TopK": 5                          // top-K tools injected per turn via cosine similarity
+    "TopK": 8                          // top-K tools injected per turn via cosine similarity
   },
   "AzureAISearch": {
     "Endpoint":   "https://<search>.search.windows.net",
@@ -552,7 +544,7 @@ Install the following before you begin:
 
 You also need:
 - An **Azure subscription** with permission to create resource groups and assign RBAC roles.
-- An **Azure OpenAI** resource with a `gpt-4.1` (or `gpt-4o`) deployment. Request access at https://aka.ms/oai/access if you don't have one.
+- An **Azure OpenAI** resource with a `gpt-4o` deployment. Request access at https://aka.ms/oai/access if you don't have one.
 
 ---
 
@@ -568,7 +560,7 @@ The `infra/` folder contains a fully automated deployment script that provisions
 
 | Resource | Purpose |
 |----------|---------|
-| Azure OpenAI | `gpt-4.1` model for the AI agent |
+| Azure OpenAI | `gpt-4o` model for the AI agent |
 | Azure AI Search (Basic) | Knowledge-base RAG — index `helpdesk-kb` |
 
 ### Step 1 — Log in to Azure
@@ -664,11 +656,11 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
   "AzureOpenAI": {
     "Endpoint":           "https://<your-resource>.openai.azure.com/",
     "ApiKey":             "<your-api-key>",
-    "ChatDeployment":     "gpt-4.1-mini",
+    "ChatDeployment":     "gpt-4o",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
-    "TopK": 5
+    "TopK": 8
   },
   "AzureAISearch": {
     "Endpoint":   "",
@@ -694,7 +686,7 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
 > - Go to https://portal.azure.com → your Azure OpenAI resource → **Keys and Endpoint**.
 > - `Endpoint` — the URL ending in `.openai.azure.com/`
 > - `ApiKey` — either Key 1 or Key 2
-> - `ChatDeployment` — the **Deployment name** you chose in Azure OpenAI Studio, e.g. `gpt-4.1`
+> - `ChatDeployment` — the **Deployment name** you chose in Azure OpenAI Studio, e.g. `gpt-4o`
 > - `EmbeddingDeployment` — an embedding model deployment in the same resource, e.g. `text-embedding-3-small`
 
 > **No AI Search?** Leave `Endpoint` and `ApiKey` empty. The agent will skip RAG and answer from its training data alone.
@@ -961,7 +953,7 @@ useCopilotChatSuggestions({
 
 - **`az login` required** — run `az login` and `az account set --subscription "<id>"`.
 - **Bicep not installed** — run `az bicep install` then retry.
-- **Region quota** — Azure OpenAI `gpt-4.1` has limited regional availability. Try `swedencentral` or `eastus2` if your region lacks quota.
+- **Region quota** — Azure OpenAI `gpt-4o` has limited regional availability. Try `swedencentral` or `eastus2` if your region lacks quota.
 
 ### Container App revision fails startup probe after a configuration change
 
