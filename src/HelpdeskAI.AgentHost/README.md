@@ -71,34 +71,47 @@ For local development, you can still run the app locally while pointing at Azure
 
 ```mermaid
 flowchart TD
-    BROWSER["Browser / Next.js"]
+    classDef browser fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef core    fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef ctx     fill:#5b21b6,stroke:#7c3aed,color:#fff
+    classDef ep      fill:#1d4ed8,stroke:#2563eb,color:#fff
+    classDef svc     fill:#d97706,stroke:#b45309,color:#fff
+    classDef db      fill:#475569,stroke:#334155,color:#fff
 
-    subgraph AH["HelpdeskAI.AgentHost (port 5200)"]
-        AGUI["MapAGUI /agent"]
-        RAG["AzureAiSearchContextProvider"]
-        FI["IChatClient + FunctionInvocation"]
-        MCP["McpToolsProvider"]
-        HIST["RedisChatHistoryProvider"]
-        ATT["POST /api/attachments"]
-        KB["GET /api/kb/search"]
-        TKP["GET /api/tickets"]
-        DTS["DynamicToolSelectionProvider"]
+    BROWSER(["🌐 Browser / Next.js"])
+
+    subgraph AH["🤖  HelpdeskAI.AgentHost  ·  port 5200"]
+        AGUI["📡 MapAGUI /agent<br/>AG-UI · SSE · Entra auth"]
+        FI["⚙️ IChatClient Pipeline<br/>FunctionInvocationMiddleware"]
+        MCP["🔧 McpToolsProvider<br/>+ RetryingMcpTool"]
+        DTS["⚡ DynamicToolSelectionProvider<br/>TopK=8 · cosine similarity"]
+        RAG["🔍 AzureAiSearchContextProvider"]
+        LTM["🧠 LongTermMemoryContextProvider"]
+        TG["🛡️ TurnGuardContextProvider"]
+        UC["👤 UserContextProvider"]
+        HIST["💾 RedisChatHistoryProvider"]
+        ATT["📎 POST /api/attachments"]
+        KB["🔎 GET /api/kb/search"]
+        TKP["🎫 GET /api/tickets"]
     end
 
-    MCPSRV["McpServer (port 5100)"]
-    AOA["Azure OpenAI"]
-    AIS["Azure AI Search"]
-    ABS["Azure Blob Storage"]
-    ADI["Document Intelligence"]
-    REDIS["Redis"]
+    MCPSRV(["🛠 McpServer  ·  port 5100"])
+    AOA["☁️ Azure OpenAI<br/>gpt-4o · embeddings"]
+    AIS["🔍 Azure AI Search"]
+    ABS["📦 Blob Storage"]
+    ADI["📄 Document Intelligence"]
+    REDIS[("💾 Redis")]
 
     BROWSER -->|POST /agent| AGUI
     BROWSER -->|POST /api/attachments| ATT
     BROWSER -->|GET /api/tickets| TKP
 
-    AGUI --> RAG
+    AGUI --> FI
     AGUI --> HIST
-    RAG --> FI
+    AGUI --> RAG
+    AGUI --> LTM
+    AGUI --> TG
+    AGUI --> UC
     FI --> MCP
     FI --> DTS
     FI -->|chat completions| AOA
@@ -111,6 +124,15 @@ flowchart TD
     ATT -->|OCR| ADI
     ATT -->|staging| REDIS
     HIST -->|read/write| REDIS
+    LTM -->|read/write| REDIS
+
+    class BROWSER browser
+    class AGUI,FI,MCP,DTS core
+    class RAG,LTM,TG,UC ctx
+    class ATT,KB,TKP ep
+    class AOA,AIS,ABS,ADI svc
+    class REDIS db
+    class MCPSRV svc
 ```
 
 ---
@@ -143,11 +165,11 @@ Create `appsettings.Development.json` at project root:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4.1-mini",
+    "ChatDeployment": "gpt-4o",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
-    "TopK": 5
+    "TopK": 8
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
@@ -205,9 +227,9 @@ npm run dev
 |---------|-----|------|----------|---------|
 | `AzureOpenAI` | `Endpoint` | string | ✅ | Azure OpenAI resource endpoint (ends with `/`) |
 | `AzureOpenAI` | `ApiKey` | string | ✅ | Admin API key for Azure OpenAI |
-| `AzureOpenAI` | `ChatDeployment` | string | ✅ | Chat model deployment name (e.g., `gpt-4.1`) |
+| `AzureOpenAI` | `ChatDeployment` | string | ✅ | Chat model deployment name (e.g., `gpt-4o`) |
 | `AzureOpenAI` | `EmbeddingDeployment` | string | ✅ | Embedding model deployment for dynamic tool selection (e.g., `text-embedding-3-small`) |
-| `DynamicTools` | `TopK` | int | | Top-K tools to inject per turn via cosine similarity (default: `5`) |
+| `DynamicTools` | `TopK` | int | | Top-K tools to inject per turn via cosine similarity (default: `8`) |
 | `AzureAISearch` | `Endpoint` | string | ❌ | Search service endpoint (leave empty to skip RAG) |
 | `AzureAISearch` | `ApiKey` | string | ❌ | Search admin key |
 | `AzureAISearch` | `IndexName` | string | | Index name (default: `helpdesk-kb`) |
@@ -261,6 +283,7 @@ HelpdeskAI.AgentHost/
 │   ├── AttachmentContextProvider.cs     # Injects staged attachment content into each turn
 │   ├── LongTermMemoryContextProvider.cs # Injects remembered profile facts and preferences
 │   ├── TurnGuardContextProvider.cs      # Injects current-turn tool history for softer guardrails
+│   ├── UserContextProvider.cs           # Injects authenticated user name and email from Entra headers
 │   └── DynamicToolSelectionProvider.cs  # Per-turn cosine similarity tool selection via embeddings
 ├── Endpoints/
 │   ├── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
@@ -294,14 +317,26 @@ HelpdeskAI.AgentHost/
 
 ```mermaid
 flowchart LR
-    S1["Browser POST /agent"]
-    S2["Deserialize RunAgentInput"]
-    S3["Inject RAG and tool-selection context"]
-    S4["LLM reasoning and tool calls"]
-    S5["Return AG-UI SSE stream"]
-    S6["Browser updates UI"]
+    classDef browser fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef agent   fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef ai      fill:#d97706,stroke:#b45309,color:#fff
 
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    S1(["🌐 Browser<br/>POST /agent"])
+    S2["🔐 Auth + Middleware<br/>Entra · thread ID · telemetry"]
+    S3["🔍 Context Injection<br/>RAG · LTM · user · attachments<br/>+ dynamic tool selection"]
+    S4(["🧠 Azure OpenAI<br/>gpt-4o reasoning"])
+    S5["🛠 MCP Tool Calls<br/>McpServer"]
+    S6["📡 AG-UI SSE Stream<br/>render actions · text chunks"]
+    S7(["✅ Browser updated<br/>cards · alerts · KB"])
+
+    S1 --> S2 --> S3 --> S4
+    S4 -. tool call .-> S5
+    S5 -. result .-> S4
+    S4 --> S6 --> S7
+
+    class S1,S7 browser
+    class S2,S3,S6 agent
+    class S4,S5 ai
 ```
 
 ### RAG (Retrieval-Augmented Generation)

@@ -17,7 +17,7 @@ This folder contains **Bicep Infrastructure as Code** and deployment scripts to 
 | **AgentHost** | Container App | AG-UI agent, RAG pipeline, attachment processing | 0.5 CPU / 1 Gi |
 | **Frontend** | Container App | Next.js UI | 0.5 CPU / 1 Gi |
 | **Azure Cosmos DB** | `Microsoft.DocumentDB/databaseAccounts` | Durable ticket persistence | Serverless |
-| **Azure OpenAI** | Cognitive Services | `gpt-4.1-mini` (chat) + `text-embedding-3-small` (embeddings) | S0 / GlobalStandard |
+| **Azure OpenAI** | Cognitive Services | `gpt-4o` (chat) + `text-embedding-3-small` (embeddings) | S0 / GlobalStandard |
 | **Azure AI Search** | Search Service | Semantic KB search (RAG), `helpdesk-kb` index | Basic (1 replica, 1 partition) |
 
 **Total monthly cost:** ~$200–350 (varies by usage; Container Apps, ACR, Blob Storage, Document Intelligence, and App Insights add to the base OpenAI + AI Search cost)
@@ -50,7 +50,7 @@ Before you start, ensure you have:
    - Assign RBAC roles
    - List/retrieve resource keys
 
-5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have a quota for `gpt-4.1` or `gpt-4o`
+5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have a quota for `gpt-4o`
 
 6. **Logged in to Azure:**
    ```bash
@@ -167,12 +167,12 @@ resource openAiAccount 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   }
 }
 
-resource gpt41Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: openAiAccount
-  name: 'gpt-4.1'
+  name: 'gpt-4o'
   sku: { name: 'GlobalStandard', capacity: 10 }  // TPM
   properties: {
-    model: { format: 'OpenAI', name: 'gpt-4.1', version: '2025-04-14' }
+    model: { format: 'OpenAI', name: 'gpt-4o', version: '2024-11-20' }
   }
 }
 ```
@@ -286,11 +286,11 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<api-key>",
-    "ChatDeployment": "gpt-4.1-mini",
+    "ChatDeployment": "gpt-4o",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
-    "TopK": 5
+    "TopK": 8
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
@@ -313,7 +313,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
 
 ## Regional Availability
 
-**Azure OpenAI `gpt-4.1` is available in:**
+**Azure OpenAI `gpt-4o` is available in:**
 - `swedencentral` ✅ (recommended)
 - `eastus2` ✅
 - `westus2` ✅
@@ -424,14 +424,13 @@ Within the same Container Apps Environment:
 az bicep install
 ```
 
-### "gpt-4.1 quota exceeded"
+### "gpt-4o quota exceeded"
 
 **Error:** `DeploymentFailed: Insufficient quota`
 
-**Fix:** 
+**Fix:**
 1. Try a different region (see [Regional Availability](#regional-availability))
-2. Use `gpt-4o` instead — edit `main.bicep` line 64 to change `gpt-4.1` → `gpt-4o`
-3. Request additional quota at https://aka.ms/oai/access
+2. Request additional quota at https://aka.ms/oai/access
 
 ### "Deploy script exits with 1"
 

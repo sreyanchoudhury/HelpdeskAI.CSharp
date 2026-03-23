@@ -105,40 +105,49 @@ lib/
 
 ```mermaid
 flowchart LR
-    USER["Browser"]
+    classDef user    fill:#2563eb,stroke:#1d4ed8,color:#fff
+    classDef app     fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef route   fill:#5b21b6,stroke:#7c3aed,color:#fff
+    classDef backend fill:#d97706,stroke:#b45309,color:#fff
 
-    subgraph APP["Next.js app (port 3000)"]
-        LAYOUT["app/layout.tsx"]
-        PAGE["app/page.tsx"]
-        CHAT["HelpdeskChat"]
-        ACTIONS["HelpdeskActions"]
+    USER(["👤 Browser<br/>Microsoft Entra SSO"])
+
+    subgraph APP["⚛️  Next.js App  ·  port 3000"]
+        LAYOUT["app/layout.tsx<br/>SessionProvider · fonts"]
+        PAGE["app/page.tsx<br/>CopilotKit provider"]
+        CHAT["HelpdeskChat.tsx<br/>4-page shell · stats chip"]
+        ACTIONS["HelpdeskActions.tsx<br/>7 render actions · suggestions"]
     end
 
-    subgraph ROUTES["Next.js API routes"]
-        CK["api/copilotkit"]
-        KB["api/kb"]
-        TK["api/tickets"]
-        STRT["api/status"]
-        UL["api/upload"]
+    subgraph ROUTES["🔀  API Routes  (proxy layer)"]
+        CK["api/copilotkit<br/>AG-UI bridge"]
+        KB["api/kb<br/>search proxy"]
+        TK["api/tickets<br/>list proxy"]
+        STRT["api/status<br/>health check"]
+        UL["api/upload<br/>file upload"]
     end
 
-    AH["AgentHost (:5200)"]
-    MS["McpServer (:5100)"]
+    AH(["🤖 AgentHost  ·  :5200"])
+    MS(["🛠 McpServer  ·  :5100"])
 
     USER --> LAYOUT --> PAGE --> CHAT --> ACTIONS
     CHAT -->|AG-UI stream| CK
-    CHAT -->|GET /api/kb| KB
-    CHAT -->|GET /api/tickets| TK
-    CHAT -->|GET /api/status| STRT
-    CHAT -->|POST /api/upload| UL
+    CHAT -->|GET| KB
+    CHAT -->|GET| TK
+    CHAT -->|GET| STRT
+    CHAT -->|POST| UL
 
     CK -->|POST /agent| AH
     KB -->|GET /api/kb/search| AH
     UL -->|POST /api/attachments| AH
     TK -->|GET /api/tickets| AH
-    AH -->|GET /tickets| MS
     STRT -->|GET /healthz| AH
     STRT -->|GET /healthz| MS
+
+    class USER user
+    class LAYOUT,PAGE,CHAT,ACTIONS app
+    class CK,KB,TK,STRT,UL route
+    class AH,MS backend
 ```
 
 ---
