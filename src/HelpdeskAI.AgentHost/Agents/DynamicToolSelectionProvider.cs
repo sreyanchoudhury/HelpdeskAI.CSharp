@@ -18,6 +18,10 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
     private readonly int _topK;
     private readonly ILogger<DynamicToolSelectionProvider> _logger;
 
+    // When set, only tools whose Name appears in this list are considered for selection.
+    // Null means all tools from the shared index are eligible (single-agent behaviour).
+    private readonly HashSet<string>? _allowedTools;
+
     // Cache tool selection per unique user query so we embed + rank exactly once per turn.
     // Bounded to 200 entries; cleared when full to prevent unbounded growth.
     private readonly ConcurrentDictionary<string, AIContext> _turnCache = new(StringComparer.Ordinal);
@@ -26,12 +30,16 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
         Task<IReadOnlyList<(AIFunction Tool, float[] Vector)>> toolIndexTask,
         IEmbeddingGenerator<string, Embedding<float>> embedder,
         int topK,
-        ILogger<DynamicToolSelectionProvider> logger)
+        ILogger<DynamicToolSelectionProvider> logger,
+        string[]? allowedTools = null)
     {
         _toolIndexTask = toolIndexTask;
         _embedder = embedder;
         _topK = topK;
         _logger = logger;
+        _allowedTools = allowedTools is { Length: > 0 }
+            ? new HashSet<string>(allowedTools, StringComparer.OrdinalIgnoreCase)
+            : null;
     }
 
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
@@ -49,6 +57,14 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
             _logger.LogWarning(ex, "Tool index not ready — returning empty tool list");
             return new AIContext { Tools = [] };
         }
+
+        // Apply specialist tool filter: if AllowedTools is set, restrict to that subset.
+        if (_allowedTools is not null)
+            toolIndex = toolIndex.Where(x => _allowedTools.Contains(x.Tool.Name)).ToList();
+
+        _logger.LogInformation("[ToolSelection] AllowedTools={Filter}, ToolCount={Count}",
+            _allowedTools is not null ? string.Join(",", _allowedTools) : "ALL",
+            toolIndex.Count);
 
         // If the total tool count is at or below topK, ranking adds nothing — skip the
         // embedding API call entirely and return all tools directly.

@@ -6,12 +6,15 @@ using HelpdeskAI.AgentHost.Agents;
 using HelpdeskAI.AgentHost.Endpoints;
 using HelpdeskAI.AgentHost.Infrastructure;
 using HelpdeskAI.AgentHost.Models;
+using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using System.Diagnostics;
 using StackExchange.Redis;
 using System.ClientModel.Primitives;
 using System.Security.Claims;
@@ -134,7 +137,45 @@ builder.Services.AddChatClient(azureClient)
         services.GetRequiredService<ILoggerFactory>().CreateLogger<UsageCapturingChatClient>()))
     .Use((inner, _) => new AGUIHistoryNormalizingClient(inner))
     .UseLogging()
-    .UseOpenTelemetry();
+    .UseOpenTelemetry(configure: c => c.EnableSensitiveData = !builder.Environment.IsProduction());
+
+// v2 chat client: separate deployment for the multi-agent workflow (falls back to v1 deployment if not set).
+var v2Deployment = !string.IsNullOrWhiteSpace(aiSettings.ChatDeploymentV2)
+    ? aiSettings.ChatDeploymentV2
+    : aiSettings.ChatDeployment;
+
+IChatClient azureClientV2 = string.IsNullOrWhiteSpace(aiSettings.ApiKey)
+    ? new AzureOpenAIClient(new Uri(aiSettings.Endpoint), new DefaultAzureCredential(), chatClientOptions)
+          .GetChatClient(v2Deployment).AsIChatClient()
+    : new AzureOpenAIClient(
+              new Uri(aiSettings.Endpoint),
+              new Azure.AzureKeyCredential(aiSettings.ApiKey), chatClientOptions)
+          .GetChatClient(v2Deployment).AsIChatClient();
+
+// Build the v2 pipeline with the same middleware stack but keyed separately so DI doesn't conflict.
+// Additional middleware vs v1:
+//   - FrontendToolCapturingChatClient: captures CopilotKit render tools (show_*, suggest_*)
+//     from the AG-UI request so the orchestrator can call them despite MAF's AgentRunOptions: null.
+//   - ThreadIdPreservingChatClient: guards AsyncLocal<ThreadIdContext> across MAF workflow
+//     handoff boundaries so attachment/history providers resolve the correct session.
+builder.Services.AddKeyedSingleton("v2-chat", (services, _) =>
+{
+    IChatClient pipeline = new ChatClientBuilder(azureClientV2)
+        .UseFunctionInvocation()
+        .Use((inner, _) => new FrontendToolCapturingChatClient(inner))
+        .Use((inner, svc) => new ThreadIdPreservingChatClient(
+            inner, svc.GetRequiredService<ILoggerFactory>().CreateLogger<ThreadIdPreservingChatClient>()))
+        .Use((inner, svc) => new UsageCapturingChatClient(
+            inner,
+            svc.GetRequiredService<IRedisService>(),
+            svc.GetRequiredService<IOptions<ConversationSettings>>(),
+            svc.GetRequiredService<ILoggerFactory>().CreateLogger<UsageCapturingChatClient>()))
+        .Use((inner, _) => new AGUIHistoryNormalizingClient(inner))
+        .UseLogging()
+        .UseOpenTelemetry()
+        .Build(services);
+    return pipeline;
+});
 
 var allowedOrigins = cfg["AllowedOrigins"]?.Split(',', StringSplitOptions.RemoveEmptyEntries)
     ?? ["http://localhost:3000"];
@@ -148,7 +189,19 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
 }));
 
 builder.Services.AddMemoryCache();
-builder.Services.AddOpenTelemetry().UseAzureMonitor();
+
+// Custom ActivitySource for agent invocation spans — emits "invoke_agent" spans
+// that populate the Agents (Preview) view in Azure Monitor Application Insights.
+var agentActivitySource = new ActivitySource("HelpdeskAI.AgentHost");
+
+builder.Services.AddOpenTelemetry()
+    .UseAzureMonitor()
+    .WithTracing(tracing => tracing
+        .AddSource("*Microsoft.Extensions.AI")
+        .AddSource("*Microsoft.Extensions.Agents*")
+        .AddSource("HelpdeskAI.AgentHost"))
+    .WithMetrics(metrics => metrics
+        .AddMeter("*Microsoft.Agents.AI"));
 
 // Redis is ephemeral/non-blocking — exclude it from the liveness check so
 // /healthz returns 200 whenever the app is running, regardless of Redis state.
@@ -281,6 +334,16 @@ app.Use(async (context, next) =>
 
             ThreadIdContext.Set(threadId);
             using var scope = agentLogger.BeginScope(new { threadId, userEmail, latestUserMessage });
+
+            // Emit an invoke_agent span that populates the Agents (Preview) view in App Insights.
+            var agentName = context.Request.Path.Value?.Contains("/v2") == true ? "helpdesk-v2" : "HelpdeskAgent";
+            using var agentSpan = agentActivitySource.StartActivity($"invoke_agent {agentName}");
+            agentSpan?.SetTag("gen_ai.operation.name", "invoke_agent");
+            agentSpan?.SetTag("gen_ai.agent.name", agentName);
+            agentSpan?.SetTag("gen_ai.agent.id", agentName);
+            agentSpan?.SetTag("gen_ai.system", "openai");
+            agentSpan?.SetTag("thread.id", threadId);
+
             await next(context);
             return;
         }
@@ -313,9 +376,25 @@ var searchProvider = new AzureAiSearchContextProvider(
     app.Services.GetRequiredService<IKnowledgeSearch>(),
     loggerFactory.CreateLogger<AzureAiSearchContextProvider>());
 
+// v1 uses LoadAndClearAsync (peek: false) — single agent, clear after injection.
 var attachmentProvider = new AttachmentContextProvider(
     app.Services.GetRequiredService<IAttachmentStore>(),
     loggerFactory.CreateLogger<AttachmentContextProvider>());
+
+// v2 diagnostic_agent uses a CLEARING provider (LoadAndClearAsync). This is safe because
+// MAF resolves providers per-agent-invocation, and the orchestrator (peek) always runs first
+// in a fresh conversation. In continuation scenarios where diagnostic_agent is already active,
+// it clears the attachment — which is fine because it's already analyzing it.
+var v2DiagnosticAttachmentProvider = new AttachmentContextProvider(
+    app.Services.GetRequiredService<IAttachmentStore>(),
+    loggerFactory.CreateLogger<AttachmentContextProvider>(),
+    peek: false);  // clearing — breaks the loop
+
+// v2 orchestrator uses PEEK (reads without clearing) so it can see the attachment to route.
+var v2OrchestratorAttachmentProvider = new AttachmentContextProvider(
+    app.Services.GetRequiredService<IAttachmentStore>(),
+    loggerFactory.CreateLogger<AttachmentContextProvider>(),
+    peek: true);
 
 // Tool index is built AFTER the HTTP server starts (via ApplicationStarted) so the
 // startup health probe passes immediately. Chat turns await this task (60 s guard).
@@ -332,6 +411,76 @@ var toolSelectionProvider = new DynamicToolSelectionProvider(
 var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider);
 
 app.MapAGUI("/agent", agent).RequireAuthorization();
+
+// === Multi-Agent Workflow — /agent/v2 (additive, single-agent route above is unchanged) ===
+// Each specialist gets a DynamicToolSelectionProvider scoped to its own tool subset.
+// The shared toolIndexTcs.Task holds ALL embedded tools; AllowedTools filters per specialist.
+var ticketToolProvider = new DynamicToolSelectionProvider(
+    toolIndexTcs.Task, embeddingGenerator, topK,
+    loggerFactory.CreateLogger<DynamicToolSelectionProvider>(),
+    allowedTools: TicketAgentFactory.AllowedTools);
+
+var kbToolProvider = new DynamicToolSelectionProvider(
+    toolIndexTcs.Task, embeddingGenerator, topK,
+    loggerFactory.CreateLogger<DynamicToolSelectionProvider>(),
+    allowedTools: KBAgentFactory.AllowedTools);
+
+var incidentToolProvider = new DynamicToolSelectionProvider(
+    toolIndexTcs.Task, embeddingGenerator, topK,
+    loggerFactory.CreateLogger<DynamicToolSelectionProvider>(),
+    allowedTools: IncidentAgentFactory.AllowedTools);
+
+// Frontend tool forwarding: captures CopilotKit render tools (show_ticket_created, etc.)
+// from the AG-UI request boundary and provides them to ALL workflow agents. Works around the
+// MAF limitation where WorkflowHostAgent passes AgentRunOptions: null to all agents.
+var frontendToolProvider = new FrontendToolForwardingProvider(
+    loggerFactory.CreateLogger<FrontendToolForwardingProvider>());
+
+var chatClientV2 = app.Services.GetRequiredKeyedService<IChatClient>("v2-chat");
+
+var helpdeskWorkflow = HelpdeskWorkflowFactory.BuildWorkflow(
+    chatClientV2,
+    userProvider, memoryProvider, turnGuardProvider,
+    searchProvider, v2DiagnosticAttachmentProvider,  // diagnostic_agent: CLEAR (breaks loop)
+    v2OrchestratorAttachmentProvider,                // orchestrator: PEEK (sees attachment to route)
+    frontendToolProvider,
+    ticketToolProvider, kbToolProvider, incidentToolProvider,
+    loggerFactory);
+
+// Use AIAgentBuilder.Use() middleware to capture CopilotKit frontend tools from
+// AgentRunOptions BEFORE WorkflowHostAgent drops them (passes null to children).
+// This solves the chicken-and-egg problem: FrontendToolCapturingChatClient in the IChatClient
+// pipeline never sees the tools because they're stripped at the agent level.
+var rawWorkflowAgent = helpdeskWorkflow.AsAIAgent("helpdesk-v2", "HelpdeskAI Multi-Agent");
+var toolCapturingLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost.ToolCapturingMiddleware");
+var wrappedWorkflowAgent = new AIAgentBuilder(rawWorkflowAgent)
+    .Use(async (messages, session, options, next, ct) =>
+    {
+        // Capture CopilotKit frontend tools from the AG-UI AgentRunOptions before
+        // WorkflowHostAgent strips them by passing null to child agents.
+        if (options is ChatClientAgentRunOptions crao
+            && crao.ChatOptions?.Tools is { Count: > 0 } tools)
+        {
+            var frontendTools = tools
+                .Where(t => t.Name.StartsWith("show_", StringComparison.OrdinalIgnoreCase)
+                         || t.Name.StartsWith("suggest_", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            toolCapturingLogger.LogInformation(
+                "[ToolCapture] Captured {FrontendCount}/{TotalCount} CopilotKit frontend tools from AgentRunOptions",
+                frontendTools.Count, tools.Count);
+            if (frontendTools.Count > 0)
+                FrontendToolForwardingProvider.Capture(frontendTools);
+        }
+        else
+        {
+            toolCapturingLogger.LogWarning(
+                "[ToolCapture] No tools in AgentRunOptions (options type: {OptionsType})",
+                options?.GetType().Name ?? "null");
+        }
+        await next(messages, session, options, ct);
+    })
+    .Build(app.Services);
+app.MapAGUI("/agent/v2", wrappedWorkflowAgent).RequireAuthorization();
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
 // Eval endpoint is not safe for production — exposes synchronous agent execution without auth.

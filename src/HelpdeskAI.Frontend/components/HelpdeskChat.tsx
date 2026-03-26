@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
 import { CopilotChat, CopilotKitCSSProperties, type InputProps } from "@copilotkit/react-ui";
 import { useCopilotContext } from "@copilotkit/react-core";
 import { signOut } from "next-auth/react";
@@ -8,6 +8,7 @@ import "@copilotkit/react-ui/styles.css";
 import { HelpdeskActions, type CurrentUser, Ticket } from "./HelpdeskActions";
 import type { AttachedFile } from "./AttachmentBar";
 import { PRIORITY_COLOR, CATEGORY_ICON, KB_CATEGORY_COLOR } from "../lib/constants";
+import { CitationBadge, KB_CITATION_REGEX } from "./CitationBadge";
 
 type Page = "chat" | "tickets" | "kb" | "settings";
 
@@ -311,6 +312,16 @@ function KbPage() {
 function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [status, setStatus] = useState<{ mcp: string; agent: string; checkedAt?: string } | null>(null);
   const [checking, setChecking] = useState(true);
+  const [agentMode, setAgentMode] = useState<"v1" | "v2">(() => {
+    if (typeof window === "undefined") return "v1";
+    return (localStorage.getItem("agent-mode") as "v1" | "v2") ?? "v1";
+  });
+  const handleModeSwitch = (mode: "v1" | "v2") => {
+    localStorage.setItem("agent-mode", mode);
+    document.cookie = `agent-mode=${mode};path=/;samesite=strict;max-age=31536000`;
+    setAgentMode(mode);
+    window.location.reload();
+  };
   const initials = currentUser.name
     .split(/\s+/)
     .filter(Boolean)
@@ -379,6 +390,39 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
           </div>
         </div>
 
+        {/* Agent Mode Toggle */}
+        <div style={{
+          background: "#0f1117", border: "1px solid #ffffff12",
+          borderRadius: 12, padding: "20px 24px",
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 16 }}>Agent Mode</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            {(["v1", "v2"] as const).map(mode => {
+              const active = agentMode === mode;
+              const label = mode === "v1" ? "Single Agent (v1)" : "Multi-Agent Workflow (v2)";
+              return (
+                <button key={mode} onClick={() => handleModeSwitch(mode)} style={{
+                  flex: 1, padding: "12px 14px", borderRadius: 8,
+                  border: `1px solid ${active ? "#3d5afe" : "#ffffff12"}`,
+                  background: active ? "#3d5afe14" : "#ffffff04",
+                  cursor: active ? "default" : "pointer",
+                  textAlign: "left",
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: active ? "#3d5afe" : "#9098b0" }}>{label}</div>
+                  <div style={{ fontSize: 11, color: "#5a6280", marginTop: 4, lineHeight: 1.4 }}>
+                    {mode === "v1"
+                      ? "All tools in one agent. Model: gpt-4o."
+                      : "Orchestrator + specialist agents. Model: gpt-5.2-chat."}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: "#5a6280", marginTop: 10 }}>
+            Switching modes reloads the page and starts a new conversation. v2 is experimental.
+          </div>
+        </div>
+
         {/* Backend Status */}
         <div style={{
           background: "#0f1117", border: "1px solid #ffffff12",
@@ -437,8 +481,13 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
             {([
               ["App",      "HelpdeskAI"],
               ["Frontend", "Next.js 16 + CopilotKit 1.54"],
-              ["Agent",    "Microsoft Agents Framework"],
-              ["AI Model", "Azure OpenAI (gpt-4o)"],
+              ["Agent",    agentMode === "v2"
+                ? "MAF Workflow (Orchestrator + 4 Specialists)"
+                : "Microsoft Agents Framework (Single Agent)"],
+              ["AI Model", agentMode === "v2"
+                ? "Azure OpenAI (gpt-5.2-chat)"
+                : "Azure OpenAI (gpt-4o)"],
+              ["Route",    agentMode === "v2" ? "/agent/v2" : "/agent"],
               ["Search",   "Azure AI Search (Basic tier)"],
             ] as [string, string][]).map(([label, value]) => (
               <div key={label} style={{ display: "flex", gap: 12, fontSize: 12 }}>
@@ -463,9 +512,10 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
           </div>
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
             {([
-              ["✅ Recommended", "gpt-4o, gpt-4o-mini, gpt-4-turbo"],
+              ["✅ v1 (Single Agent)", "gpt-4o, gpt-4o-mini, gpt-4-turbo"],
+              ["✅ v2 (Workflow)", "gpt-5.2-chat (multi-agent orchestration)"],
               ["⚠️  Use with caution", "model-router (unpredictable routing latency)"],
-              ["❌ Not compatible", "Models without tool calling, or those that don't follow agentic instruction chains (e.g. gpt-5.2-chat)"],
+              ["❌ Not compatible", "Models without tool calling or agentic instruction following"],
             ] as [string, string][]).map(([label, value]) => (
               <div key={label} style={{ fontSize: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <span style={{ color: "#5a6280", minWidth: 140, flexShrink: 0 }}>{label}</span>
@@ -658,6 +708,39 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
   );
 }
 
+
+// ── Citation markdown renderers ───────────────────────────────────────────────
+// Processes [KB-xxx] patterns in agent markdown and renders them as styled badges.
+function processCitationChildren(children: React.ReactNode): React.ReactNode {
+  if (!children) return children;
+  if (typeof children === "string") {
+    const regex = new RegExp(KB_CITATION_REGEX.source, "g");
+    if (!regex.test(children)) return children;
+    // Reset regex after test
+    regex.lastIndex = 0;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(children)) !== null) {
+      if (match.index > lastIndex) parts.push(children.slice(lastIndex, match.index));
+      parts.push(<CitationBadge key={`c-${match.index}`} id={match[1]} />);
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < children.length) parts.push(children.slice(lastIndex));
+    return <>{parts}</>;
+  }
+  if (Array.isArray(children)) return children.map((c, i) => <React.Fragment key={i}>{processCitationChildren(c)}</React.Fragment>);
+  return children;
+}
+
+const citationTagRenderers = {
+  p: ({ children, ...props }: { children?: React.ReactNode; [k: string]: unknown }) => (
+    <p {...(props as React.HTMLAttributes<HTMLParagraphElement>)}>{processCitationChildren(children)}</p>
+  ),
+  li: ({ children, ...props }: { children?: React.ReactNode; [k: string]: unknown }) => (
+    <li {...(props as React.LiHTMLAttributes<HTMLLIElement>)}>{processCitationChildren(children)}</li>
+  ),
+};
 
 export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const [page, setPage]       = useState<Page>("chat");
@@ -904,6 +987,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
               <div className="hd-chat-wrapper" style={ckTheme}>
                 <CopilotChat
                   Input={CustomChatInput}
+                  markdownTagRenderers={citationTagRenderers}
                   labels={{
                     title: "IT Support",
                     initial: `Hi ${currentUser.name.split(" ")[0]}! What IT issue can I help you with today?`,

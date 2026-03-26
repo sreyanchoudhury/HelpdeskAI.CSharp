@@ -76,15 +76,17 @@ internal sealed class AzureAiSearchService(
                     continue;
                 }
 
+                var id = r.Document.TryGetValue("id", out var i) ? i?.ToString() : null;
                 var title = r.Document.TryGetValue("title", out var t) ? t?.ToString() : "Untitled";
                 var content = r.Document.TryGetValue("content", out var c) ? c?.ToString() : "";
                 var snippet = r.SemanticSearch?.Captions?.FirstOrDefault()?.Text
                               ?? (content?.Length > 400 ? content[..400] + "…" : content);
-                chunks.Add($"### {title}\n{snippet}");
+                var idTag = !string.IsNullOrWhiteSpace(id) ? $" [{id}]" : "";
+                chunks.Add($"### {title}{idTag}\n{snippet}");
             }
 
             var result = chunks.Count == 0 ? null
-                : "## Relevant IT Knowledge Base Articles\n\n" + string.Join("\n\n---\n\n", chunks);
+                : "## RAG Context (cite as [KB-ID] when using)\n\n" + string.Join("\n\n---\n\n", chunks);
 
             cache.Set(cacheKey, result, CacheTtl);
             return result;

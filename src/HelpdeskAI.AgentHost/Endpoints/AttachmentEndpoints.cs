@@ -84,6 +84,8 @@ internal static class AttachmentEndpoints
         if (!request.Headers.TryGetValue("X-Session-Id", out var sid) || string.IsNullOrWhiteSpace(sid))
             return Results.BadRequest(new { error = "X-Session-Id header is required." });
         var sessionId = sid.ToString();
+        logger.LogInformation("[Upload] Received '{FileName}' ({Ext}) for session '{SessionId}'",
+            file.FileName, ext, sessionId);
 
         string? extractedText = null;
         string? imageBase64 = null;

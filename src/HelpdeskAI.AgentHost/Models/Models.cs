@@ -6,7 +6,9 @@ public sealed class AzureOpenAiSettings
 {
     public string Endpoint { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
-    public string ChatDeployment { get; set; } = "gpt-4.1";
+    public string ChatDeployment { get; set; } = "gpt-4o";
+    /// <summary>Optional separate deployment for the v2 multi-agent workflow. Falls back to <see cref="ChatDeployment"/> if empty.</summary>
+    public string ChatDeploymentV2 { get; set; } = string.Empty;
     public string EmbeddingDeployment { get; set; } = "text-embedding-3-small";
 }
 

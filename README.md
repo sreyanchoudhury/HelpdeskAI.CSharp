@@ -1,6 +1,6 @@
 ﻿# HelpdeskAI
 
-An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events. Each response shows a `⏱ latency · 📥 in / 📤 out` token stats chip in the header. Phase 2b adds Microsoft Entra SSO on the frontend and bearer-token validation in AgentHost, so the app can run locally or on Azure while authenticating against the same enterprise identity boundary.
+An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. Ships with two agent modes — a single-agent **v1** route and a multi-agent **v2** handoff workflow powered by the **Microsoft Agents Framework (MAF)**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events. Each response shows a `⏱ latency · 📥 in / 📤 out` token stats chip in the header. Microsoft Entra SSO protects the frontend and bearer-token validation secures AgentHost, so the app can run locally or on Azure while authenticating against the same enterprise identity boundary.
 
 <table>
   <tr>
@@ -17,10 +17,12 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 
 ## Current State Snapshot
 
+- **Two agent modes** — v1 (single agent) and v2 (multi-agent handoff workflow with orchestrator, diagnostic, ticket, KB, and incident specialists). Toggle via the Settings page.
 - Microsoft Entra sign-in is active on the frontend and AgentHost validates bearer tokens against the exposed `api://<clientId>` audience.
 - Tickets are persisted in Azure Cosmos DB rather than the original in-memory store.
 - The knowledge base supports both `search_kb_articles` and `index_kb_article`, and the Azure AI Search index now includes `tags` and `indexedAt`.
 - AgentHost persists long-term profile memory and simple `remember that ...` preferences in Redis.
+- **App Insights Agents (Preview)** telemetry — `invoke_agent` spans with `gen_ai.*` semantic attributes are emitted for Azure Monitor.
 - Local development can still run against Azure-hosted dependencies directly; a separate local sandbox is not required.
 
 ## Configuration & Environment Setup
@@ -120,7 +122,8 @@ flowchart TD
     end
 
     subgraph AgentHost["🤖  AgentHost  ·  :5200"]
-        AH1["📡 MapAGUI /agent<br/>AG-UI · SSE streaming"]
+        AH1["📡 MapAGUI /agent<br/>v1 · single agent · SSE"]
+        AH1V2["📡 MapAGUI /agent/v2<br/>v2 · MAF workflow · SSE"]
         AH2["🔐 Request Middleware<br/>Entra auth · thread ID · telemetry"]
         AH3["📎 AttachmentContextProvider"]
         AH4["🔍 AzureAiSearchContextProvider<br/>RAG"]
@@ -129,6 +132,8 @@ flowchart TD
         AH7["⚡ DynamicToolSelectionProvider<br/>TopK=8 · cosine similarity"]
         AH8["🧠 LongTermMemoryContextProvider"]
         AH9["👤 UserContextProvider"]
+        ORCH["🎯 Orchestrator<br/>routes to specialists"]
+        SPEC["🔀 Specialists<br/>diagnostic · ticket · KB · incident"]
     end
 
     subgraph McpServer["🛠  McpServer  ·  :5100"]
@@ -147,9 +152,12 @@ flowchart TD
     end
 
     Browser -->|POST /agent + SSE| AH1
+    Browser -->|POST /agent/v2 + SSE| AH1V2
     Browser -->|POST /api/attachments| AH3
 
     AH1 --> AH2
+    AH1V2 --> AH2
+    AH1V2 --> ORCH --> SPEC
     AH2 --> AH3
     AH2 --> AH4
     AH2 --> AH5
@@ -169,7 +177,7 @@ flowchart TD
     AH8 --> REDIS
 
     class FE1,FE2 fe
-    class AH1,AH2,AH3,AH4,AH5,AH6,AH7,AH8,AH9 ah
+    class AH1,AH1V2,AH2,AH3,AH4,AH5,AH6,AH7,AH8,AH9,ORCH,SPEC ah
     class MS1,MS2,MS3 mcp
     class COSMOS,REDIS db
     class AOA,AIS,ABS,ADI svc
@@ -800,7 +808,8 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/agent` | AG-UI agent endpoint (SSE stream) |
+| `POST` | `/agent` | AG-UI v1 single-agent endpoint (SSE stream) |
+| `POST` | `/agent/v2` | AG-UI v2 multi-agent workflow endpoint (SSE stream) |
 | `GET`  | `/agent/info` | Diagnostic — library names, runtime info |
 | `GET`  | `/agent/usage?threadId=` | Token usage for a session — `{promptTokens, completionTokens}` from Redis |
 | `GET`  | `/healthz` | Health (includes Redis ping) |

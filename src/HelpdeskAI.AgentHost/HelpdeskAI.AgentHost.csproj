@@ -20,6 +20,7 @@
     <!-- LAYER 2 - Microsoft Agent Framework (AG-UI hosting, NOT Semantic Kernel) -->
     <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.0.0-preview.260311.1" />
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-rc4" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-rc4" />
 
     <!-- LAYER 3 - Azure SDK -->
     <PackageReference Include="Azure.AI.DocumentIntelligence" Version="1.0.0" />

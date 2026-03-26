@@ -8,7 +8,8 @@ namespace HelpdeskAI.AgentHost.Agents;
 
 internal sealed class AttachmentContextProvider(
     IAttachmentStore attachmentStore,
-    ILogger<AttachmentContextProvider> log) : AIContextProvider
+    ILogger<AttachmentContextProvider> log,
+    bool peek = false) : AIContextProvider
 {
     // 5 000 chars ≈ ~1 100 tokens — covers ~2–3 pages; sufficient for most helpdesk attachments.
     private const int MaxExtractedTextLength = 5_000;
@@ -19,14 +20,22 @@ internal sealed class AttachmentContextProvider(
     {
         // Use the request-scoped thread ID so attachments are isolated per conversation.
         // No threadId → inject nothing; avoids reading another session's staged attachments.
-        if (ThreadIdContext.Current is not { Length: > 0 } tid)
+        var threadId = ThreadIdContext.Current;
+        log.LogInformation("[AttachmentCtx] peek={Peek}, ThreadId={ThreadId}",
+            peek, threadId ?? "(null)");
+
+        if (threadId is not { Length: > 0 } tid)
             return new AIContext();
         var sessionId = tid;
 
         IReadOnlyList<ProcessedAttachment> attachments;
         try
         {
-            attachments = await attachmentStore.LoadAndClearAsync(sessionId, cancellationToken);
+            // peek=true: orchestrator reads without clearing so downstream specialists still see it.
+            // peek=false (default): consuming read — clears the store after injection.
+            attachments = peek
+                ? await attachmentStore.LoadAsync(sessionId, cancellationToken)
+                : await attachmentStore.LoadAndClearAsync(sessionId, cancellationToken);
         }
         catch (Exception ex)
         {

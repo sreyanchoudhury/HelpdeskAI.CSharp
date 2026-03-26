@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { CopilotKit } from "@copilotkit/react-core";
 import { HelpdeskChat } from "@/components/HelpdeskChat";
 import { signIn, useSession } from "next-auth/react";
@@ -28,29 +28,41 @@ export default function Home() {
   const sessionError = typedSession?.error;
   const accessToken = typedSession?.accessToken;
   const needsReauth = status === "authenticated" && (!session?.user?.email || !accessToken || !!sessionError);
+  // Session expired or user never signed in — redirect to Entra login.
+  const needsSignIn = status === "unauthenticated";
+
+  // All hooks MUST be called before any early returns (React Rules of Hooks).
+  // Read agent mode from localStorage (set by the Settings toggle).
+  // useMemo ensures this is read once on mount — mode switch triggers a full page reload.
+  const agentName = useMemo(() => {
+    if (typeof window === "undefined") return "HelpdeskAgent";
+    return localStorage.getItem("agent-mode") === "v2" ? "helpdesk-v2" : "HelpdeskAgent";
+  }, []);
 
   useEffect(() => {
-    if (needsReauth) {
+    if (needsReauth || needsSignIn) {
       void signIn("azure-ad", { callbackUrl: "/" });
     }
-  }, [needsReauth]);
+  }, [needsReauth, needsSignIn]);
 
   if (status === "loading") {
     return <LoadingScreen message="Loading your HelpdeskAI session..." />;
   }
 
-  if (needsReauth) {
-    return <LoadingScreen message="Refreshing your Microsoft Entra session..." />;
+  if (needsReauth || needsSignIn) {
+    return <LoadingScreen message="Redirecting to Microsoft Entra ID..." />;
   }
 
   if (!session?.user?.email) {
+    // Fallback: session exists but email is missing — force re-auth.
+    void signIn("azure-ad", { callbackUrl: "/" });
     return <LoadingScreen message="Redirecting to Microsoft Entra ID..." />;
   }
 
   return (
     <CopilotKit
       runtimeUrl="/api/copilotkit"
-      agent="HelpdeskAgent"
+      agent={agentName}
       showDevConsole
       enableInspector
       onError={(event) => {
