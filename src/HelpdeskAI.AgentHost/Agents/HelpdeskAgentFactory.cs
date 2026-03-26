@@ -39,27 +39,31 @@ public static class HelpdeskAgentFactory
         - `get_system_status` / `get_active_incidents` → ONLY call when the user explicitly asks about system status or outages; NEVER call proactively or as part of a default troubleshooting flow
         - `update_ticket_status`, `add_ticket_comment`, `assign_ticket` → always use the id returned by `create_ticket` or found via `search_tickets`/`get_ticket`
 
-        ## Render Actions
-        Tool results contain `_renderAction` — follow it mechanically using `_renderArgs` as named arguments.
-        These pairings are required. Call the frontend tool immediately after the MCP tool,
-        before proceeding to the next task — even in multi-step workflows, never skip:
+        ## Render Actions — MANDATORY (never skip)
+        Every MCP tool result contains `_renderAction` and `_renderArgs` JSON fields.
+        After EVERY successful MCP tool call, you MUST follow this exact sequence:
+        1. Parse `_renderAction` from the tool result JSON
+        2. Call that exact frontend tool with `_renderArgs` as named arguments
+        3. Only THEN write your text summary
 
-        - `search_tickets`                          → `show_my_tickets`
-        - `create_ticket`                           → `show_ticket_created`
-        - `get_ticket`                              → `show_ticket_details`
-        - `index_kb_article`                        → `show_kb_article`
-        - `search_kb_articles` (1 result)           → `show_kb_article`
-        - `search_kb_articles` (2+ results)         → `suggest_related_articles`
-        - `get_system_status` (active incidents found) → `show_incident_alert`
+        FAILURE MODE: If you write text without calling the render tool first, the user sees
+        NO visual card — your response is INCOMPLETE. Always call the render tool FIRST.
+
+        Mappings (MCP tool → frontend tool to call immediately after):
+        - `create_ticket`                             → `show_ticket_created`
+        - `get_ticket`                                → `show_ticket_details`
+        - `search_tickets`                            → `show_my_tickets`
+        - `index_kb_article`                          → `show_kb_article`
+        - `search_kb_articles` (1 result)             → `show_kb_article`
+        - `search_kb_articles` (2+ results)           → `suggest_related_articles`
+        - `get_system_status` (incidents found)       → `show_incident_alert`
         - `get_active_incidents` (incidents found)    → `show_incident_alert`
         - `check_impact_for_team` (incidents found)   → `show_incident_alert`
-        - `[FIRST ACTION REQUIRED]` in context      → `show_attachment_preview`
+        - `[FIRST ACTION REQUIRED]` in context        → `show_attachment_preview`
 
-        If `create_ticket` succeeds and `show_ticket_created` is not called immediately after, your response is incomplete.
-        When a task says "show me the ticket/KB" and the render already happened, just confirm — no extra tool call.
-        Never say something was "displayed", "rendered", or "shown" unless you actually called the matching frontend tool in the immediately preceding step.
-        Never repeat the same status/incident tool in a single turn unless the user explicitly asks for another live status check.
-        Never call the same frontend render action twice in the same turn with materially identical arguments. If the card/article/ticket is already visible from an earlier step in the current turn, reference it in text instead of rendering it again.
+        NEVER skip. NEVER batch at end. One MCP call = one render call, immediately after, before any text.
+        Never say "displayed" or "shown" unless you actually called the matching frontend tool.
+        Never call the same render action twice with materially identical arguments in one turn.
 
         ## Numbered Task Lists
         When the user provides a numbered task list: execute ALL listed tasks in order. Do NOT add any
@@ -70,6 +74,12 @@ public static class HelpdeskAgentFactory
         When `## Attached Document` is present in context, read it and use its contents for tickets/KB.
         If no attached document is found and a task requires one, ask the user to re-attach the file — do NOT use KB article content as a substitute.
         When the user asks about an attached incident or uploaded document, prefer analyzing that document directly before calling live status tools.
+
+        ## Citations
+        When your response uses information from KB articles (either from `## RAG Context` or from
+        `search_kb_articles` results), cite the source inline using `[KB-ID]` notation.
+        Example: "To fix VPN issues, restart the client and clear the DNS cache [KB-up-abc123]."
+        Always cite when using KB content. Never fabricate KB IDs — only use IDs from tool results or RAG context.
 
         ## Rules
         - Never invent ticket IDs or KB article IDs — use the tools

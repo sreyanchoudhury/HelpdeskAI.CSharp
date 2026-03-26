@@ -6,7 +6,8 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 ## What It Does
 
-- **Hosts the AI agent** — AG-UI endpoint at `/agent` (Server-Sent Events streaming)
+- **Hosts the AI agent** — AG-UI endpoint at `/agent` (v1 single agent) and `/agent/v2` (multi-agent handoff workflow via MAF)
+- **Multi-agent workflow (v2)** — orchestrator routes to specialist agents (diagnostic, ticket, KB, incident) using MAF `HandoffsWorkflow`; each specialist has scoped MCP tools and context providers
 - **Integrates Azure OpenAI** — calls the configured chat deployment for completions; `gpt-4o` and `gpt-4o-mini` are the current recommended choices for reliable render-action follow-through
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
 - **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticketing, system status monitoring, and KB search/index flows
@@ -14,6 +15,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 - **Validates Microsoft Entra bearer tokens** — `/agent` and frontend-facing API routes require a valid access token before user context is derived from claims
 - **Persists long-term user memory** — profile facts and simple `remember that ...` preferences are stored in Redis and injected back into the prompt
 - **Captures turn-level telemetry** — repeated tool calls and latest user message are logged with per-turn scope data for Azure investigation
+- **App Insights Agents (Preview)** — custom `ActivitySource` emits `invoke_agent` spans with `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.agent.id` semantic attributes for the Azure Monitor Agents preview view
 
 ---
 
@@ -278,9 +280,16 @@ HelpdeskAI.AgentHost/
 ├── Abstractions/
 │   └── Abstractions.cs             # IContextProvider, AgentOptions, IBlobStorageService, IAttachmentStore interfaces
 ├── Agents/
-│   ├── HelpdeskAgentFactory.cs          # Creates the main agent (IChatClient pipeline)
+│   ├── HelpdeskAgentFactory.cs          # Creates the v1 single agent (IChatClient pipeline)
+│   ├── HelpdeskWorkflowFactory.cs       # Assembles the v2 multi-agent MAF handoff workflow
+│   ├── OrchestratorAgentFactory.cs      # V2 orchestrator — routes to specialist agents
+│   ├── DiagnosticAgentFactory.cs        # V2 specialist — attachment analysis, incident diagnosis
+│   ├── TicketAgentFactory.cs            # V2 specialist — ticket creation, assignment, updates
+│   ├── KBAgentFactory.cs               # V2 specialist — knowledge base search and indexing
+│   ├── IncidentAgentFactory.cs          # V2 specialist — system status and incident checks
+│   ├── FrontendToolForwardingProvider.cs # Captures CopilotKit frontend tools for v2 agents
 │   ├── AzureAiSearchContextProvider.cs  # RAG injection before each LLM call
-│   ├── AttachmentContextProvider.cs     # Injects staged attachment content into each turn
+│   ├── AttachmentContextProvider.cs     # Injects staged attachment content (peek or clear mode)
 │   ├── LongTermMemoryContextProvider.cs # Injects remembered profile facts and preferences
 │   ├── TurnGuardContextProvider.cs      # Injects current-turn tool history for softer guardrails
 │   ├── UserContextProvider.cs           # Injects authenticated user name and email from Entra headers
@@ -365,7 +374,8 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 
 | Method | Path | Role |
 |--------|------|------|
-| `POST` | `/agent` | AG-UI streaming endpoint (SSE) |
+| `POST` | `/agent` | AG-UI v1 streaming endpoint — single agent (SSE) |
+| `POST` | `/agent/v2` | AG-UI v2 streaming endpoint — multi-agent MAF workflow (SSE) |
 | `POST` | `/agent/eval` | Synchronous eval endpoint for `HelpdeskAI.Evaluation` test harness — enabled for non-production environments only |
 | `GET` | `/healthz` | Liveness / readiness probe |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |

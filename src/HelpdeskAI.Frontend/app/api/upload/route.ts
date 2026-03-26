@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/server-auth";
 
-// AGENT_URL in next.config carries the /agent suffix (for CopilotKit).
-// Strip it so we can reach /api/attachments on the same host.
-const AGENT_BASE = (process.env.AGENT_URL ?? "http://localhost:5200/agent")
-  .replace(/\/agent\/?$/, "");
+// Derive AGENT_BASE from the active agent URL (v1 or v2 based on cookie).
+function getAgentBase(req: NextRequest): string {
+  const mode = req.cookies.get("agent-mode")?.value === "v2" ? "v2" : "v1";
+  const url =
+    mode === "v2"
+      ? (process.env.AGENT_URL_V2 ?? `${process.env.AGENT_URL ?? "http://localhost:5200/agent"}/v2`)
+      : (process.env.AGENT_URL ?? "http://localhost:5200/agent");
+  return url.replace(/\/agent.*$/, "");
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,6 +47,9 @@ async function handleUpload(req: NextRequest) {
     return NextResponse.json({ error: "X-Session-Id header is required" }, { status: 400 });
   }
 
+  const AGENT_BASE = getAgentBase(req);
+  console.log(`[upload] sessionId=${sessionId}, agentBase=${AGENT_BASE}, file=${file.name}, mode=${req.cookies.get("agent-mode")?.value ?? "v1"}`);
+
   // Forward to AgentHost
   const forwardForm = new FormData();
   forwardForm.append("file", file);
@@ -57,9 +65,10 @@ async function handleUpload(req: NextRequest) {
       body: forwardForm,
     });
   } catch (err) {
-    console.error("[upload] Failed to reach AgentHost:", err);
+    console.error("[upload] Failed to reach AgentHost:", AGENT_BASE, err);
     return NextResponse.json({ error: "AgentHost unreachable" }, { status: 502 });
   }
+  console.log(`[upload] AgentHost responded: status=${agentResponse.status}`);
 
   // agentResponse.json() can throw if AgentHost returns HTML (e.g. dev exception page)
   let body: unknown;

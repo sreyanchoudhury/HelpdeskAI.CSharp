@@ -80,6 +80,11 @@ public interface IDocumentIntelligenceService
 public interface IAttachmentStore
 {
     Task SaveAsync(string sessionId, IEnumerable<Models.ProcessedAttachment> attachments, CancellationToken ct = default);
+
+    /// <summary>Reads attachments without removing them from the store (peek).</summary>
+    Task<IReadOnlyList<Models.ProcessedAttachment>> LoadAsync(string sessionId, CancellationToken ct = default);
+
+    /// <summary>Reads attachments and atomically removes them from the store (consume).</summary>
     Task<IReadOnlyList<Models.ProcessedAttachment>> LoadAndClearAsync(string sessionId, CancellationToken ct = default);
 }
 

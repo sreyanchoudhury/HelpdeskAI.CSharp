@@ -14,7 +14,8 @@ param location = readEnvironmentVariable('AZURE_LOCATION', 'swedencentral')
 // azd env set AZURE_OPENAI_EMBEDDING_DEPLOYMENT "text-embedding-3-small" (optional)
 param openAiEndpoint            = readEnvironmentVariable('AZURE_OPENAI_ENDPOINT', '')
 param openAiApiKey              = readEnvironmentVariable('AZURE_OPENAI_API_KEY', '')
-param openAiChatDeployment      = readEnvironmentVariable('AZURE_OPENAI_CHAT_DEPLOYMENT', 'gpt-4.1-mini')
+param openAiChatDeployment      = readEnvironmentVariable('AZURE_OPENAI_CHAT_DEPLOYMENT', 'gpt-4o')
+param openAiChatDeploymentV2   = readEnvironmentVariable('AZURE_OPENAI_CHAT_DEPLOYMENT_V2', '')
 param openAiEmbeddingDeployment = readEnvironmentVariable('AZURE_OPENAI_EMBEDDING_DEPLOYMENT', 'text-embedding-3-small')
 
 // ─── Azure AI Search ──────────────────────────────────────────────────────────

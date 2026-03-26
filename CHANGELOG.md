@@ -4,6 +4,39 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-03-26
+
+### Added
+
+- **V2 multi-agent workflow** — MAF `HandoffsWorkflow` with orchestrator + 4 specialist agents (diagnostic, ticket, KB, incident) at `/agent/v2`. Each specialist has scoped MCP tools and tailored system prompts. The orchestrator routes user requests to the appropriate specialist and chains multi-step tasks automatically.
+  - `OrchestratorAgentFactory` — routes to specialists, handles multi-step chaining
+  - `DiagnosticAgentFactory` — attachment analysis, incident diagnosis, triage
+  - `TicketAgentFactory` — ticket creation, assignment, status updates
+  - `KBAgentFactory` — knowledge base search and article indexing
+  - `IncidentAgentFactory` — system status checks and incident impact analysis
+  - `HelpdeskWorkflowFactory` — assembles the workflow with all providers and tools
+- **Agent mode toggle** — Settings page toggle to switch between v1 (single agent) and v2 (multi-agent). Preference stored in a cookie; frontend routes to the appropriate AG-UI endpoint.
+- **CopilotKit frontend tool forwarding (v2)** — `FrontendToolForwardingProvider` + `AIAgentBuilder.Use()` middleware captures CopilotKit action tools from `AgentRunOptions` before `WorkflowHostAgent` strips them, making render-action cards (show_ticket_created, etc.) work inside the workflow.
+- **Attachment peek/clear pattern (v2)** — orchestrator uses a peek provider (reads without clearing) while diagnostic_agent uses a clearing provider, preventing infinite routing loops.
+- **`FrontendToolCapturingChatClient`** — IChatClient pipeline middleware that captures frontend tools from `ChatOptions.Tools`.
+- **`ThreadIdPreservingChatClient`** — preserves `AsyncLocal<string>` thread ID across async boundaries in the IChatClient pipeline.
+- **App Insights Agents (Preview)** — custom `ActivitySource` emitting `invoke_agent` spans with `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.agent.id`, `gen_ai.system` semantic attributes for the Azure Monitor Agents preview dashboard.
+- **`CitationBadge.tsx`** — inline citation link component for KB article references in chat responses.
+- **Upload logging** — diagnostic logging in both frontend upload route and AgentHost attachment endpoint.
+
+### Changed
+
+- **Specialist agent instructions** — all v2 specialists have explicit "execute immediately, never ask for confirmation" directives to prevent passive behaviour in multi-step workflows.
+- **Attachment context provider** — now supports a `peek` constructor parameter; `peek: true` reads from Redis without clearing, `peek: false` (default) clears after read.
+- **`RedisAttachmentStore` logging** — upgraded from Debug to Information level with SAVED/PEEK/CONSUME markers for attachment lifecycle traceability.
+
+### Fixed
+
+- **V2 attachment context race condition** — MAF resolves all agents' `AIContextProviders` simultaneously at workflow start; diagnostic_agent's clearing provider consumed attachments before orchestrator could peek. Fixed by separating peek (orchestrator) and clear (diagnostic) providers.
+- **V2 specialists refusing to act** — diagnostic_agent instructions contained "you have no access to live systems" language causing the agent to treat interactions as simulations. Removed and replaced with explicit action scope.
+
+---
+
 ## [Unreleased] - 2026-03-23
 
 ### Added

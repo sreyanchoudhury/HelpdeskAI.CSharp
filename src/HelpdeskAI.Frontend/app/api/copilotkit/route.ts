@@ -7,8 +7,13 @@ import { HttpAgent } from "@ag-ui/client";
 import { NextRequest } from "next/server";
 import { getAuthenticatedUser } from "@/lib/server-auth";
 
-const agentUrl = process.env.AGENT_URL ?? "http://localhost:5200/agent";
+const agentUrlV1 = process.env.AGENT_URL ?? "http://localhost:5200/agent";
+const agentUrlV2 = process.env.AGENT_URL_V2 ?? `${agentUrlV1}/v2`;
 const serviceAdapter = new ExperimentalEmptyAdapter();
+
+function getAgentMode(req: NextRequest): "v1" | "v2" {
+  return req.cookies.get("agent-mode")?.value === "v2" ? "v2" : "v1";
+}
 
 async function buildHandler(req: NextRequest) {
   const user = await getAuthenticatedUser(req);
@@ -19,9 +24,13 @@ async function buildHandler(req: NextRequest) {
     });
   }
 
+  const mode = getAgentMode(req);
+  const url = mode === "v2" ? agentUrlV2 : agentUrlV1;
+  const agentId = mode === "v2" ? "helpdesk-v2" : "HelpdeskAgent";
+
   const helpdeskAgent = new HttpAgent({
-    url: agentUrl,
-    agentId: "HelpdeskAgent",
+    url,
+    agentId,
     headers: {
       Authorization: `Bearer ${user.accessToken}`,
     },
@@ -29,7 +38,7 @@ async function buildHandler(req: NextRequest) {
 
   const runtime = new CopilotRuntime({
     agents: {
-      HelpdeskAgent: helpdeskAgent,
+      [agentId]: helpdeskAgent,
     },
   });
 

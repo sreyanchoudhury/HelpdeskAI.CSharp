@@ -10,6 +10,8 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 - **Rich render actions** — displays tickets, incidents, and search results as interactive cards
 - **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` in the header row (right-aligned) after each agent response; fetches token counts from `/api/copilotkit/usage`
 - **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
+- **Agent mode toggle** — switch between v1 (single agent) and v2 (multi-agent workflow) from the Settings page; preference persisted via cookie
+- **Citation badges** — renders inline citation links from KB article references
 - **Session management** — maintains conversation history and ticket state
 - **Microsoft Entra SSO** — redirects unauthenticated users through NextAuth and keeps the browser session on the frontend
 - **Model compatibility guidance** — Settings page shows the currently recommended Azure OpenAI chat models for reliable render-action behavior
@@ -89,8 +91,9 @@ app/
 │   └── upload/
 │       └── route.ts             # File upload      → AgentHost /api/attachments
 components/
-├── HelpdeskChat.tsx             # Main shell: sidebar nav, multi-page layout
+├── HelpdeskChat.tsx             # Main shell: sidebar nav, multi-page layout, agent mode toggle
 ├── HelpdeskActions.tsx          # Render actions: tickets, incidents, suggestions
+├── CitationBadge.tsx            # Inline citation link component for KB references
 app/sign-in/
 ├── page.tsx                     # Branded sign-in handoff to Microsoft Entra
 app/signed-out/

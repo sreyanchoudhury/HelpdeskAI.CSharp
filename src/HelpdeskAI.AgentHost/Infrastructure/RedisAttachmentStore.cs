@@ -30,7 +30,8 @@ internal sealed class RedisAttachmentStore(IRedisService redis, ILogger<RedisAtt
             var existing = await LoadExistingAsync(key);
             existing.AddRange(attachments);
             await redis.SetAsync(key, JsonSerializer.Serialize(existing), Ttl);
-            log.LogDebug("Staged {Count} attachment(s) for session '{SessionId}'", existing.Count, sessionId);
+            log.LogInformation("[AttachmentStore] SAVED {Count} attachment(s) to Redis key '{Key}' for session '{SessionId}'",
+                existing.Count, key, sessionId);
         }
         catch (Exception ex)
         {
@@ -40,12 +41,36 @@ internal sealed class RedisAttachmentStore(IRedisService redis, ILogger<RedisAtt
         }
     }
 
+    public async Task<IReadOnlyList<ProcessedAttachment>> LoadAsync(string sessionId, CancellationToken ct = default)
+    {
+        var key = Key(sessionId);
+        try
+        {
+            var json = await redis.GetAsync(key);
+            log.LogInformation("[AttachmentStore] PEEK key='{Key}' hasData={HasData}",
+                key, !string.IsNullOrEmpty(json));
+            if (string.IsNullOrEmpty(json))
+                return [];
+
+            var attachments = JsonSerializer.Deserialize<List<ProcessedAttachment>>(json) ?? [];
+            log.LogInformation("[AttachmentStore] Peeked {Count} attachment(s) for session '{SessionId}'", attachments.Count, sessionId);
+            return attachments;
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Redis unavailable — returning empty attachment list for session '{SessionId}'", sessionId);
+            return [];
+        }
+    }
+
     public async Task<IReadOnlyList<ProcessedAttachment>> LoadAndClearAsync(string sessionId, CancellationToken ct = default)
     {
         var key = Key(sessionId);
         try
         {
             var json = await redis.GetAsync(key);
+            log.LogInformation("[AttachmentStore] CONSUME key='{Key}' hasData={HasData}",
+                key, !string.IsNullOrEmpty(json));
             if (string.IsNullOrEmpty(json))
                 return [];
 
@@ -53,7 +78,7 @@ internal sealed class RedisAttachmentStore(IRedisService redis, ILogger<RedisAtt
             await redis.DeleteAsync(key);
 
             var attachments = JsonSerializer.Deserialize<List<ProcessedAttachment>>(json) ?? [];
-            log.LogDebug("Consumed {Count} attachment(s) for session '{SessionId}'", attachments.Count, sessionId);
+            log.LogInformation("[AttachmentStore] Consumed {Count} attachment(s) for session '{SessionId}'", attachments.Count, sessionId);
             return attachments;
         }
         catch (Exception ex)

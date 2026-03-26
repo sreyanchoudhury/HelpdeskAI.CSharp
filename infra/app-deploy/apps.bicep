@@ -30,8 +30,11 @@ param openAiEndpoint string
 @description('Azure OpenAI API key')
 param openAiApiKey string
 
-@description('Chat model deployment name')
-param openAiChatDeployment string = 'gpt-4.1-mini'
+@description('Chat model deployment name (v1 single-agent)')
+param openAiChatDeployment string = 'gpt-4o'
+
+@description('Chat model deployment name for v2 multi-agent workflow (falls back to v1 deployment if empty)')
+param openAiChatDeploymentV2 string = ''
 
 @description('Embedding model deployment name')
 param openAiEmbeddingDeployment string = 'text-embedding-3-small'
@@ -282,6 +285,7 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AzureOpenAI__Endpoint',                  secretRef: 'openai-endpoint' }
             { name: 'AzureOpenAI__ApiKey',                    secretRef: 'openai-api-key' }
             { name: 'AzureOpenAI__ChatDeployment',            value: openAiChatDeployment }
+            { name: 'AzureOpenAI__ChatDeploymentV2',          value: empty(openAiChatDeploymentV2) ? openAiChatDeployment : openAiChatDeploymentV2 }
             { name: 'AzureOpenAI__EmbeddingDeployment',       value: openAiEmbeddingDeployment }
             { name: 'AzureAISearch__Endpoint',                secretRef: 'ai-search-endpoint' }
             { name: 'AzureAISearch__ApiKey',                  secretRef: 'ai-search-key' }
@@ -350,6 +354,7 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
             // NOTE: AGENT_URL must NOT be in next.config.ts env block or it gets baked at build time.
             //       These are read at runtime by Next.js API routes via process.env.
             { name: 'AGENT_URL',      value: 'https://${agentHostApp.properties.configuration.ingress.fqdn}/agent' }
+            { name: 'AGENT_URL_V2',   value: 'https://${agentHostApp.properties.configuration.ingress.fqdn}/agent/v2' }
             { name: 'AGENT_BASE_URL', value: 'https://${agentHostApp.properties.configuration.ingress.fqdn}' }
             // Internal hostname — reachable from other apps within the same Container Apps environment.
             { name: 'MCP_URL',        value: 'http://${names.mcpServer}' }
