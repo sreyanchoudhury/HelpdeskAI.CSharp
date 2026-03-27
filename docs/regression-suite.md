@@ -192,6 +192,73 @@ Capture:
 - whether token usage is materially higher in one browser
 - whether cards render differently
 
+### 11. Responsive Layout
+
+Validate the app in 3 viewport classes on both routes:
+
+- desktop
+- tablet width (`~768px` to `~960px`)
+- mobile width (`~375px` to `~430px`)
+
+Expected:
+
+- navigation remains usable
+- chat input remains usable
+- cards do not overflow horizontally
+- settings cards stack cleanly
+- stats chip does not overlap the page title
+
+Prompts to reuse:
+
+```text
+Show me my open tickets.
+```
+
+```text
+Show all active incidents.
+```
+
+```text
+Create a ticket for Outlook crashing when opening large attachments, priority high, and show me the ticket.
+```
+
+```text
+Search the knowledge base for VPN certificate issues and show me the matching article.
+```
+
+### 12. CopilotKit Controls Preference
+
+Open Settings and switch `CopilotKit Controls` between `Hidden` and `Visible`.
+
+Expected:
+
+- page reloads cleanly
+- CopilotKit developer controls disappear in `Hidden`
+- CopilotKit developer controls reappear in `Visible`
+- mobile layout is materially better in `Hidden`
+
+### 13. Streaming Auto-Scroll
+
+Use a prompt that streams for long enough to observe the message area:
+
+```text
+Summarize the current active incidents in detail and explain the likely next actions.
+```
+
+Expected:
+
+- chat stays pinned to the bottom while the assistant is streaming
+- if you manually scroll upward mid-response, the app does not fight that scroll
+
+### 14. Message Avatars
+
+Expected:
+
+- assistant messages show the `AI` avatar badge
+- user messages show the `You` avatar badge
+- badges do not overlap message controls or force bubbles off-screen
+- badge spacing still works on mobile widths
+
 ## Stress Scenarios
 
 These are useful, but they are not the primary pass/fail gate for every change.
@@ -218,6 +285,7 @@ Current known risks:
 - `v2`: complex workflows may not always complete in one uninterrupted turn
 - both routes: token usage remains higher than desired on longer workflows
 - parallel multi-browser stress runs can still surface duplicate rendering or duplicate side effects
+- CopilotKit developer controls are still not inherently mobile-friendly when explicitly enabled
 
 ## Recommended Recording Format
 

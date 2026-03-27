@@ -31,6 +31,10 @@ All notable changes to HelpdeskAI are recorded here.
 - **Specialist agent instructions** — all v2 specialists have explicit "execute immediately, never ask for confirmation" directives to prevent passive behaviour in multi-step workflows.
 - **Attachment context provider** — now supports a `peek` constructor parameter; `peek: true` reads from Redis without clearing, `peek: false` (default) clears after read.
 - **`RedisAttachmentStore` logging** — upgraded from Debug to Information level with SAVED/PEEK/CONSUME markers for attachment lifecycle traceability.
+- **Frontend responsive shell polish** — desktop-first layout now adapts across tablet and mobile widths; Settings page cards stack cleanly, route header wraps safely, and render cards no longer depend on fixed desktop widths.
+- **CopilotKit controls preference** — Settings page now lets users hide or show the CopilotKit developer controls, improving the normal mobile experience.
+- **Streaming chat auto-scroll** — the chat follows the assistant while streaming unless the user intentionally scrolls upward.
+- **Message avatars** — assistant and user chat bubbles now show lightweight `AI` and `You` badges for easier scanning.
 
 ### Fixed
 
@@ -103,4 +107,3 @@ All notable changes to HelpdeskAI are recorded here.
 ## Earlier History
 
 See `git log` for full commit history prior to this changelog.
-
