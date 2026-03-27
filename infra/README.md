@@ -17,7 +17,7 @@ This folder contains **Bicep Infrastructure as Code** and deployment scripts to 
 | **AgentHost** | Container App | AG-UI agent, RAG pipeline, attachment processing | 0.5 CPU / 1 Gi |
 | **Frontend** | Container App | Next.js UI | 0.5 CPU / 1 Gi |
 | **Azure Cosmos DB** | `Microsoft.DocumentDB/databaseAccounts` | Durable ticket persistence | Serverless |
-| **Azure OpenAI** | Cognitive Services | `gpt-4o` (chat) + `text-embedding-3-small` (embeddings) | S0 / GlobalStandard |
+| **Azure OpenAI** | Cognitive Services | `gpt-4o` (v1 chat) + `gpt-5.2-chat` (v2 workflow) + `text-embedding-3-small` (embeddings) | S0 / GlobalStandard |
 | **Azure AI Search** | Search Service | Semantic KB search (RAG), `helpdesk-kb` index | Basic (1 replica, 1 partition) |
 
 **Total monthly cost:** ~$200–350 (varies by usage; Container Apps, ACR, Blob Storage, Document Intelligence, and App Insights add to the base OpenAI + AI Search cost)
@@ -50,7 +50,7 @@ Before you start, ensure you have:
    - Assign RBAC roles
    - List/retrieve resource keys
 
-5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have a quota for `gpt-4o`
+5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have quota for `gpt-4o` / `gpt-5.2-chat`
 
 6. **Logged in to Azure:**
    ```bash
@@ -95,12 +95,13 @@ cd infra
 
 1. **Logs into Azure** — prompts `az login` if not already authenticated
 2. **Creates resource group** — if it doesn't exist
-3. **Deploys Bicep template** — provisions OpenAI + AI Search
+3. **Deploys Bicep template** — provisions OpenAI, AI Search, and Cosmos DB
 4. **Creates AI Search index** — `helpdesk-kb` with semantic search config
 5. **Seeds knowledge base** — uploads 5 IT articles from `seed-data.json`
 6. **Generates config** — creates `src/HelpdeskAI.AgentHost/appsettings.Development.json` with credentials
 7. **Reads Entra/NextAuth env vars** — app deployment consumes `AZURE_AD_*` and `NEXTAUTH_SECRET` from the active `azd` environment
 8. **Wires Cosmos DB settings** — app and MCP deployments consume `CosmosDb__*` settings when Phase 2a persistence is enabled
+9. **Supports regression cleanup** — `cleanup-demo-data.ps1` removes non-seed Cosmos and AI Search artifacts while preserving the repository seed baseline
 
 **Typical runtime:** 5–10 minutes
 
@@ -139,12 +140,13 @@ Three alert rules are deployed as `scheduledQueryRules` in `app-deploy/apps.bice
 
 | File | Purpose |
 |------|---------|
-| `main.bicep` | Bicep infrastructure template (OpenAI + AI Search) |
+| `main.bicep` | Bicep infrastructure template (OpenAI + AI Search + Cosmos DB) |
 | `app-deploy/apps.bicep` | Full app stack (Container Apps, Redis, alert rules) |
 | `app-deploy/apps.bicepparam` | `azd` environment variable mappings, including Entra/NextAuth settings |
 | `deploy.ps1` | PowerShell deployment orchestration script |
 | `seed-data.json` | Knowledge base articles seeded into AI Search at setup |
 | `setup-search.ps1` | Standalone KB index setup / re-seeding script |
+| `cleanup-demo-data.ps1` | Removes non-seed AI Search and Cosmos artifacts while preserving repository seed data |
 | `monitoring.md` | KQL query reference, alert rules, regression checks |
 
 ---
@@ -198,7 +200,7 @@ resource aiSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = {
 
 ## Knowledge Base (`seed-data.json`)
 
-Contains 5 sample IT support articles. Each document structure:
+Contains the baseline KB articles seeded into Azure AI Search. Each document structure:
 
 ```json
 {
@@ -229,6 +231,25 @@ Then re-run the search setup:
 .\setup-search.ps1 -SearchEndpoint "https://<search>.search.windows.net" `
                     -AdminKey "<search-admin-key>"
 ```
+
+### Resetting Demo Data Without Losing Seeds
+
+If regression runs have created noisy tickets or KB articles, reset only the non-seed data:
+
+```bash
+.\cleanup-demo-data.ps1 `
+  -SearchEndpoint "https://<search>.search.windows.net" `
+  -SearchAdminKey "<search-admin-key>" `
+  -CosmosEndpoint "https://<cosmos>.documents.azure.com:443/" `
+  -CosmosPrimaryKey "<cosmos-primary-key>"
+```
+
+By default the cleanup keeps:
+
+- KB documents listed in `seed-data.json`
+- ticket documents with `seq <= 1013`
+
+That preserves the baseline demo dataset while clearing agent-created regression artifacts.
 
 ---
 
@@ -287,6 +308,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<api-key>",
     "ChatDeployment": "gpt-4o",
+    "ChatDeploymentV2": "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -313,7 +335,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
 
 ## Regional Availability
 
-**Azure OpenAI `gpt-4o` is available in:**
+**Azure OpenAI deployments such as `gpt-4o` and `gpt-5.2-chat` are available in:**
 - `swedencentral` ✅ (recommended)
 - `eastus2` ✅
 - `westus2` ✅
@@ -424,7 +446,7 @@ Within the same Container Apps Environment:
 az bicep install
 ```
 
-### "gpt-4o quota exceeded"
+### "Azure OpenAI quota exceeded"
 
 **Error:** `DeploymentFailed: Insufficient quota`
 

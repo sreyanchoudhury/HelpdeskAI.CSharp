@@ -23,6 +23,8 @@ All notable changes to HelpdeskAI are recorded here.
 - **App Insights Agents (Preview)** — custom `ActivitySource` emitting `invoke_agent` spans with `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.agent.id`, `gen_ai.system` semantic attributes for the Azure Monitor Agents preview dashboard.
 - **`CitationBadge.tsx`** — inline citation link component for KB article references in chat responses.
 - **Upload logging** — diagnostic logging in both frontend upload route and AgentHost attachment endpoint.
+- **`docs/regression-suite.md`** — route-by-route Azure regression checklist covering auth, tickets, incidents, KB, attachment workflows, memory, and cross-browser validation for both `v1` and `v2`.
+- **`infra/cleanup-demo-data.ps1`** — cleanup utility that removes non-seed Cosmos tickets and AI Search KB artifacts while preserving repository seed data for repeatable regression runs.
 
 ### Changed
 
@@ -101,5 +103,4 @@ All notable changes to HelpdeskAI are recorded here.
 ## Earlier History
 
 See `git log` for full commit history prior to this changelog.
-
 

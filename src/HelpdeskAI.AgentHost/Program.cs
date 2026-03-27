@@ -154,15 +154,12 @@ IChatClient azureClientV2 = string.IsNullOrWhiteSpace(aiSettings.ApiKey)
 
 // Build the v2 pipeline with the same middleware stack but keyed separately so DI doesn't conflict.
 // Additional middleware vs v1:
-//   - FrontendToolCapturingChatClient: captures CopilotKit render tools (show_*, suggest_*)
-//     from the AG-UI request so the orchestrator can call them despite MAF's AgentRunOptions: null.
 //   - ThreadIdPreservingChatClient: guards AsyncLocal<ThreadIdContext> across MAF workflow
 //     handoff boundaries so attachment/history providers resolve the correct session.
 builder.Services.AddKeyedSingleton("v2-chat", (services, _) =>
 {
     IChatClient pipeline = new ChatClientBuilder(azureClientV2)
         .UseFunctionInvocation()
-        .Use((inner, _) => new FrontendToolCapturingChatClient(inner))
         .Use((inner, svc) => new ThreadIdPreservingChatClient(
             inner, svc.GetRequiredService<ILoggerFactory>().CreateLogger<ThreadIdPreservingChatClient>()))
         .Use((inner, svc) => new UsageCapturingChatClient(
@@ -349,6 +346,7 @@ app.Use(async (context, next) =>
         }
         finally
         {
+            FrontendToolForwardingProvider.Clear();
             ThreadIdContext.Set(null);
             TurnStateContext.Clear();
             UserContext.Clear();
@@ -449,8 +447,8 @@ var helpdeskWorkflow = HelpdeskWorkflowFactory.BuildWorkflow(
 
 // Use AIAgentBuilder.Use() middleware to capture CopilotKit frontend tools from
 // AgentRunOptions BEFORE WorkflowHostAgent drops them (passes null to children).
-// This solves the chicken-and-egg problem: FrontendToolCapturingChatClient in the IChatClient
-// pipeline never sees the tools because they're stripped at the agent level.
+// This keeps the render tools available to workflow specialists even though they are
+// stripped at the child-agent boundary.
 var rawWorkflowAgent = helpdeskWorkflow.AsAIAgent("helpdesk-v2", "HelpdeskAI Multi-Agent");
 var toolCapturingLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost.ToolCapturingMiddleware");
 var wrappedWorkflowAgent = new AIAgentBuilder(rawWorkflowAgent)

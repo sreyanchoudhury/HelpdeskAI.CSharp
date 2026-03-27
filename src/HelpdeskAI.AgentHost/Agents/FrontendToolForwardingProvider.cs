@@ -6,14 +6,15 @@ namespace HelpdeskAI.AgentHost.Agents;
 /// <summary>
 /// Captures CopilotKit frontend tools from the AG-UI request boundary and provides
 /// them to ALL agents in the workflow via <see cref="AIContextProvider"/>. Works around the MAF
-/// limitation where <c>WorkflowHostAgent</c> passes <c>AgentRunOptions: null</c> to all agents,
+/// limitation where <c>WorkflowHostAgent</c> passes <c>AgentRunOptions: null</c> to child agents,
 /// stripping CopilotKit frontend tools (<c>show_ticket_created</c>, etc.).
 ///
 /// <para>
-/// Flow: AG-UI request arrives with frontend tools → <see cref="FrontendToolCapturingChatClient"/>
-/// intercepts and calls <see cref="Capture"/> → each agent's context resolution calls
-/// <see cref="ProvideAIContextAsync"/> which returns the captured tools → agents can call
-/// render tools like <c>show_ticket_created</c>, <c>show_kb_article</c>, etc.
+/// Flow: AG-UI request arrives with frontend tools → the outer v2 agent middleware in
+/// <c>Program.cs</c> calls <see cref="Capture"/> before the workflow runs → each agent's
+/// context resolution calls <see cref="ProvideAIContextAsync"/> which returns the captured
+/// tools → specialists can call render tools like <c>show_ticket_created</c>,
+/// <c>show_kb_article</c>, etc.
 /// </para>
 /// </summary>
 internal sealed class FrontendToolForwardingProvider(
