@@ -24,6 +24,7 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 - AgentHost persists long-term profile memory and simple `remember that ...` preferences in Redis.
 - **App Insights Agents (Preview)** telemetry — `invoke_agent` spans with `gen_ai.*` semantic attributes are emitted for Azure Monitor.
 - Local development can still run against Azure-hosted dependencies directly; a separate local sandbox is not required.
+- The frontend shell is now responsive across desktop, tablet, and mobile widths, with a Settings toggle to hide CopilotKit developer controls when a cleaner UI is preferred.
 
 ## Configuration & Environment Setup
 

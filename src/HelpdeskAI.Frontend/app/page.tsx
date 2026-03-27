@@ -39,6 +39,11 @@ export default function Home() {
     return localStorage.getItem("agent-mode") === "v2" ? "helpdesk-v2" : "HelpdeskAgent";
   }, []);
 
+  const showCopilotControls = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("copilotkit-controls") === "visible";
+  }, []);
+
   useEffect(() => {
     if (needsReauth || needsSignIn) {
       void signIn("azure-ad", { callbackUrl: "/" });
@@ -63,8 +68,8 @@ export default function Home() {
     <CopilotKit
       runtimeUrl="/api/copilotkit"
       agent={agentName}
-      showDevConsole
-      enableInspector
+      showDevConsole={showCopilotControls}
+      enableInspector={showCopilotControls}
       onError={(event) => {
         // CopilotErrorEvent shape: { error: unknown } — not Error directly.
         // Suppress browser extension noise (React DevTools, Chrome extensions)

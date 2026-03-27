@@ -109,12 +109,12 @@ function TicketsPage({ agentTickets, refreshKey, currentUser }: { agentTickets: 
   );
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "16px 32px 24px" }}>
+    <div className="hd-page-scroll">
       {/* User context hint */}
       <div style={{ fontSize: 11, color: "#5a6280", marginBottom: 12 }}>
         Showing tickets for <span style={{ color: "#3d5afe" }}>{currentUser.email}</span> — click any card to expand details
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 680 }}>
+      <div className="hd-page-stack">
         {display.map(t => {
           const priColor = PRIORITY_COLOR[t.priority.toLowerCase() as Ticket["priority"]] ?? "#5a6280";
           const stsColor = STATUS_COLOR[t.status] ?? "#5a6280";
@@ -228,7 +228,7 @@ function KbPage() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "16px 32px 8px" }}>
+      <div style={{ padding: "16px var(--page-gutter) 8px" }}>
         <input
           type="text"
           placeholder="Search knowledge base…"
@@ -243,7 +243,7 @@ function KbPage() {
           }}
         />
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 32px 24px" }}>
+      <div className="hd-page-scroll" style={{ paddingTop: 8 }}>
         {loading ? (
           <div style={{ color: "#5a6280", fontSize: 13, paddingTop: 32, textAlign: "center" }}>Loading…</div>
         ) : error ? (
@@ -253,7 +253,7 @@ function KbPage() {
             {query.trim() ? "No articles found." : "No articles available."}
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 680 }}>
+          <div className="hd-page-stack">
             {articles.map(a => {
               const catColor = KB_CATEGORY_COLOR[(a.category ?? "other").toLowerCase()] ?? "#9098b0";
               const isOpen   = expanded.has(a.id);
@@ -316,10 +316,19 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
     if (typeof window === "undefined") return "v1";
     return (localStorage.getItem("agent-mode") as "v1" | "v2") ?? "v1";
   });
+  const [copilotControls, setCopilotControls] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("copilotkit-controls") === "visible";
+  });
   const handleModeSwitch = (mode: "v1" | "v2") => {
     localStorage.setItem("agent-mode", mode);
     document.cookie = `agent-mode=${mode};path=/;samesite=strict;max-age=31536000`;
     setAgentMode(mode);
+    window.location.reload();
+  };
+  const handleCopilotControlToggle = (visible: boolean) => {
+    localStorage.setItem("copilotkit-controls", visible ? "visible" : "hidden");
+    setCopilotControls(visible);
     window.location.reload();
   };
   const initials = currentUser.name
@@ -354,14 +363,11 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   ] as const;
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 520 }}>
+    <div className="hd-page-scroll" style={{ paddingTop: 24 }}>
+      <div className="hd-settings-stack">
 
         {/* User Profile */}
-        <div style={{
-          background: "#0f1117", border: "1px solid #ffffff12",
-          borderRadius: 12, padding: "20px 24px",
-        }}>
+        <div className="hd-settings-card">
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 16 }}>User Profile</div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{
@@ -375,7 +381,7 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
               <div style={{ fontSize: 12, color: "#5a6280", marginTop: 2 }}>{currentUser.email}</div>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", marginTop: 16 }}>
+          <div className="hd-user-meta-grid">
             {([
               ["Sign-In",    "Microsoft Entra ID"],
               ["Session",    "Authenticated"],
@@ -391,12 +397,9 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
         </div>
 
         {/* Agent Mode Toggle */}
-        <div style={{
-          background: "#0f1117", border: "1px solid #ffffff12",
-          borderRadius: 12, padding: "20px 24px",
-        }}>
+        <div className="hd-settings-card">
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 16 }}>Agent Mode</div>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="hd-agent-mode-grid">
             {(["v1", "v2"] as const).map(mode => {
               const active = agentMode === mode;
               const label = mode === "v1" ? "Single Agent (v1)" : "Multi-Agent Workflow (v2)";
@@ -423,11 +426,37 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
           </div>
         </div>
 
+        <div className="hd-settings-card">
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 16 }}>CopilotKit Controls</div>
+          <div className="hd-agent-mode-grid">
+            {([
+              { id: false, label: "Hidden", subtitle: "Recommended for normal app usage and mobile screens." },
+              { id: true, label: "Visible", subtitle: "Shows the CopilotKit developer controls and inspector." },
+            ] as const).map(option => {
+              const active = copilotControls === option.id;
+              return (
+                <button key={option.label} onClick={() => handleCopilotControlToggle(option.id)} style={{
+                  flex: 1, padding: "12px 14px", borderRadius: 8,
+                  border: `1px solid ${active ? "#3d5afe" : "#ffffff12"}`,
+                  background: active ? "#3d5afe14" : "#ffffff04",
+                  cursor: active ? "default" : "pointer",
+                  textAlign: "left",
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: active ? "#3d5afe" : "#9098b0" }}>{option.label}</div>
+                  <div style={{ fontSize: 11, color: "#5a6280", marginTop: 4, lineHeight: 1.4 }}>
+                    {option.subtitle}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: "#5a6280", marginTop: 10 }}>
+            Changing this setting reloads the page so the CopilotKit provider can reinitialize cleanly.
+          </div>
+        </div>
+
         {/* Backend Status */}
-        <div style={{
-          background: "#0f1117", border: "1px solid #ffffff12",
-          borderRadius: 12, padding: "20px 24px",
-        }}>
+        <div className="hd-settings-card">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280" }}>Backend Status</div>
             <button
@@ -472,12 +501,9 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
         </div>
 
         {/* App Info */}
-        <div style={{
-          background: "#0f1117", border: "1px solid #ffffff12",
-          borderRadius: 12, padding: "20px 24px",
-        }}>
+        <div className="hd-settings-card">
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 12 }}>About</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="hd-about-grid">
             {([
               ["App",      "HelpdeskAI"],
               ["Frontend", "Next.js 16 + CopilotKit 1.54"],
@@ -490,20 +516,16 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
               ["Route",    agentMode === "v2" ? "/agent/v2" : "/agent"],
               ["Search",   "Azure AI Search (Basic tier)"],
             ] as [string, string][]).map(([label, value]) => (
-              <div key={label} style={{ display: "flex", gap: 12, fontSize: 12 }}>
-                <span style={{ color: "#5a6280", minWidth: 72 }}>{label}</span>
-                <span style={{ color: "#9098b0" }}>{value}</span>
+              <div key={label} className="hd-kv-row">
+                <span className="hd-kv-key">{label}</span>
+                <span className="hd-kv-value">{value}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Model Requirements */}
-        <div style={{
-          background: "#0f1117", border: "1px solid #3d5afe33",
-          borderLeft: "3px solid #3d5afe",
-          borderRadius: 12, padding: "20px 24px",
-        }}>
+        <div className="hd-settings-card hd-settings-card--accent">
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#3d5afe", marginBottom: 12 }}>
             Model Requirements
           </div>
@@ -517,9 +539,9 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
               ["⚠️  Use with caution", "model-router (unpredictable routing latency)"],
               ["❌ Not compatible", "Models without tool calling or agentic instruction following"],
             ] as [string, string][]).map(([label, value]) => (
-              <div key={label} style={{ fontSize: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <span style={{ color: "#5a6280", minWidth: 140, flexShrink: 0 }}>{label}</span>
-                <span style={{ color: "#9098b0" }}>{value}</span>
+              <div key={label} className="hd-model-row">
+                <span className="hd-model-key">{label}</span>
+                <span className="hd-model-value">{value}</span>
               </div>
             ))}
           </div>
@@ -755,6 +777,8 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const sendTimeRef = useRef<number>(0);
   const waitingRef = useRef(false);
   const [lastStats, setLastStats] = useState<{ elapsedMs: number; promptTokens: number; completionTokens: number } | null>(null);
+  const chatWrapperRef = useRef<HTMLDivElement>(null);
+  const shouldStickToBottomRef = useRef(true);
 
   // Use a ref so onResponseComplete (captured with [] deps) always calls the latest closure.
   // fetchStatsRef.current is reassigned each render to capture the latest refs/setters.
@@ -885,6 +909,41 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   }), [attachedFiles, handleAttachFile, handleRemoveAttachment, handleRetryAttachment,
       clearAllAttachments, onSendStarted, onResponseComplete, onResponseReset]);
 
+  useEffect(() => {
+    if (page !== "chat") return;
+
+    const wrapper = chatWrapperRef.current;
+    const scrollHost = wrapper?.querySelector(":scope > div > div:first-child") as HTMLDivElement | null;
+    if (!scrollHost) return;
+
+    const nearBottom = () =>
+      scrollHost.scrollHeight - scrollHost.scrollTop - scrollHost.clientHeight < 80;
+
+    const syncStickiness = () => {
+      shouldStickToBottomRef.current = nearBottom();
+    };
+
+    const scrollToBottom = () => {
+      if (!shouldStickToBottomRef.current) return;
+      scrollHost.scrollTo({ top: scrollHost.scrollHeight, behavior: "auto" });
+    };
+
+    syncStickiness();
+    scrollToBottom();
+
+    const observer = new MutationObserver(() => {
+      scrollToBottom();
+    });
+    observer.observe(scrollHost, { childList: true, subtree: true, characterData: true });
+
+    scrollHost.addEventListener("scroll", syncStickiness, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      scrollHost.removeEventListener("scroll", syncStickiness);
+    };
+  }, [page, threadId]);
+
   return (
     <div className="hd-shell">
       <aside className="hd-sidebar">
@@ -984,7 +1043,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
                 currentUser={currentUser}
               />
 
-              <div className="hd-chat-wrapper" style={ckTheme}>
+              <div className="hd-chat-wrapper" style={ckTheme} ref={chatWrapperRef}>
                 <CopilotChat
                   Input={CustomChatInput}
                   markdownTagRenderers={citationTagRenderers}

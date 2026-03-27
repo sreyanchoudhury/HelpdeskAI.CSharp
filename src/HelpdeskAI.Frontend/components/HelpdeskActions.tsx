@@ -43,9 +43,9 @@ function TicketCard({ ticket, status }: { ticket: Partial<Ticket>; status: strin
       border: `1px solid ${PRIORITY_COLOR[priority]}44`,
       borderLeft: `3px solid ${PRIORITY_COLOR[priority]}`,
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 420, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card hd-action-card--narrow">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 18 }}>{icon}</span>
         <span style={{
@@ -87,9 +87,9 @@ function IncidentAlertCard({ incidents, status }: {
       border: "1px solid #ef444433",
       borderLeft: "3px solid #ef4444",
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 460, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 16 }}>🚨</span>
         <span style={{
@@ -160,9 +160,9 @@ function TicketListCard({ tickets: ticketList, status }: {
   if (!ticketList?.length) return (
     <div style={{
       border: "1px solid #ffffff12", borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 420, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       fontSize: 12, color: "#5a6280",
-    }}>
+    }} className="hd-action-card hd-action-card--narrow">
       No tickets found.
     </div>
   );
@@ -171,9 +171,9 @@ function TicketListCard({ tickets: ticketList, status }: {
     <div style={{
       border: "1px solid #ffffff12", borderLeft: "3px solid #3d5afe",
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 460, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 14 }}>📋</span>
         <span style={{
@@ -237,9 +237,9 @@ function AttachmentDocCard({ fileName, summary, blobUrl, status }: {
     <div style={{
       border: "1px solid #22c55e33", borderLeft: "3px solid #22c55e",
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 420, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card hd-action-card--narrow">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 18 }}>📄</span>
         <span style={{
@@ -280,9 +280,9 @@ function TicketDetailCard({ id, title, description, priority, category, ticketSt
     <div style={{
       border: "1px solid #3d5afe33", borderLeft: "3px solid #3d5afe",
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 460, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 16 }}>{catIcon}</span>
         <span style={{
@@ -341,9 +341,9 @@ function KbArticleCard({ id, title, content, category, status }: {
     <div style={{
       border: "1px solid #6366f133", borderLeft: "3px solid #6366f1",
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 460, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 14 }}>📖</span>
         <span style={{
@@ -384,9 +384,9 @@ function RelatedArticlesCard({ articles, status }: {
     <div style={{
       border: "1px solid #6366f133", borderLeft: "3px solid #6366f1",
       borderRadius: 10, padding: "14px 16px",
-      background: "#0f1117", maxWidth: 460, marginTop: 4,
+      background: "#0f1117", marginTop: 4,
       opacity: isStreaming ? 0.7 : 1, transition: "opacity 0.3s",
-    }}>
+    }} className="hd-action-card">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 14 }}>📚</span>
         <span style={{
