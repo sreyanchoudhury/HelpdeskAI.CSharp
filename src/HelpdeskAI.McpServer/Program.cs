@@ -37,6 +37,7 @@ builder.Services.AddSingleton(sp =>
 
 builder.Services.AddSingleton<TicketService>();
 builder.Services.AddSingleton<KnowledgeBaseService>();
+builder.Services.AddSingleton<SystemStatusService>();
 
 // ModelContextProtocol.AspNetCore
 // WithToolsFromAssembly() discovers all [McpServerToolType] classes
@@ -75,7 +76,33 @@ app.MapGet("/tickets", async (TicketService svc, string? requestedBy, string? st
         t.CreatedAt,
         t.UpdatedAt,
         t.Resolution,
+        t.UserSentiment,
+        t.EscalationReason,
+        t.ImpactScope,
+        t.RelatedIncidentIds,
     }));
+});
+
+app.MapGet("/incidents/active", (SystemStatusService svc) =>
+{
+    var incidents = svc.GetActiveIncidents()
+        .Select(s => new
+        {
+            service = s.Name,
+            severity = s.Health.ToString().ToLowerInvariant(),
+            incidentId = s.IncidentId,
+            message = s.StatusMessage,
+            workaround = s.Workaround,
+            eta = s.EstimatedResolve.HasValue ? s.EstimatedResolve.Value.ToString("t") + " UTC" : null,
+        })
+        .ToList();
+
+    return Results.Ok(new
+    {
+        count = incidents.Count,
+        incidents,
+        checkedAt = DateTimeOffset.UtcNow,
+    });
 });
 
 app.MapHealthChecks("/healthz");

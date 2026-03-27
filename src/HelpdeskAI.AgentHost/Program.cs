@@ -113,6 +113,7 @@ builder.Services.AddSingleton<IKnowledgeIngestion>(sp => sp.GetRequiredService<A
 builder.Services.AddSingleton<IMcpToolsProvider, McpToolsProvider>();
 builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
 builder.Services.AddSingleton<LongTermMemoryStore>();
+builder.Services.AddSingleton<ThreadSideEffectStore>();
 
 // Named HttpClient for internal McpServer calls (base URL derived from MCP endpoint).
 // Standard resilience pipeline: 3 retries with exponential backoff + 30 s total timeout.
@@ -481,6 +482,7 @@ var wrappedWorkflowAgent = new AIAgentBuilder(rawWorkflowAgent)
 app.MapAGUI("/agent/v2", wrappedWorkflowAgent).RequireAuthorization();
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
+app.MapIncidentEndpoints();
 // Eval endpoint is not safe for production — exposes synchronous agent execution without auth.
 if (!app.Environment.IsProduction()) app.MapEvalEndpoints();
 
@@ -505,8 +507,16 @@ app.Lifetime.ApplicationStarted.Register(() =>
             // Wrap each tool so it auto-reconnects on "Session not found" after McpServer restart.
             // Passes the shared logger so each RetryingMcpTool emits structured audit traces.
             var retryingToolLogger = loggerFactory.CreateLogger<RetryingMcpTool>();
+            var retrySafeLogger = loggerFactory.CreateLogger<RetrySafeSideEffectTool>();
+            var sideEffectStore = app.Services.GetRequiredService<ThreadSideEffectStore>();
             var tools = rawTools
-                .Select(t => (AIFunction)new RetryingMcpTool(t, toolsProvider, retryingToolLogger))
+                .Select(t =>
+                {
+                    AIFunction wrapped = new RetryingMcpTool(t, toolsProvider, retryingToolLogger);
+                    if (RetrySafeSideEffectTool.ShouldGuard(wrapped.Name))
+                        wrapped = new RetrySafeSideEffectTool(wrapped, sideEffectStore, retrySafeLogger);
+                    return wrapped;
+                })
                 .ToList();
             var toolDescriptions = tools.Select(t => $"{t.Name}: {t.Description}").ToList();
             var toolEmbeddings = await embeddingGenerator.GenerateAsync(toolDescriptions);

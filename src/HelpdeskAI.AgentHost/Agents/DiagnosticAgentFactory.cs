@@ -38,6 +38,7 @@ internal static class DiagnosticAgentFactory
         2. Use injected KB articles as your primary reference for known solutions.
         3. Structure your response as: Summary → Root Cause → Resolution Steps.
         4. Keep your response focused on the diagnostic findings only.
+        5. If the user describes a team-wide or multi-user problem, call that out clearly so the orchestrator can correlate it with incident work rather than treating it as purely isolated.
 
         ## Render Actions — MANDATORY
         When `[FIRST ACTION REQUIRED]` appears in context (from an attached document), you MUST call

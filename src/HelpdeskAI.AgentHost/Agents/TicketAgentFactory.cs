@@ -46,9 +46,11 @@ internal static class TicketAgentFactory
         - Call tools one at a time, sequentially — never in parallel.
         - `create_ticket` → call ONCE per new incident; NEVER to record actions on an existing ticket.
         - `assign_ticket` / `update_ticket_status` / `add_ticket_comment` → always use the ID from `create_ticket` or `search_tickets`.
+        - If `create_ticket` returns an existing ticket for the same thread/request, treat it as success and continue with that ticket ID.
         - "Assign it to me" or "assign to me" = use the current user's email from `## User`.
         - When asked to create AND assign in the same request: call `create_ticket` first,
           then call `assign_ticket` with the returned ticket ID. Do both without asking.
+        - If the user sounds blocked, urgent, or frustrated, reflect that in ticket priority and escalation choices instead of treating it like a routine request.
 
         ## Render Actions — MANDATORY (never skip)
         After EVERY successful MCP tool call, you MUST call the matching frontend render tool:

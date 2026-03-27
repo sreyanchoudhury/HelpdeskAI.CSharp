@@ -30,26 +30,36 @@ public static class KnowledgeBaseTools
                 var a = articles[0];
                 return JsonSerializer.Serialize(new
                 {
-                    count         = 1,
-                    articles      = articles.Select(x => new { x.Id, x.Title, x.Category }),
+                    count = 1,
+                    matchQuality = a.MatchQuality,
+                    articles = articles.Select(x => new { x.Id, x.Title, x.Category, x.MatchQuality }),
                     _renderAction = "show_kb_article",
-                    _renderArgs   = new { id = a.Id, title = a.Title, content = a.Content, category = a.Category },
+                    _renderArgs = new
+                    {
+                        id = a.Id,
+                        title = a.Title,
+                        content = a.Content,
+                        category = a.Category,
+                        matchQuality = a.MatchQuality,
+                    },
                 });
             }
 
             var summaries = articles.Select(a => new
             {
-                id       = a.Id,
-                title    = a.Title,
+                id = a.Id,
+                title = a.Title,
                 category = a.Category,
-                summary  = a.Content.Length > 140 ? a.Content[..140].TrimEnd() + "…" : a.Content,
+                matchQuality = a.MatchQuality,
+                summary = a.Content.Length > 140 ? a.Content[..140].TrimEnd() + "..." : a.Content,
             }).ToList();
 
             return JsonSerializer.Serialize(new
             {
-                count         = articles.Count,
+                count = articles.Count,
+                bestMatchQuality = articles[0].MatchQuality,
                 _renderAction = "suggest_related_articles",
-                _renderArgs   = new { articles = JsonSerializer.Serialize(summaries) },
+                _renderArgs = new { articles = JsonSerializer.Serialize(summaries) },
             });
         }
         catch (Exception ex)
@@ -69,20 +79,32 @@ public static class KnowledgeBaseTools
     public static async Task<string> IndexKbArticle(
         KnowledgeBaseService svc,
         [Description("Short, descriptive title for the KB article (max 100 chars)")] string title,
-        [Description("Full content of the article — troubleshooting steps, resolution, or reference material")] string content,
+        [Description("Full content of the article - troubleshooting steps, resolution, or reference material")] string content,
         [Description("Category: VPN | Email | Hardware | Network | Access | Printing | Software | Other")] string? category = null)
     {
         try
         {
-            var id = await svc.IndexArticleAsync(title, content, category);
+            var result = await svc.IndexArticleAsync(title, content, category);
             return JsonSerializer.Serialize(new
             {
-                id,
+                id = result.Id,
                 title,
                 category,
-                message       = $"Successfully indexed. KB article ID: {id}",
+                message = result.Message,
+                created = result.Created,
+                updated = result.Updated,
+                disposition = result.Disposition,
+                matchQuality = result.MatchQuality,
                 _renderAction = "show_kb_article",
-                _renderArgs   = new { id, title, content, category },
+                _renderArgs = new
+                {
+                    id = result.Id,
+                    title,
+                    content,
+                    category,
+                    disposition = result.Disposition,
+                    matchQuality = result.MatchQuality,
+                },
             });
         }
         catch (Exception ex)

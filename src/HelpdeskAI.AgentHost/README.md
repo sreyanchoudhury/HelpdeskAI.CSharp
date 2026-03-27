@@ -14,6 +14,8 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 - **Applies render-action guidance** — follows `_renderAction` / `_renderArgs` from MCP tool results so the frontend can render structured cards when appropriate
 - **Validates Microsoft Entra bearer tokens** — `/agent` and frontend-facing API routes require a valid access token before user context is derived from claims
 - **Persists long-term user memory** — profile facts and simple `remember that ...` preferences are stored in Redis and injected back into the prompt
+- **Guards retry-safe side effects** — `create_ticket` and `index_kb_article` reuse prior thread-scoped results on immediate retries instead of duplicating writes
+- **Proxies active incidents for the frontend shell** — authenticated `/api/incidents/active` enables the proactive incident banner without exposing McpServer directly
 - **Captures turn-level telemetry** — repeated tool calls and latest user message are logged with per-turn scope data for Azure investigation
 - **App Insights Agents (Preview)** — custom `ActivitySource` emits `invoke_agent` spans with `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.agent.id` semantic attributes for the Azure Monitor Agents preview view
 
@@ -67,6 +69,11 @@ For local development, you can still run the app locally while pointing at Azure
 > tool-level scope (`toolName`) and logs `attempt`, `outcome`, and `durationMs` at Info/Warning/Error.
 > Token counts per turn are emitted as structured traces (`PromptTokens`, `CompletionTokens`, `ThreadId`).
 > These feed directly into the Phase 1d KQL baseline queries in `docs/baseline/kql-queries.md`.
+
+> **Retry-Safe Writes (Phase 4a):**
+> Thread-scoped Redis ledger entries now protect `create_ticket` and `index_kb_article` from duplicate
+> writes during immediate retries or partial-workflow recovery. Reused results are returned in the same
+> render-friendly shape as fresh tool responses, so the frontend card flow remains unchanged.
 
 ---
 ## Architecture

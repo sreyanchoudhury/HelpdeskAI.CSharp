@@ -34,6 +34,7 @@ internal static class KBAgentFactory
         1. FIRST call `search_kb_articles` to check if a similar article exists
         2. If NO match found → call `index_kb_article` with content derived from conversation context
         3. If a match IS found → return the existing article
+        4. If `index_kb_article` refreshes an existing article for the same topic, treat that as success and continue
         Do all of this without asking for confirmation.
 
         ## Tools
@@ -43,6 +44,7 @@ internal static class KBAgentFactory
         ## Tool Rules
         - Call tools one at a time, sequentially.
         - `index_kb_article` → call ONCE per indexing request; combine summary, root cause, and resolution into one article.
+        - If `index_kb_article` returns an existing article for the same thread/request, treat it as success and continue with that article ID.
         - Always search before claiming no article exists.
 
         ## Render Actions — MANDATORY (never skip)

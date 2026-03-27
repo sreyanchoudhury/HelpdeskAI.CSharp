@@ -23,7 +23,7 @@ Hosts **11 MCP tools** over HTTP at `/mcp` in three categories:
 
 **Knowledge Base (2 tools):**
 - Search KB articles with render-friendly results
-- Index incident resolutions and documents into Azure AI Search
+- Index incident resolutions and documents into Azure AI Search, with same-topic reuse/refresh behavior to reduce duplicate articles
 
 ---
 
@@ -382,6 +382,8 @@ Searches Azure AI Search for one or more relevant KB articles and returns either
 
 **Returns:** A KB article payload or a related-articles shortlist for the frontend render flow.
 
+Search results now include lightweight `matchQuality` hints so the UI can distinguish a strong match from a merely related article without changing the overall render flow.
+
 #### `index_kb_article`
 
 Saves a document or incident resolution to the IT knowledge base (Azure AI Search) so it can be found in future RAG queries.
@@ -395,10 +397,18 @@ Saves a document or incident resolution to the IT knowledge base (Azure AI Searc
 }
 ```
 
-**Returns:** KB article ID
+**Returns:** KB article result. The service now prefers:
+- reusing an exact existing article when title/content/category already match
+- refreshing an existing article when the same topic is found with improved content
+- creating a new article only when no strong same-topic match exists
+
+The result payload also includes:
+- `disposition` — `created` | `reused` | `refreshed`
+- `matchQuality` — lightweight quality signal for the resulting KB article
+
+Example:
 ```
-Successfully indexed into the knowledge base. KB article ID: KB-0006.
-It will be available for retrieval in future helpdesk conversations.
+KB article already existed for this topic. Refreshed article ID: KB-up-abc123.
 ```
 
 > **Requires Azure AI Search** — configures via `AzureAISearch.Endpoint` + `AzureAISearch.ApiKey` in `appsettings.Development.json` on the **AgentHost** side. The MCP server's `KnowledgeBaseSettings` section must also point to the same Search endpoint.

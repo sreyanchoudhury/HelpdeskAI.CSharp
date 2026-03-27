@@ -16,6 +16,9 @@ internal sealed class RedisService(IConnectionMultiplexer multiplexer) : IRedisS
     public async Task SetAsync(string key, string value, TimeSpan ttl) =>
         await _db.StringSetAsync(key, value, ttl);
 
+    public async Task<bool> TrySetAsync(string key, string value, TimeSpan ttl) =>
+        await _db.StringSetAsync(key, value, ttl, when: When.NotExists);
+
     public async Task DeleteAsync(string key) =>
         await _db.KeyDeleteAsync(key);
 }

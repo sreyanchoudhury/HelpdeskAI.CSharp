@@ -24,6 +24,10 @@ public sealed class Ticket
     public string RequestedBy { get; set; } = string.Empty;
     public string? AssignedTo { get; set; }
     public string? Resolution { get; set; }
+    public string? UserSentiment { get; set; }
+    public string? EscalationReason { get; set; }
+    public string? ImpactScope { get; set; }
+    public List<string> RelatedIncidentIds { get; set; } = [];
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<TicketComment> Comments { get; set; } = [];
@@ -36,4 +40,3 @@ public sealed class TicketComment
     public bool IsInternal { get; init; }
     public DateTimeOffset PostedAt { get; init; } = DateTimeOffset.UtcNow;
 }
-
