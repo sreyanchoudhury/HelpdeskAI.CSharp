@@ -17,9 +17,9 @@ namespace HelpdeskAI.AgentHost.Infrastructure;
 ///
 /// <para>
 /// <b>Critical timing:</b> <see cref="AIContextProvider.ProvideAIContextAsync"/> runs BEFORE
-/// the chat client pipeline. Since <see cref="AttachmentContextProvider"/> needs ThreadId at
-/// context-resolution time, we expose <see cref="EnsureAllContexts"/> which the AG-UI middleware
-/// in <c>Program.cs</c> can call to pre-populate AsyncLocals before the agent runs.
+/// the chat client pipeline. Request middleware in <c>Program.cs</c> therefore remains the
+/// primary source of truth for the initial thread/user context, while this client helps restore
+/// lost values on subsequent workflow hops.
 /// </para>
 /// </summary>
 internal sealed class ThreadIdPreservingChatClient : DelegatingChatClient
@@ -51,11 +51,7 @@ internal sealed class ThreadIdPreservingChatClient : DelegatingChatClient
             yield return update;
     }
 
-    /// <summary>
-    /// Restore all AsyncLocal values if lost. Called both from pipeline methods and
-    /// from Program.cs middleware to ensure context providers have access.
-    /// </summary>
-    internal void EnsureAllContexts(ChatOptions? options = null)
+    private void EnsureAllContexts(ChatOptions? options = null)
     {
         EnsureThreadId();
         EnsureFrontendTools(options);

@@ -92,17 +92,18 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
     - [RAG Retrieval](#-rag-retrieval-azureaisearchcontextprovider)
     - [Multi-Step Chaining](#-multi-step-chaining)
     - [Tips for Demos](#tips-for-demos)
-11. [Seed Data Reference](#seed-data-reference) — Incidents and tickets
+11. [Regression Suite](docs/regression-suite.md) — Repeatable validation prompts for both routes
+12. [Seed Data Reference](#seed-data-reference) — Incidents and tickets
 
 ### Advanced
-12. [Key Technologies](#key-technologies) — Stacks and frameworks
-13. [Azure AI Search Setup](#azure-ai-search-setup) — Manual KB index creation
-14. [API Endpoints](#api-endpoints) — AgentHost and McpServer endpoints
-15. [MCP Tools](#mcp-tools) — Tool descriptions and examples
-16. [Learn More](#learn-more) — External resources
+13. [Key Technologies](#key-technologies) — Stacks and frameworks
+14. [Azure AI Search Setup](#azure-ai-search-setup) — Manual KB index creation
+15. [API Endpoints](#api-endpoints) — AgentHost and McpServer endpoints
+16. [MCP Tools](#mcp-tools) — Tool descriptions and examples
+17. [Learn More](#learn-more) — External resources
 
 ### Troubleshooting
-17. [Troubleshooting](#troubleshooting) — Common issues and fixes
+18. [Troubleshooting](#troubleshooting) — Common issues and fixes
 
 ---
 
@@ -144,7 +145,7 @@ flowchart TD
     end
 
     subgraph Azure["☁️  Azure Services"]
-        AOA["Azure OpenAI<br/>gpt-4o · embeddings"]
+        AOA["Azure OpenAI<br/>gpt-4o · gpt-5.2-chat · embeddings"]
         AIS["Azure AI Search<br/>helpdesk-kb"]
         ABS["Blob Storage"]
         ADI["Document Intelligence"]
@@ -218,7 +219,8 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<your-resource>.openai.azure.com/",
     "ApiKey": "<your-key>",
-    "ChatDeployment": "gpt-4o"
+    "ChatDeployment": "gpt-4o",
+    "ChatDeploymentV2": "gpt-5.2-chat"
   },
   "AzureAISearch": {
     "Endpoint": "",
@@ -257,7 +259,7 @@ Then run services (same as above).
 ### Azure Prerequisites (if deploying to cloud)
 
 - Active **Azure subscription** with permission to create resources and assign RBAC roles
-- **Azure OpenAI** resource with a `gpt-4o` deployment (or request access at https://aka.ms/oai/access)
+- **Azure OpenAI** resource with `gpt-4o` for v1 and `gpt-5.2-chat` for v2 (or request access at https://aka.ms/oai/access)
 
 ---
 
@@ -273,7 +275,7 @@ az login
 ```
 
 This provisions:
-- Azure OpenAI (gpt-4o)
+- Azure OpenAI (`gpt-4o` for v1, `gpt-5.2-chat` for v2)
 - Azure AI Search (Basic tier)
 - Generated `appsettings.Development.json` with credentials
 
@@ -301,7 +303,8 @@ Create this file at `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4o"
+    "ChatDeployment": "gpt-4o",
+    "ChatDeploymentV2": "gpt-5.2-chat"
   },
   "AzureAISearch": {
     "Endpoint": "https://<search>.search.windows.net",
@@ -447,7 +450,7 @@ flowchart LR
     AH["🤖 AgentHost<br/>POST /agent"]
     CTX["🔍 Context injection<br/>RAG · LTM · user · attachments"]
     RH["💾 Redis<br/>history load"]
-    LLM(["🧠 Azure OpenAI<br/>gpt-4o"])
+    LLM(["🧠 Azure OpenAI<br/>gpt-4o / gpt-5.2-chat"])
     MCP["🛠 MCP tools<br/>McpServer"]
     SSE["📡 AG-UI SSE stream"]
     RP["💾 Redis<br/>history persist"]
@@ -510,6 +513,7 @@ A `RetryingMcpTool` wrapper catches `Session not found` (HTTP -32001) after McpS
     "Endpoint":           "https://<resource>.openai.azure.com/",
     "ApiKey":             "",          // leave empty → DefaultAzureCredential (managed identity)
     "ChatDeployment":     "gpt-4o",
+    "ChatDeploymentV2":   "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -552,7 +556,7 @@ Install the following before you begin:
 
 You also need:
 - An **Azure subscription** with permission to create resource groups and assign RBAC roles.
-- An **Azure OpenAI** resource with a `gpt-4o` deployment. Request access at https://aka.ms/oai/access if you don't have one.
+- An **Azure OpenAI** resource with `gpt-4o` for v1 and `gpt-5.2-chat` for v2. Request access at https://aka.ms/oai/access if you don't have them.
 
 ---
 
@@ -568,7 +572,7 @@ The `infra/` folder contains a fully automated deployment script that provisions
 
 | Resource | Purpose |
 |----------|---------|
-| Azure OpenAI | `gpt-4o` model for the AI agent |
+| Azure OpenAI | `gpt-4o` for v1 and `gpt-5.2-chat` for v2 |
 | Azure AI Search (Basic) | Knowledge-base RAG — index `helpdesk-kb` |
 
 ### Step 1 — Log in to Azure
@@ -665,6 +669,7 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
     "Endpoint":           "https://<your-resource>.openai.azure.com/",
     "ApiKey":             "<your-api-key>",
     "ChatDeployment":     "gpt-4o",
+    "ChatDeploymentV2":   "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -694,7 +699,8 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
 > - Go to https://portal.azure.com → your Azure OpenAI resource → **Keys and Endpoint**.
 > - `Endpoint` — the URL ending in `.openai.azure.com/`
 > - `ApiKey` — either Key 1 or Key 2
-> - `ChatDeployment` — the **Deployment name** you chose in Azure OpenAI Studio, e.g. `gpt-4o`
+> - `ChatDeployment` — the v1 deployment name in Azure OpenAI Studio, e.g. `gpt-4o`
+> - `ChatDeploymentV2` — the optional v2 workflow deployment name, e.g. `gpt-5.2-chat`
 > - `EmbeddingDeployment` — an embedding model deployment in the same resource, e.g. `text-embedding-3-small`
 
 > **No AI Search?** Leave `Endpoint` and `ApiKey` empty. The agent will skip RAG and answer from its training data alone.
@@ -745,13 +751,14 @@ The deploy scripts handle this automatically. This section is for **manual setup
 
 The `helpdesk-kb` index has these fields:
 
-| Field | Type | Key | Searchable | Filterable |
-|-------|------|-----|-----------|-----------|
-| `id` | `Edm.String` | ✅ | | |
-| `title` | `Edm.String` | | ✅ | |
-| `content` | `Edm.String` | | ✅ | |
-| `category` | `Edm.String` | | ✅ | ✅ |
-| `tags` | `Collection(Edm.String)` | | ✅ | ✅ |
+| Field | Type | Key | Searchable | Filterable | Sortable |
+|-------|------|-----|-----------|-----------|----------|
+| `id` | `Edm.String` | ✅ | | | |
+| `title` | `Edm.String` | | ✅ | | |
+| `content` | `Edm.String` | | ✅ | | |
+| `category` | `Edm.String` | | ✅ | ✅ | |
+| `tags` | `Collection(Edm.String)` | | ✅ | ✅ | |
+| `indexedAt` | `Edm.DateTimeOffset` | | | ✅ | ✅ |
 
 Semantic configuration name: `helpdesk-semantic-config`
 
@@ -760,16 +767,14 @@ Semantic configuration name: `helpdesk-semantic-config`
 Replace `<ENDPOINT>` with your Search endpoint (e.g. `https://your-search.search.windows.net`) and `<ADMIN-KEY>` with your Admin key from the Azure portal.
 
 ```bash
-curl -X POST "<ENDPOINT>/indexes?api-version=2024-07-01" \
-  -H "api-key: <ADMIN-KEY>" \
-  -H "Content-Type: application/json" \
-  -d @infra/index-schema.json
+.\infra\setup-search.ps1 -SearchEndpoint "https://<your-search>.search.windows.net" `
+                         -AdminKey "<ADMIN-KEY>"
 ```
 
 ### Create the index (Azure Portal)
 
 1. Go to https://portal.azure.com → your Azure AI Search resource → **Indexes** → **+ Add index**.
-2. Add fields as per the table above. Set `id` as the Key field.
+2. Add fields as per the table above. Set `id` as the Key field and `indexedAt` as sortable + filterable.
 3. Under **Semantic configurations**, add a config named `helpdesk-semantic-config` with `title` as the title field and `content` as the content field.
 
 ### Seed the knowledge base
@@ -812,7 +817,7 @@ Then re-run the seed command above. Use `"@search.action": "mergeOrUpload"` to u
 | `POST` | `/agent/v2` | AG-UI v2 multi-agent workflow endpoint (SSE stream) |
 | `GET`  | `/agent/info` | Diagnostic — library names, runtime info |
 | `GET`  | `/agent/usage?threadId=` | Token usage for a session — `{promptTokens, completionTokens}` from Redis |
-| `GET`  | `/healthz` | Health (includes Redis ping) |
+| `GET`  | `/healthz` | AgentHost liveness / readiness probe |
 | `GET`  | `/api/kb/search?q=...` | Knowledge base search |
 | `POST` | `/api/attachments` | File upload — `.txt`, `.pdf`, `.docx` (OCR), `.png`/`.jpg`/`.jpeg` (vision) |
 
@@ -962,7 +967,7 @@ useCopilotChatSuggestions({
 
 - **`az login` required** — run `az login` and `az account set --subscription "<id>"`.
 - **Bicep not installed** — run `az bicep install` then retry.
-- **Region quota** — Azure OpenAI `gpt-4o` has limited regional availability. Try `swedencentral` or `eastus2` if your region lacks quota.
+- **Region quota** — Azure OpenAI chat deployments can have limited regional availability. Try `swedencentral` or `eastus2` if your region lacks quota.
 
 ### Container App revision fails startup probe after a configuration change
 
@@ -1001,8 +1006,12 @@ A curated set of prompts to explore the full capability stack: context awareness
 generative UI, MCP backend tools, RAG retrieval, chat suggestions, and multi-step
 chaining.
 
-The seeded user for all demos is **Alex Johnson** — Senior Developer, Engineering team,
-Kolkata Office, `alex.johnson@contoso.com`, MacBook Pro 16" M3.
+These prompts now run against the currently signed-in Microsoft Entra user. Any examples
+that mention team, location, or tickets assume your session has matching profile context or
+seed data that makes the scenario meaningful.
+
+For release validation, use the dedicated [regression suite](docs/regression-suite.md)
+rather than this broader demo catalog.
 
 ---
 
@@ -1024,9 +1033,9 @@ Calls `check_impact_for_team(team="Engineering")` automatically from the readabl
 ```
 My VPN isn't working
 ```
-The agent knows Alex is in the **Kolkata Office** and calls `get_system_status(service="VPN")`,
-finds **INC-9055** (Kolkata primary gateway outage), and replies with the secondary gateway
-workaround — without asking where the user is.
+The agent can use the signed-in user's location context and call `get_system_status(service="VPN")`,
+find **INC-9055** (Kolkata primary gateway outage), and reply with the secondary gateway
+workaround without forcing an extra location question when that context is already available.
 
 ---
 
@@ -1034,7 +1043,7 @@ workaround — without asking where the user is.
 ```
 Do I have any open tickets?
 ```
-Calls `search_tickets(requestedBy="alex.johnson@contoso.com")` using the email already in
+Calls `search_tickets(requestedBy="<signed-in-user-email>")` using the email already in
 context. The user never has to provide it.
 
 ---

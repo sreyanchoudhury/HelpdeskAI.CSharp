@@ -8,7 +8,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 - **Hosts the AI agent** — AG-UI endpoint at `/agent` (v1 single agent) and `/agent/v2` (multi-agent handoff workflow via MAF)
 - **Multi-agent workflow (v2)** — orchestrator routes to specialist agents (diagnostic, ticket, KB, incident) using MAF `HandoffsWorkflow`; each specialist has scoped MCP tools and context providers
-- **Integrates Azure OpenAI** — calls the configured chat deployment for completions; `gpt-4o` and `gpt-4o-mini` are the current recommended choices for reliable render-action follow-through
+- **Integrates Azure OpenAI** — v1 uses `gpt-4o` and v2 uses `gpt-5.2-chat` via an optional separate workflow deployment
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
 - **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticketing, system status monitoring, and KB search/index flows
 - **Applies render-action guidance** — follows `_renderAction` / `_renderArgs` from MCP tool results so the frontend can render structured cards when appropriate
@@ -98,7 +98,7 @@ flowchart TD
     end
 
     MCPSRV(["🛠 McpServer  ·  port 5100"])
-    AOA["☁️ Azure OpenAI<br/>gpt-4o · embeddings"]
+    AOA["☁️ Azure OpenAI<br/>gpt-4o · gpt-5.2-chat · embeddings"]
     AIS["🔍 Azure AI Search"]
     ABS["📦 Blob Storage"]
     ADI["📄 Document Intelligence"]
@@ -168,6 +168,7 @@ Create `appsettings.Development.json` at project root:
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
     "ChatDeployment": "gpt-4o",
+    "ChatDeploymentV2": "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
   "DynamicTools": {
@@ -229,7 +230,8 @@ npm run dev
 |---------|-----|------|----------|---------|
 | `AzureOpenAI` | `Endpoint` | string | ✅ | Azure OpenAI resource endpoint (ends with `/`) |
 | `AzureOpenAI` | `ApiKey` | string | ✅ | Admin API key for Azure OpenAI |
-| `AzureOpenAI` | `ChatDeployment` | string | ✅ | Chat model deployment name (e.g., `gpt-4o`) |
+| `AzureOpenAI` | `ChatDeployment` | string | ✅ | v1 chat model deployment name (e.g., `gpt-4o`) |
+| `AzureOpenAI` | `ChatDeploymentV2` | string | | v2 workflow deployment name (e.g., `gpt-5.2-chat`); falls back to `ChatDeployment` if empty |
 | `AzureOpenAI` | `EmbeddingDeployment` | string | ✅ | Embedding model deployment for dynamic tool selection (e.g., `text-embedding-3-small`) |
 | `DynamicTools` | `TopK` | int | | Top-K tools to inject per turn via cosine similarity (default: `8`) |
 | `AzureAISearch` | `Endpoint` | string | ❌ | Search service endpoint (leave empty to skip RAG) |
@@ -333,7 +335,7 @@ flowchart LR
     S1(["🌐 Browser<br/>POST /agent"])
     S2["🔐 Auth + Middleware<br/>Entra · thread ID · telemetry"]
     S3["🔍 Context Injection<br/>RAG · LTM · user · attachments<br/>+ dynamic tool selection"]
-    S4(["🧠 Azure OpenAI<br/>gpt-4o reasoning"])
+    S4(["🧠 Azure OpenAI<br/>gpt-4o or gpt-5.2-chat reasoning"])
     S5["🛠 MCP Tool Calls<br/>McpServer"]
     S6["📡 AG-UI SSE Stream<br/>render actions · text chunks"]
     S7(["✅ Browser updated<br/>cards · alerts · KB"])
@@ -377,7 +379,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | `POST` | `/agent` | AG-UI v1 streaming endpoint — single agent (SSE) |
 | `POST` | `/agent/v2` | AG-UI v2 streaming endpoint — multi-agent MAF workflow (SSE) |
 | `POST` | `/agent/eval` | Synchronous eval endpoint for `HelpdeskAI.Evaluation` test harness — enabled for non-production environments only |
-| `GET` | `/healthz` | Liveness / readiness probe |
+| `GET` | `/healthz` | Liveness / readiness probe (does not fail on Redis loss) |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
 | `GET` | `/agent/usage?threadId=` | Token usage for the most recent response — returns `{promptTokens, completionTokens}` from the thread-scoped Redis key written by `UsageCapturingChatClient` |
 | `GET` | `/api/kb/search?q=...` | Knowledge base search (proxied from frontend `/api/kb`) |
@@ -567,7 +569,7 @@ cd ../HelpdeskAI.McpServer && dotnet run
 | `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` (managed identity) |
 | `Azure.Monitor.OpenTelemetry.AspNetCore` | 1.4.0 | Application Insights telemetry |
 | `StackExchange.Redis` | 2.12.1 | Chat history + attachment staging |
-| `AspNetCore.HealthChecks.Redis` | 9.0.0 | Redis liveness check at `/healthz` |
+| `AspNetCore.HealthChecks.Redis` | 9.0.0 | Redis health check package retained for future explicit probes; current `/healthz` does not fail on Redis loss |
 
 ---
 
