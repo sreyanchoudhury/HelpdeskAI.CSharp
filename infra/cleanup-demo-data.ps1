@@ -6,10 +6,12 @@
     This script is intended for regression-cycle cleanup. It preserves:
       - KB articles whose IDs are present in infra/seed-data.json
       - Seeded ticket documents whose seq is <= SeedTicketMaxSeq
+      - Long-term Redis memory unless -ClearLongTermMemory is supplied
 
     It deletes:
       - Agent-indexed or manually added KB documents not present in seed-data.json
       - Cosmos ticket documents above the configured seed threshold
+      - Ephemeral Redis state for chat history, attachments, usage snapshots, and retry-safe side-effect ledgers
 #>
 
 param(
@@ -20,7 +22,10 @@ param(
     [string]$SearchIndexName = "helpdesk-kb",
     [string]$CosmosDatabaseName = "helpdeskdb",
     [string]$CosmosContainerName = "tickets",
-    [int]$SeedTicketMaxSeq = 1013
+    [int]$SeedTicketMaxSeq = 1013,
+    [string]$RedisContainerAppName,
+    [string]$RedisResourceGroupName,
+    [switch]$ClearLongTermMemory
 )
 
 $ErrorActionPreference = "Stop"
@@ -202,4 +207,37 @@ else {
 }
 
 Write-Host ""
+if ($RedisContainerAppName -and $RedisResourceGroupName) {
+    Write-Host "Cleaning Redis ephemeral state through Container App '$RedisContainerAppName'..." -ForegroundColor Cyan
+
+    $patterns = @(
+        "messages:*",
+        "usage:*",
+        "attachments:*",
+        "sideeffect:*"
+    )
+
+    if ($ClearLongTermMemory) {
+        $patterns += "ltm:*:profile"
+    }
+
+    foreach ($pattern in $patterns) {
+        Write-Host "Deleting Redis keys matching '$pattern'..." -ForegroundColor Yellow
+        $redisCommand = "sh -lc ""redis-cli --scan --pattern '$pattern' | xargs -r redis-cli del >/dev/null"""
+        az containerapp exec `
+            --name $RedisContainerAppName `
+            --resource-group $RedisResourceGroupName `
+            --command $redisCommand `
+            --only-show-errors | Out-Null
+    }
+
+    Write-Host "Redis cleanup complete." -ForegroundColor Green
+}
+else {
+    Write-Host "Redis cleanup skipped. Supply -RedisContainerAppName and -RedisResourceGroupName to clear ephemeral Redis state." -ForegroundColor DarkYellow
+}
+
 Write-Host "Cleanup finished. Seed KB data and seed tickets were preserved." -ForegroundColor Cyan
+if (-not $ClearLongTermMemory) {
+    Write-Host "Long-term memory in Redis was preserved." -ForegroundColor Cyan
+}

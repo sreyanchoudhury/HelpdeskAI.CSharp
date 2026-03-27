@@ -101,7 +101,8 @@ cd infra
 6. **Generates config** — creates `src/HelpdeskAI.AgentHost/appsettings.Development.json` with credentials
 7. **Reads Entra/NextAuth env vars** — app deployment consumes `AZURE_AD_*` and `NEXTAUTH_SECRET` from the active `azd` environment
 8. **Wires Cosmos DB settings** — app and MCP deployments consume `CosmosDb__*` settings when Phase 2a persistence is enabled
-9. **Supports regression cleanup** — `cleanup-demo-data.ps1` removes non-seed Cosmos and AI Search artifacts while preserving the repository seed baseline
+9. **Supports regression cleanup** — `cleanup-demo-data.ps1` removes non-seed Cosmos and AI Search artifacts and can also clear ephemeral Redis thread state while preserving the repository seed baseline
+10. **Supports proactive monitoring UX** — the deployed stack now exposes active-incident data through the authenticated app path so the frontend can surface a lightweight live incident banner
 
 **Typical runtime:** 5–10 minutes
 

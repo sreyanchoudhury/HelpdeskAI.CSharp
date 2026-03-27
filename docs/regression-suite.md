@@ -177,7 +177,83 @@ Expected:
 - preference memory survives across sessions
 - not limited to just name/email identity recall
 
-### 10. Cross-Browser Sanity
+### 10. Retry-Safe Side Effects
+
+Run these scenarios on both routes in the same conversation thread.
+
+#### 10a. Ticket Retry Reuse
+
+Prompt:
+
+```text
+Create a ticket for VPN reconnect failures after a Windows update, assign it to me, and show me the ticket.
+```
+
+After it completes, immediately retry with:
+
+```text
+Retry that workflow and continue from where you left off.
+```
+
+Expected:
+
+- no second ticket is created
+- the existing ticket is reused
+- assignment still targets the original ticket
+- ticket card still renders correctly
+
+#### 10b. KB Retry Reuse
+
+Prompt:
+
+```text
+Add this resolution to the knowledge base and show me the article.
+```
+
+After it completes, immediately retry with:
+
+```text
+Retry that KB step and continue from where you left off.
+```
+
+Expected:
+
+- no second KB article is created
+- the existing KB article is reused
+- KB responses should now make it easier to tell whether the article was reused, refreshed, or created anew
+- KB card still renders correctly
+
+#### 10c. Partial Workflow Recovery
+
+Use the attachment workflow, then after a partial answer or after manually interrupting the flow, continue with:
+
+```text
+Continue the remaining steps without repeating anything already completed.
+```
+
+Expected:
+
+- completed side effects are reused rather than replayed
+- the workflow continues with remaining tasks
+- no duplicate ticket or KB record is created
+
+#### 10d. Urgency and Escalation Signal
+
+Prompt:
+
+```text
+This is urgent. Our whole team is blocked again and I need this fixed immediately. Create a ticket and assign it to me.
+```
+
+Expected:
+
+- the response remains concise and empathetic
+- the created ticket reflects appropriately high urgency
+- repeated-failure or frustrated wording should now be reflected in stored ticket sentiment/escalation metadata
+- active-incident-linked requests should reuse the same flow while capturing incident correlation on the created ticket
+- no duplicate ticket is created if the prompt is retried in the same thread
+
+### 11. Cross-Browser Sanity
 
 Run one ticket flow and one attachment workflow in both Chrome and Edge.
 
@@ -192,7 +268,7 @@ Capture:
 - whether token usage is materially higher in one browser
 - whether cards render differently
 
-### 11. Responsive Layout
+### 12. Responsive Layout
 
 Validate the app in 3 viewport classes on both routes:
 
@@ -226,7 +302,7 @@ Create a ticket for Outlook crashing when opening large attachments, priority hi
 Search the knowledge base for VPN certificate issues and show me the matching article.
 ```
 
-### 12. CopilotKit Controls Preference
+### 13. CopilotKit Controls Preference
 
 Open Settings and switch `CopilotKit Controls` between `Hidden` and `Visible`.
 
@@ -237,7 +313,18 @@ Expected:
 - CopilotKit developer controls reappear in `Visible`
 - mobile layout is materially better in `Hidden`
 
-### 13. Streaming Auto-Scroll
+### 14. Proactive Incident Banner
+
+Open Settings and switch `Live Incident Banner` between `Visible` and `Hidden`.
+
+Expected:
+
+- page reloads cleanly
+- when `Visible`, active incidents appear as a slim banner in the app shell
+- when `Hidden`, the app shell stays focused on chat and pages without the proactive banner
+- the banner does not break responsive layout on desktop or mobile
+
+### 15. Streaming Auto-Scroll
 
 Use a prompt that streams for long enough to observe the message area:
 
@@ -250,7 +337,7 @@ Expected:
 - chat stays pinned to the bottom while the assistant is streaming
 - if you manually scroll upward mid-response, the app does not fight that scroll
 
-### 14. Message Avatars
+### 16. Message Avatars
 
 Expected:
 
@@ -284,7 +371,7 @@ Current known risks:
 - `v1`: sporadic `show_ticket_details` argument parsing failure on render path
 - `v2`: complex workflows may not always complete in one uninterrupted turn
 - both routes: token usage remains higher than desired on longer workflows
-- parallel multi-browser stress runs can still surface duplicate rendering or duplicate side effects
+- parallel multi-browser stress runs can still surface duplicate rendering, and long workflows can still need follow-up nudges even when side effects are reused safely
 - CopilotKit developer controls are still not inherently mobile-friendly when explicitly enabled
 
 ## Recommended Recording Format
@@ -309,7 +396,9 @@ cd infra
   -SearchEndpoint "https://<search>.search.windows.net" `
   -SearchAdminKey "<search-admin-key>" `
   -CosmosEndpoint "https://<cosmos>.documents.azure.com:443/" `
-  -CosmosPrimaryKey "<cosmos-primary-key>"
+  -CosmosPrimaryKey "<cosmos-primary-key>" `
+  -RedisContainerAppName "<redis-container-app>" `
+  -RedisResourceGroupName "<resource-group>"
 ```
 
 By default, the cleanup script:
@@ -318,3 +407,5 @@ By default, the cleanup script:
 - removes agent-indexed KB documents such as `KB-up-*`
 - preserves seeded ticket documents with `seq <= 1013`
 - removes later demo-created tickets
+- clears ephemeral Redis state used for chat history, attachments, usage snapshots, and retry-safe side-effect tracking
+- preserves long-term memory unless `-ClearLongTermMemory` is explicitly supplied

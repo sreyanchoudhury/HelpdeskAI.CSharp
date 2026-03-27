@@ -14,6 +14,7 @@ public static class TicketTools
     [Description("Creates a new IT support ticket. Call this when the user reports a new issue that needs tracking. After success, immediately follow with show_ticket_created using the returned render metadata.")]
     public static async Task<string> CreateTicket(
         TicketService svc,
+        SystemStatusService systemStatus,
         ILoggerFactory loggerFactory,
         [Description("Short title (max 80 chars)")] string title,
         [Description("Full description including error messages and steps already tried")] string description,
@@ -25,7 +26,18 @@ public static class TicketTools
         {
             if (!Enum.TryParse<TicketPriority>(priority, true, out var p)) p = TicketPriority.Medium;
             if (!Enum.TryParse<TicketCategory>(category, true, out var c)) c = TicketCategory.Other;
-            var t = await svc.CreateTicketAsync(title, description, p, c, requestedBy);
+            var analysis = AnalyzeTicketContext(title, description, p, systemStatus);
+            var effectivePriority = analysis.PriorityOverride ?? p;
+            var t = await svc.CreateTicketAsync(
+                title,
+                description,
+                effectivePriority,
+                c,
+                requestedBy,
+                userSentiment: analysis.UserSentiment,
+                escalationReason: analysis.EscalationReason,
+                impactScope: analysis.ImpactScope,
+                relatedIncidentIds: analysis.RelatedIncidentIds);
             var pri = t.Priority.ToString().ToLowerInvariant();
             var cat = t.Category.ToString().ToLowerInvariant();
             return JsonSerializer.Serialize(new
@@ -39,8 +51,23 @@ public static class TicketTools
                 requestedBy = t.RequestedBy,
                 assignedTo  = t.AssignedTo,
                 createdAt   = t.CreatedAt,
+                userSentiment = t.UserSentiment,
+                escalationReason = t.EscalationReason,
+                impactScope = t.ImpactScope,
+                relatedIncidentIds = t.RelatedIncidentIds,
                 _renderAction = "show_ticket_created",
-                _renderArgs   = new { id = t.Id, title = t.Title, description = t.Description, priority = pri, category = cat },
+                _renderArgs   = new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                    description = t.Description,
+                    priority = pri,
+                    category = cat,
+                    userSentiment = t.UserSentiment,
+                    escalationReason = t.EscalationReason,
+                    impactScope = t.ImpactScope,
+                    relatedIncidentIds = t.RelatedIncidentIds,
+                },
             });
         }
         catch (Exception ex)
@@ -80,9 +107,27 @@ public static class TicketTools
                 createdAt   = t.CreatedAt,
                 updatedAt   = t.UpdatedAt,
                 resolution  = t.Resolution,
+                userSentiment = t.UserSentiment,
+                escalationReason = t.EscalationReason,
+                impactScope = t.ImpactScope,
+                relatedIncidentIds = t.RelatedIncidentIds,
                 comments,
                 _renderAction = "show_ticket_details",
-                _renderArgs   = new { id = t.Id, title = t.Title, description = t.Description, priority = pri, category = cat, status = sta, assignedTo = t.AssignedTo, createdAt = t.CreatedAt.ToString("o") },
+                _renderArgs   = new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                    description = t.Description,
+                    priority = pri,
+                    category = cat,
+                    status = sta,
+                    assignedTo = t.AssignedTo,
+                    createdAt = t.CreatedAt.ToString("o"),
+                    userSentiment = t.UserSentiment,
+                    escalationReason = t.EscalationReason,
+                    impactScope = t.ImpactScope,
+                    relatedIncidentIds = t.RelatedIncidentIds,
+                },
             });
         }
         catch (Exception ex)
@@ -113,6 +158,10 @@ public static class TicketTools
                 status   = t.Status.ToString().ToLowerInvariant(),
                 priority = t.Priority.ToString().ToLowerInvariant(),
                 category = t.Category.ToString().ToLowerInvariant(),
+                userSentiment = t.UserSentiment,
+                escalationReason = t.EscalationReason,
+                impactScope = t.ImpactScope,
+                relatedIncidentIds = t.RelatedIncidentIds,
             }).ToList();
             return JsonSerializer.Serialize(new
             {
@@ -196,5 +245,91 @@ public static class TicketTools
             loggerFactory.CreateLogger("TicketTools").LogError(ex, "assign_ticket failed for ticketId={TicketId}", ticketId);
             return $"Failed to assign ticket {ticketId}: {ex.Message}";
         }
+    }
+
+    private sealed record TicketContextAnalysis(
+        TicketPriority? PriorityOverride,
+        string UserSentiment,
+        string? EscalationReason,
+        string? ImpactScope,
+        List<string> RelatedIncidentIds);
+
+    private static TicketContextAnalysis AnalyzeTicketContext(
+        string title,
+        string description,
+        TicketPriority requestedPriority,
+        SystemStatusService systemStatus)
+    {
+        var combined = $"{title}\n{description}";
+        var normalized = combined.ToLowerInvariant();
+        var activeIncidents = systemStatus.GetActiveIncidents();
+        var relatedIncidentIds = activeIncidents
+            .Where(incident => IncidentMatchesText(incident, normalized))
+            .Select(incident => incident.IncidentId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var urgencySignals = new[]
+        {
+            "urgent", "immediately", "asap", "blocked", "critical", "sev1", "sev 1", "p1"
+        };
+        var frustrationSignals = new[]
+        {
+            "again", "still broken", "frustrated", "annoying", "unacceptable", "fed up", "not working", "keeps failing"
+        };
+        var broadImpactSignals = new[]
+        {
+            "whole team", "entire team", "multiple users", "everyone", "across the team", "company-wide", "all users"
+        };
+
+        var urgent = urgencySignals.Any(signal => normalized.Contains(signal, StringComparison.Ordinal));
+        var frustrated = frustrationSignals.Any(signal => normalized.Contains(signal, StringComparison.Ordinal));
+        var broadImpact = broadImpactSignals.Any(signal => normalized.Contains(signal, StringComparison.Ordinal))
+            || relatedIncidentIds.Count > 0;
+
+        var escalationParts = new List<string>();
+        if (urgent) escalationParts.Add("User expressed urgency or blockage");
+        if (frustrated) escalationParts.Add("User language suggests repeated failure or frustration");
+        if (broadImpact) escalationParts.Add("Issue appears to affect multiple users or maps to an active incident");
+
+        var priorityOverride = requestedPriority;
+        if ((urgent || broadImpact) && requestedPriority < TicketPriority.High)
+            priorityOverride = TicketPriority.High;
+        if (urgent && broadImpact)
+            priorityOverride = TicketPriority.Critical;
+
+        var userSentiment = urgent && frustrated
+            ? "urgent-frustrated"
+            : urgent
+                ? "urgent"
+                : frustrated
+                    ? "frustrated"
+                    : "neutral";
+
+        return new TicketContextAnalysis(
+            PriorityOverride: priorityOverride == requestedPriority ? null : priorityOverride,
+            UserSentiment: userSentiment,
+            EscalationReason: escalationParts.Count > 0 ? string.Join("; ", escalationParts) : null,
+            ImpactScope: broadImpact ? "multiple-users" : "single-user",
+            RelatedIncidentIds: relatedIncidentIds);
+    }
+
+    private static bool IncidentMatchesText(ServiceStatus incident, string normalizedText)
+    {
+        if (normalizedText.Contains(incident.Name.ToLowerInvariant(), StringComparison.Ordinal))
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(incident.IncidentId) &&
+            normalizedText.Contains(incident.IncidentId.ToLowerInvariant(), StringComparison.Ordinal))
+            return true;
+
+        var keywords = incident.Name
+            .Split([' ', '(', ')', '/', '-'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(part => part.Length >= 4)
+            .Select(part => part.ToLowerInvariant());
+
+        return keywords.Any(keyword => normalizedText.Contains(keyword, StringComparison.Ordinal));
     }
 }

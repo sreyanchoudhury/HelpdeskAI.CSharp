@@ -17,6 +17,10 @@ export interface Ticket {
   category: string;
   status: "open" | "in_progress" | "resolved";
   createdAt: Date;
+  userSentiment?: string;
+  escalationReason?: string;
+  impactScope?: string;
+  relatedIncidentIds?: string[];
 }
 
 interface Props {
@@ -37,6 +41,7 @@ function TicketCard({ ticket, status }: { ticket: Partial<Ticket>; status: strin
   const category = (ticket.category ?? "other").toLowerCase();
   const icon = CATEGORY_ICON[category] ?? "🎫";
   const isStreaming = status === "inProgress";
+  const relatedIncidentIds = ticket.relatedIncidentIds ?? [];
 
   return (
     <div style={{
@@ -62,6 +67,46 @@ function TicketCard({ ticket, status }: { ticket: Partial<Ticket>; status: strin
       </div>
       {ticket.description && (
         <div style={{ fontSize: 12, color: "#9098b0", lineHeight: 1.5 }}>{ticket.description}</div>
+      )}
+      {(ticket.userSentiment || ticket.impactScope || relatedIncidentIds.length > 0) && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {ticket.userSentiment && ticket.userSentiment !== "neutral" && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+              textTransform: "uppercase", color: "#f59e0b",
+              background: "#f59e0b18", padding: "2px 8px", borderRadius: 999,
+            }}>
+              {ticket.userSentiment.replace(/-/g, " ")}
+            </span>
+          )}
+          {ticket.impactScope === "multiple-users" && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+              textTransform: "uppercase", color: "#ef4444",
+              background: "#ef444418", padding: "2px 8px", borderRadius: 999,
+            }}>
+              multi-user impact
+            </span>
+          )}
+          {relatedIncidentIds.map(incidentId => (
+            <span key={incidentId} style={{
+              fontSize: 10, fontWeight: 700, color: "#3d5afe",
+              background: "#3d5afe18", padding: "2px 8px", borderRadius: 999,
+              fontFamily: "monospace",
+            }}>
+              {incidentId}
+            </span>
+          ))}
+        </div>
+      )}
+      {ticket.escalationReason && (
+        <div style={{
+          marginTop: 10, fontSize: 11, color: "#c7cedd",
+          background: "#ffffff05", border: "1px solid #ffffff0a",
+          borderRadius: 8, padding: "8px 10px", lineHeight: 1.5,
+        }}>
+          {ticket.escalationReason}
+        </div>
       )}
       <div style={{
         marginTop: 12, paddingTop: 10, borderTop: "1px solid #ffffff0f",
@@ -265,9 +310,11 @@ function AttachmentDocCard({ fileName, summary, blobUrl, status }: {
 }
 
 // ── TicketDetailCard ──────────────────────────────────────────────────────────
-function TicketDetailCard({ id, title, description, priority, category, ticketStatus, assignedTo, createdAt, status }: {
+function TicketDetailCard({ id, title, description, priority, category, ticketStatus, assignedTo, createdAt, userSentiment, escalationReason, impactScope, relatedIncidentIds, status }: {
   id: string; title: string; description?: string; priority: string; category?: string;
-  ticketStatus: string; assignedTo?: string; createdAt?: string; status: string;
+  ticketStatus: string; assignedTo?: string; createdAt?: string;
+  userSentiment?: string; escalationReason?: string; impactScope?: string; relatedIncidentIds?: string[];
+  status: string;
 }) {
   const isStreaming = status === "inProgress";
   const pri = (priority ?? "medium").toLowerCase() as Ticket["priority"];
@@ -276,6 +323,7 @@ function TicketDetailCard({ id, title, description, priority, category, ticketSt
   const catIcon = CATEGORY_ICON[cat] ?? "🎫";
   const statusColor = (ticketStatus ?? "").toLowerCase().includes("resolved") ? "#22c55e"
     : (ticketStatus ?? "").toLowerCase().includes("progress") ? "#3d5afe" : "#9098b0";
+  const linkedIncidentIds = relatedIncidentIds ?? [];
   return (
     <div style={{
       border: "1px solid #3d5afe33", borderLeft: "3px solid #3d5afe",
@@ -322,6 +370,41 @@ function TicketDetailCard({ id, title, description, priority, category, ticketSt
         )}
       </div>
 
+      {(userSentiment || impactScope || linkedIncidentIds.length > 0) && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+          {userSentiment && userSentiment !== "neutral" && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+              color: "#f59e0b", background: "#f59e0b18",
+              padding: "2px 8px", borderRadius: 999,
+            }}>{userSentiment.replace(/-/g, " ")}</span>
+          )}
+          {impactScope === "multiple-users" && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+              color: "#ef4444", background: "#ef444418",
+              padding: "2px 8px", borderRadius: 999,
+            }}>multi-user impact</span>
+          )}
+          {linkedIncidentIds.map(incidentId => (
+            <span key={incidentId} style={{
+              fontSize: 10, color: "#3d5afe", background: "#3d5afe18",
+              padding: "2px 8px", borderRadius: 999, fontFamily: "monospace",
+            }}>{incidentId}</span>
+          ))}
+        </div>
+      )}
+
+      {escalationReason && (
+        <div style={{
+          marginTop: 10, fontSize: 11, color: "#c7cedd",
+          background: "#ffffff05", border: "1px solid #ffffff0a",
+          borderRadius: 8, padding: "8px 10px", lineHeight: 1.5,
+        }}>
+          {escalationReason}
+        </div>
+      )}
+
       {createdAt && (
         <div style={{ fontSize: 10, color: "#3a4060", marginTop: 8, fontFamily: "monospace" }}>
           Created: {createdAt}
@@ -332,8 +415,8 @@ function TicketDetailCard({ id, title, description, priority, category, ticketSt
 }
 
 // ── KbArticleCard ─────────────────────────────────────────────────────────────
-function KbArticleCard({ id, title, content, category, status }: {
-  id: string; title: string; content: string; category?: string; status: string;
+function KbArticleCard({ id, title, content, category, matchQuality, disposition, status }: {
+  id: string; title: string; content: string; category?: string; matchQuality?: string; disposition?: string; status: string;
 }) {
   const isStreaming = status === "inProgress";
   const catColor = KB_CATEGORY_COLOR[(category ?? "other").toLowerCase()] ?? "#9098b0";
@@ -357,6 +440,18 @@ function KbArticleCard({ id, title, content, category, status }: {
             padding: "1px 6px", borderRadius: 4, textTransform: "capitalize",
           }}>{category}</span>
         )}
+        {matchQuality && (
+          <span style={{
+            fontSize: 10, color: "#9098b0", background: "#ffffff08",
+            padding: "1px 6px", borderRadius: 4, textTransform: "capitalize",
+          }}>{matchQuality} match</span>
+        )}
+        {disposition && disposition !== "new" && (
+          <span style={{
+            fontSize: 10, color: "#22c55e", background: "#22c55e18",
+            padding: "1px 6px", borderRadius: 4, textTransform: "capitalize",
+          }}>{disposition}</span>
+        )}
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 600, color: "#e8eaf0", marginBottom: 8 }}>{title}</div>
@@ -375,7 +470,7 @@ function KbArticleCard({ id, title, content, category, status }: {
 
 // ── RelatedArticlesCard ───────────────────────────────────────────────────────
 function RelatedArticlesCard({ articles, status }: {
-  articles: Array<{ id: string; title: string; category?: string; summary?: string }>;
+  articles: Array<{ id: string; title: string; category?: string; summary?: string; matchQuality?: string }>;
   status: string;
 }) {
   const isStreaming = status === "inProgress";
@@ -417,6 +512,11 @@ function RelatedArticlesCard({ articles, status }: {
                   {a.summary && (
                     <div style={{ fontSize: 11, color: "#9098b0", marginTop: 2, lineHeight: 1.4 }}>
                       {a.summary}
+                    </div>
+                  )}
+                  {a.matchQuality && (
+                    <div style={{ fontSize: 10, color: "#6366f1", marginTop: 4, textTransform: "capitalize" }}>
+                      {a.matchQuality} match
                     </div>
                   )}
                 </div>
@@ -466,15 +566,23 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, curre
       { name: "description", type: "string", description: "Full description of the issue", required: true },
       { name: "priority",    type: "string", description: "low | medium | high | critical", required: true },
       { name: "category",    type: "string", description: "hardware | software | network | access | email | vpn | other", required: true },
+      { name: "userSentiment", type: "string", description: "neutral | frustrated | urgent | urgent-frustrated", required: false },
+      { name: "escalationReason", type: "string", description: "Short explanation for why the ticket was escalated", required: false },
+      { name: "impactScope", type: "string", description: "single-user | multiple-users", required: false },
+      { name: "relatedIncidentIds", type: "string[]", description: "Any linked active incident IDs", required: false },
     ],
     render: ({ status, args }) => (
       <TicketCard ticket={args as Partial<Ticket>} status={status} />
     ),
-    handler: ({ id, title, description, priority, category }) => {
+    handler: ({ id, title, description, priority, category, userSentiment, escalationReason, impactScope, relatedIncidentIds }) => {
       const ticket: Ticket = {
         id, title, description,
         priority: priority as Ticket["priority"],
         category, status: "open", createdAt: new Date(),
+        userSentiment: userSentiment as string | undefined,
+        escalationReason: escalationReason as string | undefined,
+        impactScope: impactScope as string | undefined,
+        relatedIncidentIds: Array.isArray(relatedIncidentIds) ? relatedIncidentIds as string[] : undefined,
       };
       onTicketCreated(ticket);
       return `Ticket card displayed for ${ticket.id}.`;
@@ -568,6 +676,10 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, curre
       { name: "status",      type: "string", description: "open | in_progress | resolved | closed", required: true },
       { name: "assignedTo",  type: "string", description: "Name or email of the assigned engineer", required: false },
       { name: "createdAt",   type: "string", description: "ISO date string when the ticket was created", required: false },
+      { name: "userSentiment", type: "string", description: "neutral | frustrated | urgent | urgent-frustrated", required: false },
+      { name: "escalationReason", type: "string", description: "Short explanation for escalation", required: false },
+      { name: "impactScope", type: "string", description: "single-user | multiple-users", required: false },
+      { name: "relatedIncidentIds", type: "string[]", description: "Any linked active incident IDs", required: false },
     ],
     render: ({ status, args }) => (
       <TicketDetailCard
@@ -579,6 +691,10 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, curre
         ticketStatus={(args.status as string) ?? ""}
         assignedTo={args.assignedTo as string | undefined}
         createdAt={args.createdAt as string | undefined}
+        userSentiment={args.userSentiment as string | undefined}
+        escalationReason={args.escalationReason as string | undefined}
+        impactScope={args.impactScope as string | undefined}
+        relatedIncidentIds={Array.isArray(args.relatedIncidentIds) ? args.relatedIncidentIds as string[] : undefined}
         status={status}
       />
     ),
@@ -594,6 +710,8 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, curre
       { name: "title",    type: "string", description: "Title of the KB article", required: true },
       { name: "content",  type: "string", description: "Full article content", required: true },
       { name: "category", type: "string", description: "VPN | Email | Hardware | Network | Access | Printing | Software | Other", required: false },
+      { name: "matchQuality", type: "string", description: "strong | related | weak | exact | new", required: false },
+      { name: "disposition", type: "string", description: "created | reused | refreshed", required: false },
     ],
     render: ({ status, args }) => (
       <KbArticleCard
@@ -601,6 +719,8 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, curre
         title={(args.title as string) ?? ""}
         content={(args.content as string) ?? ""}
         category={args.category as string | undefined}
+        matchQuality={args.matchQuality as string | undefined}
+        disposition={args.disposition as string | undefined}
         status={status}
       />
     ),
@@ -620,7 +740,7 @@ export function HelpdeskActions({ tickets, onTicketCreated, attachedFiles, curre
       },
     ],
     render: ({ status, args }) => {
-      let parsed: Array<{ id: string; title: string; category?: string; summary?: string }> = [];
+      let parsed: Array<{ id: string; title: string; category?: string; summary?: string; matchQuality?: string }> = [];
       try {
         const raw = args.articles as string;
         parsed = Array.isArray(raw) ? raw : JSON.parse(raw);

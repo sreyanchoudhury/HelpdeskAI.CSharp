@@ -21,10 +21,16 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 - Microsoft Entra sign-in is active on the frontend and AgentHost validates bearer tokens against the exposed `api://<clientId>` audience.
 - Tickets are persisted in Azure Cosmos DB rather than the original in-memory store.
 - The knowledge base supports both `search_kb_articles` and `index_kb_article`, and the Azure AI Search index now includes `tags` and `indexedAt`.
+- Retry-safe side effects are now guarded per conversation thread, so ticket creation and KB indexing can reuse prior results on immediate retries instead of blindly creating duplicates.
+- KB indexing now prefers reuse or refresh for the same topic before creating a new article, reducing duplicate knowledge records during iterative workflows.
+- KB search and indexing now expose lightweight match-quality and disposition signals, making it easier to tell whether an article was newly created, refreshed, or reused.
+- Ticket creation now persists lightweight sentiment, escalation, and incident-correlation metadata, so urgent or active-incident-linked requests can be tracked more accurately without changing the chat flow.
 - AgentHost persists long-term profile memory and simple `remember that ...` preferences in Redis.
+- Regression cleanup now covers Redis-backed ephemeral thread state in addition to Cosmos tickets and AI Search documents.
 - **App Insights Agents (Preview)** telemetry — `invoke_agent` spans with `gen_ai.*` semantic attributes are emitted for Azure Monitor.
 - Local development can still run against Azure-hosted dependencies directly; a separate local sandbox is not required.
 - The frontend shell is now responsive across desktop, tablet, and mobile widths, with a Settings toggle to hide CopilotKit developer controls when a cleaner UI is preferred.
+- A proactive live-incident banner can now be shown or hidden from Settings, giving the app a lightweight monitoring surface without forcing it on every session.
 
 ## Configuration & Environment Setup
 

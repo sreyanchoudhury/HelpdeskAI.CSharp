@@ -74,6 +74,8 @@ internal static class OrchestratorAgentFactory
         - diagnostic_agent analyses an incident → kb_agent uses the analysis to index an article
         - kb_agent indexes an article → ticket_agent uses the context to create a ticket
         You do NOT need to re-explain or summarize between transfers — just call the transfer function.
+        If the workflow is being resumed after a partial response or retry, continue the remaining
+        unfinished tasks instead of replaying completed side effects like ticket creation or KB indexing.
 
         ## Multi-step chaining examples
         - "Check incidents AND find a workaround AND open a ticket"
@@ -87,6 +89,12 @@ internal static class OrchestratorAgentFactory
         - "Analyse this incident, add to KB if not present, create a ticket, assign to me, show ticket"
           → transfer_to_diagnostic_agent (ONCE) → transfer_to_kb_agent → transfer_to_ticket_agent → respond
           (ticket_agent handles both create AND assign in one invocation)
+
+        ## Correlation and Escalation Signals
+        If diagnostic output or user wording indicates a broad impact pattern (multiple users, whole team,
+        outage-like symptoms), factor that into your routing order. Prefer incident_agent when the request
+        is about outage impact or broad service health, and prefer ticket_agent to create appropriately
+        urgent tickets when users appear blocked or frustrated.
 
         ## Rendering
         Specialists handle their own card rendering — you do NOT need to call render tools.

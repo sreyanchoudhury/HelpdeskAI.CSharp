@@ -44,6 +44,22 @@ interface KbArticle {
   id: string; title: string; content: string; category?: string;
 }
 
+interface ActiveIncidentSummary {
+  service: string;
+  severity: string;
+  incidentId?: string;
+  message?: string;
+  workaround?: string;
+  eta?: string | null;
+}
+
+interface IncidentFeedState {
+  status: "loading" | "ok" | "empty" | "error";
+  count: number;
+  checkedAt?: string;
+  error?: string;
+}
+
 const STATUS_COLOR: Record<string, string> = {
   Open: "#3d5afe", InProgress: "#f59e0b", PendingUser: "#f97316",
   Resolved: "#22c55e", Closed: "#5a6280",
@@ -312,6 +328,7 @@ function KbPage() {
 function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [status, setStatus] = useState<{ mcp: string; agent: string; checkedAt?: string } | null>(null);
   const [checking, setChecking] = useState(true);
+  const [incidentFeed, setIncidentFeed] = useState<IncidentFeedState>({ status: "loading", count: 0 });
   const [agentMode, setAgentMode] = useState<"v1" | "v2">(() => {
     if (typeof window === "undefined") return "v1";
     return (localStorage.getItem("agent-mode") as "v1" | "v2") ?? "v1";
@@ -319,6 +336,10 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   const [copilotControls, setCopilotControls] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("copilotkit-controls") === "visible";
+  });
+  const [incidentBannerVisible, setIncidentBannerVisible] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("incident-banner") !== "hidden";
   });
   const handleModeSwitch = (mode: "v1" | "v2") => {
     localStorage.setItem("agent-mode", mode);
@@ -329,6 +350,11 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   const handleCopilotControlToggle = (visible: boolean) => {
     localStorage.setItem("copilotkit-controls", visible ? "visible" : "hidden");
     setCopilotControls(visible);
+    window.location.reload();
+  };
+  const handleIncidentBannerToggle = (visible: boolean) => {
+    localStorage.setItem("incident-banner", visible ? "visible" : "hidden");
+    setIncidentBannerVisible(visible);
     window.location.reload();
   };
   const initials = currentUser.name
@@ -348,6 +374,40 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
   };
 
   useEffect(() => { check(); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIncidentFeed({ status: "loading", count: 0 });
+
+    fetch("/api/incidents", { cache: "no-store" })
+      .then(async r => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok) {
+          const message = typeof data?.error === "string" ? data.error : `HTTP ${r.status}`;
+          throw new Error(message);
+        }
+        return data as { incidents?: ActiveIncidentSummary[]; checkedAt?: string };
+      })
+      .then(data => {
+        if (cancelled) return;
+        const incidents = Array.isArray(data.incidents) ? data.incidents : [];
+        setIncidentFeed({
+          status: incidents.length > 0 ? "ok" : "empty",
+          count: incidents.length,
+          checkedAt: data.checkedAt,
+        });
+      })
+      .catch(error => {
+        if (cancelled) return;
+        setIncidentFeed({
+          status: "error",
+          count: 0,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, [incidentBannerVisible]);
 
   const dot = (s: string) => (
     <span style={{
@@ -452,6 +512,51 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
           </div>
           <div style={{ fontSize: 10, color: "#5a6280", marginTop: 10 }}>
             Changing this setting reloads the page so the CopilotKit provider can reinitialize cleanly.
+          </div>
+        </div>
+
+        <div className="hd-settings-card">
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 16 }}>Live Incident Banner</div>
+          <div className="hd-agent-mode-grid">
+            {([
+              { id: true, label: "Visible", subtitle: "Shows a proactive active-incident banner in the app shell." },
+              { id: false, label: "Hidden", subtitle: "Keeps the interface focused on chat and manual workflows." },
+            ] as const).map(option => {
+              const active = incidentBannerVisible === option.id;
+              return (
+                <button key={option.label} onClick={() => handleIncidentBannerToggle(option.id)} style={{
+                  flex: 1, padding: "12px 14px", borderRadius: 8,
+                  border: `1px solid ${active ? "#3d5afe" : "#ffffff12"}`,
+                  background: active ? "#3d5afe14" : "#ffffff04",
+                  cursor: active ? "default" : "pointer",
+                  textAlign: "left",
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: active ? "#3d5afe" : "#9098b0" }}>{option.label}</div>
+                  <div style={{ fontSize: 11, color: "#5a6280", marginTop: 4, lineHeight: 1.4 }}>
+                    {option.subtitle}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: "#5a6280", marginTop: 10 }}>
+            Changing this setting reloads the page so the banner state is applied consistently.
+          </div>
+          <div style={{
+            marginTop: 12,
+            fontSize: 11,
+            color:
+              incidentFeed.status === "ok" ? "#22c55e" :
+              incidentFeed.status === "empty" ? "#9098b0" :
+              incidentFeed.status === "error" ? "#ef4444" :
+              "#f59e0b",
+          }}>
+            Live incident feed: {
+              incidentFeed.status === "ok" ? `${incidentFeed.count} active incident${incidentFeed.count === 1 ? "" : "s"} available` :
+              incidentFeed.status === "empty" ? "no active incidents returned" :
+              incidentFeed.status === "error" ? `unavailable${incidentFeed.error ? ` (${incidentFeed.error})` : ""}` :
+              "checking..."
+            }
           </div>
         </div>
 
@@ -769,6 +874,13 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const [tickets, setTickets]  = useState<Ticket[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [incidentBannerVisible] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("incident-banner") !== "hidden";
+  });
+  const [activeIncidents, setActiveIncidents] = useState<ActiveIncidentSummary[]>([]);
+  const [incidentFeedStatus, setIncidentFeedStatus] = useState<"loading" | "ok" | "empty" | "error">("loading");
+  const [incidentBannerExpanded, setIncidentBannerExpanded] = useState(false);
   const current = NAV_ITEMS.find(n => n.id === page)!;
 
   const { threadId } = useCopilotContext();
@@ -944,6 +1056,44 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
     };
   }, [page, threadId]);
 
+  useEffect(() => {
+    if (!incidentBannerVisible) {
+      setActiveIncidents([]);
+      setIncidentFeedStatus("empty");
+      setIncidentBannerExpanded(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIncidentFeedStatus("loading");
+    fetch("/api/incidents", { cache: "no-store" })
+      .then(async r => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok) {
+          const message = typeof data?.error === "string" ? data.error : `HTTP ${r.status}`;
+          throw new Error(message);
+        }
+        return data as { incidents?: ActiveIncidentSummary[] };
+      })
+      .then((data: { incidents?: ActiveIncidentSummary[] }) => {
+        if (!cancelled) {
+          const incidents = Array.isArray(data.incidents) ? data.incidents : [];
+          setActiveIncidents(incidents);
+          setIncidentFeedStatus(incidents.length > 0 ? "ok" : "empty");
+          if (incidents.length === 0) setIncidentBannerExpanded(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setActiveIncidents([]);
+          setIncidentFeedStatus("error");
+          setIncidentBannerExpanded(false);
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [incidentBannerVisible]);
+
   return (
     <div className="hd-shell">
       <aside className="hd-sidebar">
@@ -1033,6 +1183,98 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
             </div>
           )}
         </header>
+
+        {incidentBannerVisible && page !== "settings" && activeIncidents.length > 0 && (
+          <div style={{
+            margin: "0 var(--page-gutter) 12px",
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #f59e0b33",
+            background: "linear-gradient(180deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.05))",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 15 }}>⚠️</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#f59e0b" }}>
+                Active Incident Monitor
+              </span>
+              <span style={{ fontSize: 12, color: "#9098b0" }}>
+                {activeIncidents.length} active issue{activeIncidents.length === 1 ? "" : "s"} detected
+              </span>
+              <button
+                type="button"
+                onClick={() => setIncidentBannerExpanded(prev => !prev)}
+                style={{
+                  marginLeft: "auto",
+                  border: "1px solid #f59e0b33",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "#f8d08b",
+                  borderRadius: 999,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                aria-expanded={incidentBannerExpanded}
+                aria-label={incidentBannerExpanded ? "Hide active incident details" : "Show active incident details"}
+              >
+                {incidentBannerExpanded ? "Hide details" : "View details"}
+              </button>
+            </div>
+            {incidentBannerExpanded && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, overflowY: "auto", paddingRight: 2 }}>
+                {activeIncidents.map(incident => (
+                  <div
+                    key={`${incident.incidentId ?? incident.service}`}
+                    style={{
+                      fontSize: 12,
+                      color: "#d7dcec",
+                      lineHeight: 1.5,
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                      borderRadius: 8,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <strong>{incident.service}</strong>
+                    {incident.incidentId ? ` (${incident.incidentId})` : ""}: {incident.message}
+                    {incident.eta ? ` ETA ${incident.eta}.` : ""}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {incidentBannerVisible && page !== "settings" && incidentFeedStatus === "error" && (
+          <div style={{
+            margin: "0 var(--page-gutter) 12px",
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #ef444433",
+            background: "rgba(239, 68, 68, 0.08)",
+            fontSize: 12,
+            color: "#fca5a5",
+          }}>
+            Live Incident Monitor is enabled, but the incident feed is currently unavailable.
+          </div>
+        )}
+
+        {incidentBannerVisible && page !== "settings" && incidentFeedStatus === "empty" && (
+          <div style={{
+            margin: "0 var(--page-gutter) 12px",
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #ffffff12",
+            background: "rgba(255,255,255,0.04)",
+            fontSize: 12,
+            color: "#9098b0",
+          }}>
+            Live Incident Monitor is enabled. No active incidents are currently being returned.
+          </div>
+        )}
 
         {page === "chat" && (
           <AttachmentContext.Provider value={attachmentContextValue}>

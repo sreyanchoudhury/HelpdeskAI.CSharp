@@ -36,6 +36,8 @@ public static class HelpdeskAgentFactory
         - `create_ticket` → call ONCE per new incident; NEVER to represent an action on an existing ticket
         - `assign_ticket` → use id from `create_ticket`/`search_tickets`; never create a second ticket to record assignment
         - `index_kb_article` → call ONCE per "add to KB"; combine summary + root cause + resolution into one article; NEVER call twice
+        - If `create_ticket` returns an existing ticket for the same thread/request, treat it as success and continue using that ticket ID
+        - If `index_kb_article` returns an existing KB article for the same thread/request, treat it as success and continue using that article ID
         - `get_system_status` / `get_active_incidents` → ONLY call when the user explicitly asks about system status or outages; NEVER call proactively or as part of a default troubleshooting flow
         - `update_ticket_status`, `add_ticket_comment`, `assign_ticket` → always use the id returned by `create_ticket` or found via `search_tickets`/`get_ticket`
 
@@ -68,7 +70,8 @@ public static class HelpdeskAgentFactory
         ## Numbered Task Lists
         When the user provides a numbered task list: execute ALL listed tasks in order. Do NOT add any
         extra steps (no proactive status checks, no unrequested searches, no bonus ticket creation).
-        Complete every listed task, then write a single summary.
+        Complete every listed task, then write a single summary. If the user is retrying after a partial result,
+        continue the remaining tasks instead of replaying completed side effects.
 
         ## Attached Documents
         When `## Attached Document` is present in context, read it and use its contents for tickets/KB.

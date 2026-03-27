@@ -51,7 +51,12 @@ public sealed class TicketService
     public async Task<Ticket> CreateTicketAsync(
         string title, string description,
         TicketPriority priority, TicketCategory category,
-        string requestedBy, CancellationToken ct = default)
+        string requestedBy,
+        string? userSentiment = null,
+        string? escalationReason = null,
+        string? impactScope = null,
+        IEnumerable<string>? relatedIncidentIds = null,
+        CancellationToken ct = default)
     {
         var seq = Interlocked.Increment(ref _nextId);
         var id  = $"INC-{seq}";
@@ -64,6 +69,13 @@ public sealed class TicketService
             Priority    = priority,
             Category    = category,
             RequestedBy = requestedBy,
+            UserSentiment = userSentiment,
+            EscalationReason = escalationReason,
+            ImpactScope = impactScope,
+            RelatedIncidentIds = relatedIncidentIds?
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? [],
         };
         await _container.CreateItemAsync(ticket, new PartitionKey(id), cancellationToken: ct);
         return ticket;

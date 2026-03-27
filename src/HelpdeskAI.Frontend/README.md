@@ -8,6 +8,7 @@ A **React 19 + TypeScript** single-page application for the IT helpdesk AI agent
 
 - **Real-time chat UI** — streams responses from the AI agent as they're generated
 - **Rich render actions** — displays tickets, incidents, and search results as interactive cards
+- **Operational context chips** — ticket and KB cards can now show lightweight sentiment, incident-link, reuse, and refresh hints without overwhelming the chat
 - **Response stats chip** — shows `⏱ Xs · 📥 N in / 📤 M out` in the header row (right-aligned) after each agent response; fetches token counts from `/api/copilotkit/usage`
 - **Multi-page navigation** — IT Support chat, My Tickets tracker, Knowledge Base, Settings
 - **Agent mode toggle** — switch between v1 (single agent) and v2 (multi-agent workflow) from the Settings page; preference persisted via cookie
@@ -180,7 +181,7 @@ Main UI shell:
 - **Chat page** — hosts `CopilotChat` component + `HelpdeskActions`
 - **Tickets page** — displays user's created tickets with status badges
 - **Knowledge Base page** — live search via `/api/kb?q=...`; renders `KbArticleCard` results sourced from Azure AI Search
-- **Settings page** — pings `/api/status`; renders green/red health indicators for McpServer + AgentHost
+- **Settings page** — pings `/api/status`; renders green/red health indicators for McpServer + AgentHost; includes toggles for agent mode, CopilotKit controls, and the proactive live incident banner
 - **Response stats chip** — after each response, fetches token usage from `/api/copilotkit/usage?threadId=` and renders a `⏱ Xs · 📥 N in / 📤 M out` chip in the header row (right-aligned, monospace); uses a `fetchStatsRef` pattern to avoid stale closures across re-renders
 - **Styling** — CopilotKit CSS variable overrides for dark theme
 
@@ -189,12 +190,12 @@ Main UI shell:
 Copilot integration layer:
 - **`useCopilotReadable()`** — exposes user context and staged attachment context to the agent
 - **Render actions** — 7 custom components rendered by the agent:
-  - `show_ticket_created` — ticket confirmation card (after `create_ticket`)
+  - `show_ticket_created` — ticket confirmation card (after `create_ticket`; can include urgency/impact/incident-link chips)
   - `show_incident_alert` — incident/outage alert card (after `get_active_incidents`, `get_system_status`, or `check_impact_for_team`)
   - `show_my_tickets` — ticket search results list (after `search_tickets`)
-  - `show_ticket_details` — full ticket detail card (after `get_ticket`; agent must call `get_ticket` first and pass all fields)
-  - `show_kb_article` — single knowledge base article card (after `search_kb_articles` returns one strong match)
-  - `suggest_related_articles` — related article suggestions (after `search_kb_articles` returns multiple matches)
+  - `show_ticket_details` — full ticket detail card (after `get_ticket`; can include sentiment, escalation reason, and linked incidents)
+  - `show_kb_article` — single knowledge base article card (after `search_kb_articles` returns one strong match, or after `index_kb_article` creates/reuses/refreshes an article)
+  - `suggest_related_articles` — related article suggestions (after `search_kb_articles` returns multiple matches, with lightweight match-quality hints)
   - `show_attachment_preview` — document preview card (after processing an `## Attached Document`)
 - **Chat suggestions** — `useCopilotChatSuggestions()` for follow-up prompts
 

@@ -7,6 +7,7 @@ public interface IRedisService
 {
     Task<string?> GetAsync(string key);
     Task SetAsync(string key, string value, TimeSpan ttl);
+    Task<bool> TrySetAsync(string key, string value, TimeSpan ttl);
     Task DeleteAsync(string key);
 }
 
