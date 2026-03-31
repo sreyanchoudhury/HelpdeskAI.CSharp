@@ -80,14 +80,10 @@ internal sealed class ThreadIdPreservingChatClient : DelegatingChatClient
         // Capture frontend tools from the first call (AG-UI boundary has them in ChatOptions.Tools).
         if (options?.Tools is { Count: > 0 } tools)
         {
-            var frontendTools = tools
-                .Where(t => t.Name.StartsWith("show_", StringComparison.OrdinalIgnoreCase) ||
-                            t.Name.StartsWith("suggest_", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var frontendTools = FrontendToolForwardingProvider.CaptureFrontendTools(tools);
             if (frontendTools.Count > 0)
             {
                 _capturedFrontendTools = frontendTools;
-                FrontendToolForwardingProvider.Capture(frontendTools);
                 _logger.LogDebug("[FrontendToolGuard] Captured {Count} frontend tools", frontendTools.Count);
                 return;
             }

@@ -5,36 +5,51 @@ namespace HelpdeskAI.AgentHost.Agents;
 
 /// <summary>
 /// Captures CopilotKit frontend tools from the AG-UI request boundary and provides
-/// them to ALL agents in the workflow via <see cref="AIContextProvider"/>. Works around the MAF
-/// limitation where <c>WorkflowHostAgent</c> passes <c>AgentRunOptions: null</c> to child agents,
-/// stripping CopilotKit frontend tools (<c>show_ticket_created</c>, etc.).
+/// them to workflow agents via <see cref="AIContextProvider"/>.
 ///
 /// <para>
-/// Flow: AG-UI request arrives with frontend tools → the outer v2 agent middleware in
-/// <c>Program.cs</c> calls <see cref="Capture"/> before the workflow runs → each agent's
-/// context resolution calls <see cref="ProvideAIContextAsync"/> which returns the captured
-/// tools → specialists can call render tools like <c>show_ticket_created</c>,
-/// <c>show_kb_article</c>, etc.
+/// This works around the MAF limitation where <c>WorkflowHostAgent</c> passes
+/// <c>AgentRunOptions: null</c> to child agents, which strips frontend render tools
+/// such as <c>show_ticket_created</c> and <c>show_kb_article</c>.
 /// </para>
 /// </summary>
 internal sealed class FrontendToolForwardingProvider(
     ILogger<FrontendToolForwardingProvider> logger) : AIContextProvider
 {
-    // Request-scoped storage via AsyncLocal — set at AG-UI boundary, read by all workflow agents.
-    private static readonly AsyncLocal<IReadOnlyList<AITool>?> _capturedTools = new();
+    private static readonly AsyncLocal<IReadOnlyList<AITool>?> CapturedTools = new();
+    private static readonly string[] FrontendToolPrefixes = ["show_", "suggest_"];
 
-    /// <summary>Capture CopilotKit frontend tools from the AG-UI request.</summary>
-    public static void Capture(IReadOnlyList<AITool> tools) => _capturedTools.Value = tools;
+    public static void Capture(IReadOnlyList<AITool> tools) => CapturedTools.Value = tools;
 
-    /// <summary>Clear captured tools after the request completes.</summary>
-    public static void Clear() => _capturedTools.Value = null;
+    public static IReadOnlyList<AITool> CaptureFrontendTools(IEnumerable<AITool>? tools)
+    {
+        if (tools is null)
+            return [];
+
+        var frontendTools = tools
+            .Where(IsFrontendTool)
+            .ToList();
+
+        if (frontendTools.Count > 0)
+            Capture(frontendTools);
+
+        return frontendTools;
+    }
+
+    public static void Clear() => CapturedTools.Value = null;
+
+    public static bool IsFrontendTool(AITool tool) =>
+        FrontendToolPrefixes.Any(prefix =>
+            tool.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
 
     protected override ValueTask<AIContext> ProvideAIContextAsync(
-        AIContextProvider.InvokingContext context, CancellationToken ct)
+        AIContextProvider.InvokingContext context,
+        CancellationToken ct)
     {
-        var tools = _capturedTools.Value;
-        logger.LogInformation("[FrontendTools] Providing {Count} captured CopilotKit tools",
+        var tools = CapturedTools.Value;
+        logger.LogDebug("[FrontendTools] Providing {Count} captured CopilotKit tools",
             tools?.Count ?? 0);
+
         return ValueTask.FromResult(tools is { Count: > 0 }
             ? new AIContext { Tools = [.. tools] }
             : new AIContext());

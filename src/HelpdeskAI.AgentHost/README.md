@@ -8,7 +8,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 - **Hosts the AI agent** — AG-UI endpoint at `/agent` (v1 single agent) and `/agent/v2` (multi-agent handoff workflow via MAF)
 - **Multi-agent workflow (v2)** — orchestrator routes to specialist agents (diagnostic, ticket, KB, incident) using MAF `HandoffsWorkflow`; each specialist has scoped MCP tools and context providers
-- **Integrates Azure OpenAI** — v1 uses `gpt-4o` and v2 uses `gpt-5.2-chat` via an optional separate workflow deployment
+- **Integrates Azure OpenAI** — v1 uses `gpt-4o`; v2 uses `ChatDeploymentV2` (configurable, falls back to `ChatDeployment`). See [docs/model-compatibility.md](../../docs/model-compatibility.md) — `gpt-5.2-chat` is **not compatible** with render-action cards; use `gpt-4o` for both routes to get cards in v2
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
 - **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticketing, system status monitoring, and KB search/index flows
 - **Applies render-action guidance** — follows `_renderAction` / `_renderArgs` from MCP tool results so the frontend can render structured cards when appropriate

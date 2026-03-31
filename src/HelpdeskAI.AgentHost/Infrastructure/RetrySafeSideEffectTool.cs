@@ -12,6 +12,8 @@ internal sealed class RetrySafeSideEffectTool : DelegatingAIFunction
         "create_ticket",
         "index_kb_article",
     };
+    private const int PendingWaitAttempts = 20;
+    private static readonly TimeSpan PendingWaitDelay = TimeSpan.FromMilliseconds(300);
 
     private readonly AIFunction _inner;
     private readonly ThreadSideEffectStore _store;
@@ -63,7 +65,7 @@ internal sealed class RetrySafeSideEffectTool : DelegatingAIFunction
             _logger.LogWarning(
                 "Suppressed duplicate side effect while original operation remained pending - toolName: {ToolName}, threadId: {ThreadId}, operationKey: {OperationKey}, suppressionCount: {SuppressionCount}, outcome: {Outcome}.",
                 _toolName, threadId, operationKey, start.State.SuppressionCount, "suppressed_pending");
-            return BuildPendingResponse();
+            return BuildPendingResponse(operationKey, start.State);
         }
 
         try
@@ -103,9 +105,9 @@ internal sealed class RetrySafeSideEffectTool : DelegatingAIFunction
         string operationKey,
         CancellationToken cancellationToken)
     {
-        for (var i = 0; i < 20; i++)
+        for (var i = 0; i < PendingWaitAttempts; i++)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken);
+            await Task.Delay(PendingWaitDelay, cancellationToken);
             var state = await _store.GetAsync(threadId, operationKey);
             if (state is null || state.Status != SideEffectOperationStatus.Pending)
                 return state;
@@ -152,13 +154,20 @@ internal sealed class RetrySafeSideEffectTool : DelegatingAIFunction
         return false;
     }
 
-    private string BuildPendingResponse() =>
-        _toolName switch
+    private string BuildPendingResponse(string operationKey, SideEffectOperationState state) =>
+        JsonSerializer.Serialize(new
         {
-            "create_ticket" => "A matching ticket creation request is already in progress for this conversation. Do not create another ticket.",
-            "index_kb_article" => "A matching KB indexing request is already in progress for this conversation. Do not index another article yet.",
-            _ => "A matching side-effect request is already in progress for this conversation."
-        };
+            status = "pending",
+            tool = _toolName,
+            operationKey,
+            suppressionCount = state.SuppressionCount,
+            message = _toolName switch
+            {
+                "create_ticket" => "A matching ticket creation request is already in progress for this conversation. Reuse the existing ticket if it appears, and continue with any remaining non-creation steps.",
+                "index_kb_article" => "A matching KB indexing request is already in progress for this conversation. Reuse the existing article if it appears, and continue with any remaining non-indexing steps.",
+                _ => "A matching side-effect request is already in progress for this conversation. Continue with any remaining non-duplicate steps."
+            }
+        });
 
     private bool IsSuccessfulPayload(string payload)
     {
