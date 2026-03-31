@@ -17,7 +17,6 @@ using Microsoft.IdentityModel.Tokens;
 using System.Diagnostics;
 using StackExchange.Redis;
 using System.ClientModel.Primitives;
-using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
@@ -194,12 +193,8 @@ var agentActivitySource = new ActivitySource("HelpdeskAI.AgentHost");
 
 builder.Services.AddOpenTelemetry()
     .UseAzureMonitor()
-    .WithTracing(tracing => tracing
-        .AddSource("*Microsoft.Extensions.AI")
-        .AddSource("*Microsoft.Extensions.Agents*")
-        .AddSource("HelpdeskAI.AgentHost"))
-    .WithMetrics(metrics => metrics
-        .AddMeter("*Microsoft.Agents.AI"));
+    .WithTracing(tracing => tracing.AddHelpdeskTracing())
+    .WithMetrics(metrics => metrics.AddHelpdeskMetrics());
 
 // Redis is ephemeral/non-blocking — exclude it from the liveness check so
 // /healthz returns 200 whenever the app is running, regardless of Redis state.
@@ -209,153 +204,8 @@ var app = builder.Build();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Cache ILoggerFactory from DI once — used throughout startup and middleware.
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
-var agentLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost");
-var longTermMemoryStore = app.Services.GetRequiredService<LongTermMemoryStore>();
-
-static string? GetClaimValue(ClaimsPrincipal user, params string[] claimTypes) =>
-    claimTypes
-        .Select(type => user.FindFirst(type)?.Value)
-        .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-
-static string? TryGetThreadId(System.Text.Json.JsonElement root)
-{
-    if (root.TryGetProperty("threadId", out var elem))
-        return elem.GetString();
-    return null;
-}
-
-static string? TryGetLatestUserMessage(System.Text.Json.JsonElement root)
-{
-    if (!root.TryGetProperty("messages", out var messages) || messages.ValueKind != System.Text.Json.JsonValueKind.Array)
-        return null;
-
-    for (var i = messages.GetArrayLength() - 1; i >= 0; i--)
-    {
-        var message = messages[i];
-        if (message.ValueKind != System.Text.Json.JsonValueKind.Object)
-            continue;
-        if (!message.TryGetProperty("role", out var role) || !string.Equals(role.GetString(), "user", StringComparison.OrdinalIgnoreCase))
-            continue;
-        if (!message.TryGetProperty("content", out var content))
-            continue;
-
-        var text = ExtractText(content);
-        if (!string.IsNullOrWhiteSpace(text))
-            return text;
-    }
-
-    return null;
-}
-
-static string? ExtractText(System.Text.Json.JsonElement content)
-{
-    if (content.ValueKind == System.Text.Json.JsonValueKind.String)
-        return content.GetString();
-
-    if (content.ValueKind == System.Text.Json.JsonValueKind.Array)
-    {
-        var parts = new List<string>();
-        foreach (var item in content.EnumerateArray())
-        {
-            var text = ExtractText(item);
-            if (!string.IsNullOrWhiteSpace(text))
-                parts.Add(text);
-        }
-        return parts.Count == 0 ? null : string.Join("\n", parts);
-    }
-
-    if (content.ValueKind == System.Text.Json.JsonValueKind.Object)
-    {
-        if (content.TryGetProperty("text", out var text))
-            return ExtractText(text);
-        if (content.TryGetProperty("content", out var nested))
-            return ExtractText(nested);
-        if (content.TryGetProperty("value", out var value))
-            return ExtractText(value);
-    }
-
-    return null;
-}
-
-static string? TryExtractPreference(string? message)
-{
-    if (string.IsNullOrWhiteSpace(message))
-        return null;
-
-    var text = message.Trim();
-    const string rememberPrefix = "remember that ";
-    if (text.StartsWith(rememberPrefix, StringComparison.OrdinalIgnoreCase))
-        return text[rememberPrefix.Length..].Trim().TrimEnd('.');
-
-    const string rememberPreferencePrefix = "please remember that ";
-    if (text.StartsWith(rememberPreferencePrefix, StringComparison.OrdinalIgnoreCase))
-        return text[rememberPreferencePrefix.Length..].Trim().TrimEnd('.');
-
-    return null;
-}
-
-// Populate ThreadIdContext before the request is handled so history providers
-// can key Redis by AG-UI threadId without access to the (always-null) AgentSession.
-// Also opens a request-level BeginScope(threadId) so every log line during the turn
-// carries threadId as customDimensions.threadId in App Insights traces.
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/agent") &&
-        context.Request.Method == "POST")
-    {
-        var userName = GetClaimValue(context.User, "name", ClaimTypes.Name);
-        var userEmail = GetClaimValue(context.User, "preferred_username", ClaimTypes.Email, "email");
-        UserContext.Set(userName, userEmail);
-        if (!string.IsNullOrWhiteSpace(userEmail))
-            await longTermMemoryStore.UpsertProfileAsync(userEmail, userName, context.RequestAborted);
-
-        context.Request.EnableBuffering();
-        using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
-        var body = await reader.ReadToEndAsync();
-        context.Request.Body.Position = 0;
-
-        string? threadId = null;
-        string? latestUserMessage = null;
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(body);
-            threadId = TryGetThreadId(doc.RootElement);
-            latestUserMessage = TryGetLatestUserMessage(doc.RootElement);
-            TurnStateContext.SetLastUserMessage(latestUserMessage);
-
-            var rememberedPreference = TryExtractPreference(latestUserMessage);
-            if (!string.IsNullOrWhiteSpace(userEmail) && !string.IsNullOrWhiteSpace(rememberedPreference))
-                await longTermMemoryStore.UpsertPreferenceAsync(userEmail, rememberedPreference, context.RequestAborted);
-
-            ThreadIdContext.Set(threadId);
-            using var scope = agentLogger.BeginScope(new { threadId, userEmail, latestUserMessage });
-
-            // Emit an invoke_agent span that populates the Agents (Preview) view in App Insights.
-            var agentName = context.Request.Path.Value?.Contains("/v2") == true ? "helpdesk-v2" : "HelpdeskAgent";
-            using var agentSpan = agentActivitySource.StartActivity($"invoke_agent {agentName}");
-            agentSpan?.SetTag("gen_ai.operation.name", "invoke_agent");
-            agentSpan?.SetTag("gen_ai.agent.name", agentName);
-            agentSpan?.SetTag("gen_ai.agent.id", agentName);
-            agentSpan?.SetTag("gen_ai.system", "openai");
-            agentSpan?.SetTag("thread.id", threadId);
-
-            await next(context);
-            return;
-        }
-        finally
-        {
-            FrontendToolForwardingProvider.Clear();
-            ThreadIdContext.Set(null);
-            TurnStateContext.Clear();
-            UserContext.Clear();
-        }
-    }
-
-    await next(context);
-});
+app.UseAgentRequestContext(agentActivitySource);
 
 var chatClient = app.Services.GetRequiredService<IChatClient>();
 
@@ -460,15 +310,10 @@ var wrappedWorkflowAgent = new AIAgentBuilder(rawWorkflowAgent)
         if (options is ChatClientAgentRunOptions crao
             && crao.ChatOptions?.Tools is { Count: > 0 } tools)
         {
-            var frontendTools = tools
-                .Where(t => t.Name.StartsWith("show_", StringComparison.OrdinalIgnoreCase)
-                         || t.Name.StartsWith("suggest_", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var frontendTools = FrontendToolForwardingProvider.CaptureFrontendTools(tools);
             toolCapturingLogger.LogInformation(
                 "[ToolCapture] Captured {FrontendCount}/{TotalCount} CopilotKit frontend tools from AgentRunOptions",
                 frontendTools.Count, tools.Count);
-            if (frontendTools.Count > 0)
-                FrontendToolForwardingProvider.Capture(frontendTools);
         }
         else
         {

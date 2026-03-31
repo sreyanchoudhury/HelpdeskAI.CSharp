@@ -121,6 +121,34 @@ public sealed class TicketService
         return results.Take(MaxSearchResults).ToList();
     }
 
+    public async Task<IReadOnlyList<Ticket>> SearchForUserAsync(
+        string userEmail,
+        TicketStatus? status = null,
+        TicketCategory? category = null,
+        CancellationToken ct = default)
+    {
+        var sql = "SELECT * FROM c WHERE (CONTAINS(LOWER(c.requestedBy), LOWER(@userEmail)) OR CONTAINS(LOWER(c.assignedTo), LOWER(@userEmail)))"
+            + (status   is not null ? " AND c.status = @status" : "")
+            + (category is not null ? " AND c.category = @category" : "")
+            + " ORDER BY c.createdAt DESC";
+
+        var qd = new QueryDefinition(sql)
+            .WithParameter("@userEmail", userEmail);
+        if (status   is not null) qd = qd.WithParameter("@status", status.ToString());
+        if (category is not null) qd = qd.WithParameter("@category", category.ToString());
+
+        var opts = new QueryRequestOptions { MaxItemCount = MaxSearchResults };
+        using var iter = _container.GetItemQueryIterator<Ticket>(qd, requestOptions: opts);
+        var results = new List<Ticket>(MaxSearchResults);
+        while (iter.HasMoreResults && results.Count < MaxSearchResults)
+        {
+            var page = await iter.ReadNextAsync(ct);
+            results.AddRange(page);
+        }
+
+        return results.Take(MaxSearchResults).ToList();
+    }
+
     public async Task<Ticket?> UpdateStatusAsync(
         string id, TicketStatus status, string? resolution, CancellationToken ct = default)
     {

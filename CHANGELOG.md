@@ -4,6 +4,28 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-03-31
+
+### Added
+
+- **`AgentHostCompositionExtensions.cs`** — extracted request middleware composition (user context injection, turn state wiring, telemetry scope) out of `Program.cs` into a dedicated extension class, reducing startup file size and improving testability.
+
+### Changed
+
+- **`RetrySafeSideEffectTool`** — replaced magic-number wait loop with named constants (`PendingWaitAttempts`, `PendingWaitDelay`); `BuildPendingResponse` now returns structured JSON with `status`, `operationKey`, and `message` fields for easier debugging.
+- **`FrontendToolForwardingProvider`** — refined tool capture and clear lifecycle to reduce stale tool state across workflow turns.
+- **`ThreadIdPreservingChatClient`** — minor guard improvements for AsyncLocal restoration logging.
+- **`TicketService`** — expanded seed ticket data for more realistic demo scenarios.
+- **Specialist agent instructions** — `TicketAgentFactory` and `KBAgentFactory` strengthened with explicit "EXECUTE IMMEDIATELY" directives and richer multi-step chaining examples; `DiagnosticAgentFactory` clarifies team-wide impact detection.
+- **Orchestrator instructions** — added explicit "only route to `diagnostic_agent` ONCE per conversation" guard to prevent repeated attachment analysis loops when `## Attached Document` stays in conversation history across turns.
+- **AgentHost README** — corrected v2 model section to align with `docs/model-compatibility.md`; `gpt-5.2-chat` is documented as not compatible with render-action cards.
+
+### Fixed
+
+- **V2 attachment routing loop** — orchestrator was re-routing to `diagnostic_agent` on every turn because `## Attached Document` persists in conversation history. Added explicit once-per-conversation guard in orchestrator instructions.
+
+---
+
 ## [Unreleased] - 2026-03-26
 
 ### Added
