@@ -1,0 +1,76 @@
+HelpdeskAI — Demo Prompts
+════════════════════════════════════════════════════════
+A few ideas to get you started. Don't stop here though —
+describe a real IT problem and see what happens!
+════════════════════════════════════════════════════════
+
+── Everyday IT Issues ───────────────────────────────────
+
+"My laptop won't connect to the VPN. What should I do?"
+
+"Outlook keeps crashing every time I try to open an attachment."
+
+"I've been locked out of my work account since this morning —
+ can you help me get back in?"
+
+"My computer is running really slowly. Could it be a virus?"
+
+"Teams calls keep dropping after about 5 minutes. Very frustrating."
+
+
+── Raising a Support Ticket ─────────────────────────────
+
+"I keep getting a Blue Screen of Death on startup.
+ Can you raise a ticket for me?"
+
+"Log a high-priority issue: our whole department lost access
+ to SharePoint an hour ago."
+
+"I've had a broken keyboard for two weeks and no one has
+ followed up. Create a ticket and escalate it."
+
+
+── Searching the Knowledge Base ─────────────────────────
+
+"Is there a guide on setting up multi-factor authentication?"
+
+"What's the standard process for onboarding a new employee's laptop?"
+
+"Search the knowledge base for anything on printer setup."
+
+
+── Try Uploading a File ──────────────────────────────────
+
+Tap the paperclip and upload a screenshot of an error,
+a crash log, or any work document, then ask:
+
+"Can you analyse this and tell me what the issue is?"
+
+"Add a summary of this to the knowledge base."
+
+"Create a ticket based on what you see in this file."
+
+
+── Push It Further ───────────────────────────────────────
+
+"My entire team can't access Salesforce. This is urgent —
+ diagnose the issue, create a P1 ticket, and tell me
+ who I should escalate to."
+
+"I'm getting error code 0x80070002 when Windows updates.
+ Walk me through fixing it step by step."
+
+"We had a security incident — someone clicked a phishing link
+ on our finance team's machine. What do we do?"
+
+
+── Just Have a Conversation ──────────────────────────────
+
+The agent keeps context throughout the session.
+Try following up on an earlier message, asking for
+clarification, or changing direction mid-conversation.
+
+════════════════════════════════════════════════════════
+Demo:  https://helpdeskaiapp-dev-frontend.purpleground-d164e1be.swedencentral.azurecontainerapps.io/demo
+Built with Microsoft Agent Framework + Azure OpenAI (gpt-4o)
+════════════════════════════════════════════════════════
