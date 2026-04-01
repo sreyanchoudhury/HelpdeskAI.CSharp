@@ -58,12 +58,15 @@ internal static class DiagnosticAgentFactory
         AIContextProvider searchProvider,
         AIContextProvider attachmentProvider,
         AIContextProvider frontendToolProvider,
+        AIContextProvider? skillsProvider = null,
         ILoggerFactory? loggerFactory = null) =>
         new(chatClient, new ChatClientAgentOptions
         {
             Name = AgentName,
             Description = "Troubleshoots issues using KB context and uploaded documents",
             ChatOptions = new ChatOptions { Instructions = Instructions },
-            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, frontendToolProvider],
+            AIContextProviders = skillsProvider is null
+                ? [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, frontendToolProvider]
+                : [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, frontendToolProvider, skillsProvider],
         }, loggerFactory);
 }

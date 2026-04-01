@@ -17,7 +17,8 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 - **Guards retry-safe side effects** — `create_ticket` and `index_kb_article` reuse prior thread-scoped results on immediate retries instead of duplicating writes
 - **Proxies active incidents for the frontend shell** — authenticated `/api/incidents/active` enables the proactive incident banner without exposing McpServer directly
 - **Captures turn-level telemetry** — repeated tool calls and latest user message are logged with per-turn scope data for Azure investigation
-- **App Insights Agents (Preview)** — custom `ActivitySource` emits `invoke_agent` spans with `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.agent.id` semantic attributes for the Azure Monitor Agents preview view
+- **App Insights Agents (Preview)** — `OpenTelemetryAgent` wrapping emits `invoke_agent` spans with `gen_ai.agent.name`, `gen_ai.request.model` and other Gen AI semantic attributes. `Telemetry:EnableSensitiveData` config controls whether `gen_ai.input.messages` / `gen_ai.output.messages` span attributes are captured. Set `Telemetry__EnableSensitiveData=true` in Container App env vars to enable full message tracing.
+- **Agent Skills (FileAgentSkillsProvider)** — behavioral SKILL.md files in the `skills/` directory are discovered at startup and advertised to agents via the [agentskills.io](https://agentskills.io/) progressive disclosure protocol. Skills are loaded on demand (`load_skill` tool) so context stays lean. Skills are included in the Docker image via `CopyToPublishDirectory`. Path is configurable via `Skills:Path`.
 
 ---
 
@@ -258,6 +259,9 @@ npm run dev
 | `AzureBlobStorage` | `ContainerName` | string | ❌ | Blob container (default: `helpdesk-attachments`) |
 | `DocumentIntelligence` | `Endpoint` | string | ❌ | Azure Document Intelligence endpoint for PDF/DOCX OCR |
 | `DocumentIntelligence` | `Key` | string | ❌ | Document Intelligence API key |
+| `Skills` | `Path` | string | | Path to the skills directory, resolved against `AppContext.BaseDirectory` (default: `skills`) |
+| `Telemetry` | `EnableSensitiveData` | bool | | Capture `gen_ai.input.messages` / `gen_ai.output.messages` in traces. Set `Telemetry__EnableSensitiveData=true` in Container App (default: `false`) |
+| `Evaluation` | `ApiKey` | string | | Secret key enabling `/agent/eval` in any environment. Send as `X-Eval-Key` header from the test harness. Empty = endpoint disabled |
 
 > **Attachment services are optional.** When `AzureBlobStorage` or `DocumentIntelligence` config is absent the `/api/attachments` endpoint returns a graceful error; all other agent functionality is unaffected.
 
@@ -303,6 +307,7 @@ HelpdeskAI.AgentHost/
 │   ├── TurnGuardContextProvider.cs      # Injects current-turn tool history for softer guardrails
 │   ├── UserContextProvider.cs           # Injects authenticated user name and email from Entra headers
 │   └── DynamicToolSelectionProvider.cs  # Per-turn cosine similarity tool selection via embeddings
+│   └── (skills loaded from skills/ directory — SKILL.md files, CopyToPublishDirectory)
 ├── Endpoints/
 │   ├── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
 │   ├── EvalEndpoints.cs            # POST /agent/eval — synchronous eval endpoint for test harness
@@ -325,6 +330,12 @@ HelpdeskAI.AgentHost/
 ├── Models/
 │   └── Models.cs                   # Config DTOs (AzureOpenAIOptions, AzureBlobStorageSettings, etc.)
 └── HelpdeskAI.AgentHost.csproj     # Project file (.NET 10)
+├── skills/
+│   ├── escalation-protocol/SKILL.md   # When/how to escalate to L2/L3/management
+│   ├── frustrated-user/SKILL.md       # De-escalation and empathy-first response patterns
+│   ├── major-incident/SKILL.md        # P1/P2 response playbook
+│   ├── security-incident/SKILL.md     # Phishing/breach/malware response
+│   └── vip-request/SKILL.md           # White-glove handling for executives
 ```
 
 ---
@@ -385,7 +396,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 |--------|------|------|
 | `POST` | `/agent` | AG-UI v1 streaming endpoint — single agent (SSE) |
 | `POST` | `/agent/v2` | AG-UI v2 streaming endpoint — multi-agent MAF workflow (SSE) |
-| `POST` | `/agent/eval` | Synchronous eval endpoint for `HelpdeskAI.Evaluation` test harness — enabled for non-production environments only |
+| `POST` | `/agent/eval` | Synchronous eval endpoint for the HelpdeskAI.Evaluation harness. Enabled when Evaluation:ApiKey is configured (any environment). Requires X-Eval-Key header matching the configured key. |
 | `GET` | `/healthz` | Liveness / readiness probe (does not fail on Redis loss) |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
 | `GET` | `/agent/usage?threadId=` | Token usage for the most recent response — returns `{promptTokens, completionTokens}` from the thread-scoped Redis key written by `UsageCapturingChatClient` |
@@ -466,6 +477,45 @@ Current memory/guardrail scope:
 See [src/HelpdeskAI.McpServer/README.md](../HelpdeskAI.McpServer/README.md) for full tool details.
 
 For model-specific render-action behavior, see [docs/model-compatibility.md](../../docs/model-compatibility.md).
+
+---
+
+## Running Evaluations
+
+The `HelpdeskAI.Evaluation` project runs 12 golden tests against the live agent using the Microsoft.Extensions.AI.Evaluation framework.
+
+### Against Local AgentHost (default)
+
+```bash
+# Start McpServer and AgentHost first, then:
+$env:EVAL_OPENAI_API_KEY = "<your-azure-openai-key>"
+dotnet test tests/HelpdeskAI.Evaluation --logger "console;verbosity=normal"
+```
+
+### Against Azure (any environment)
+
+Set `Evaluation:ApiKey` to a secret string in the Container App environment variables:
+```
+Evaluation__ApiKey = <your-eval-secret>
+```
+
+Then run tests with:
+```bash
+$env:EVAL_OPENAI_API_KEY = "<your-azure-openai-key>"
+$env:EVAL_AGENT_URL      = "https://<your-agenthost>.azurecontainerapps.io"
+$env:EVAL_API_KEY        = "<your-eval-secret>"
+dotnet test tests/HelpdeskAI.Evaluation --logger "console;verbosity=normal"
+```
+
+### Generating the HTML Report
+
+```bash
+dotnet tool install -g Microsoft.Extensions.AI.Evaluation.Console
+dotnet aieval report --path "$env:LOCALAPPDATA\HelpdeskAI\EvalResults" --output docs/eval-report.html
+start docs/eval-report.html
+```
+
+Results are cached on disk — re-runs are instant unless the agent response changes.
 
 ---
 
@@ -568,15 +618,16 @@ cd ../HelpdeskAI.McpServer && dotnet run
 | `Microsoft.Extensions.AI.OpenAI` | 10.4.0 | Azure OpenAI adapter (`AsIChatClient()`) |
 | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
 | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
-| `ModelContextProtocol` | 1.1.0 | MCP client — `McpClientTool` implements `AIFunction` |
+| `ModelContextProtocol` | 1.2.0 | MCP client — `McpClientTool` implements `AIFunction` |
 | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
 | `Azure.AI.DocumentIntelligence` | 1.0.0 | PDF/DOCX OCR via Azure Document Intelligence |
 | `Azure.Search.Documents` | 11.8.0-beta.1 | Semantic search / RAG |
 | `Azure.Storage.Blobs` | 12.27.0 | Attachment archival to Blob Storage |
-| `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` (managed identity) |
+| `Azure.Identity` | 1.20.0 | `DefaultAzureCredential` (managed identity) |
 | `Azure.Monitor.OpenTelemetry.AspNetCore` | 1.4.0 | Application Insights telemetry |
-| `StackExchange.Redis` | 2.12.1 | Chat history + attachment staging |
+| `StackExchange.Redis` | 2.12.8 | Chat history + attachment staging |
 | `AspNetCore.HealthChecks.Redis` | 9.0.0 | Redis health check package retained for future explicit probes; current `/healthz` does not fail on Redis loss |
+| `Microsoft.Agents.AI` (rc4) | — | `FileAgentSkillsProvider`, `OpenTelemetryAgent` (in Microsoft.Agents.AI package) |
 
 ---
 

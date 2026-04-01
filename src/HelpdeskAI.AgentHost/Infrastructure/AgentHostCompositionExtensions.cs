@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json;
 using HelpdeskAI.AgentHost.Agents;
@@ -17,8 +16,9 @@ internal static class AgentHostCompositionExtensions
     private static readonly string[] TraceSourceNames =
     [
         "HelpdeskAI.AgentHost",
-        "Microsoft.Extensions.AI",
-        "Microsoft.Extensions.AI.OpenAI",
+        // Wildcard patterns catch both current "Experimental.*" prefix and any future stable rename.
+        "*Microsoft.Extensions.AI",       // gen_ai spans from IChatClient pipeline
+        "*Microsoft.Extensions.Agents*",  // MAF agent framework activity sources
         "Microsoft.Agents.AI",
         "Microsoft.Agents.AI.OpenAI",
         "Microsoft.Agents.AI.Workflows",
@@ -27,8 +27,10 @@ internal static class AgentHostCompositionExtensions
 
     private static readonly string[] MeterNames =
     [
-        "Microsoft.Extensions.AI",
-        "Microsoft.Agents.AI"
+        // Wildcards capture gen_ai.client.token.usage + gen_ai.client.operation.duration
+        // regardless of whether the "Experimental." prefix is present in the current version.
+        "*Microsoft.Extensions.AI",
+        "*Microsoft.Agents.AI"
     ];
 
     public static TracerProviderBuilder AddHelpdeskTracing(this TracerProviderBuilder tracing)
@@ -47,9 +49,7 @@ internal static class AgentHostCompositionExtensions
         return metrics;
     }
 
-    public static void UseAgentRequestContext(
-        this WebApplication app,
-        ActivitySource agentActivitySource)
+    public static void UseAgentRequestContext(this WebApplication app)
     {
         var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
         var agentLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost");
@@ -92,7 +92,6 @@ internal static class AgentHostCompositionExtensions
                     latestUserMessage = requestState.LatestUserMessage
                 });
 
-                using var agentSpan = StartAgentInvocationSpan(agentActivitySource, context.Request.Path, requestState.ThreadId);
                 await next(context);
             }
             finally
@@ -130,24 +129,6 @@ internal static class AgentHostCompositionExtensions
         {
             return new AgentRequestState(null, null);
         }
-    }
-
-    private static Activity? StartAgentInvocationSpan(
-        ActivitySource activitySource,
-        PathString path,
-        string? threadId)
-    {
-        var agentName = path.Value?.Contains("/v2", StringComparison.OrdinalIgnoreCase) == true
-            ? "helpdesk-v2"
-            : "HelpdeskAgent";
-
-        var activity = activitySource.StartActivity($"invoke_agent {agentName}");
-        activity?.SetTag("gen_ai.operation.name", "invoke_agent");
-        activity?.SetTag("gen_ai.agent.name", agentName);
-        activity?.SetTag("gen_ai.agent.id", agentName);
-        activity?.SetTag("gen_ai.system", "openai");
-        activity?.SetTag("thread.id", threadId);
-        return activity;
     }
 
     private static string? TryGetThreadId(JsonElement root)

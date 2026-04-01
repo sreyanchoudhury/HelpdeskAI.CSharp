@@ -14,7 +14,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System.Diagnostics;
 using StackExchange.Redis;
 using System.ClientModel.Primitives;
 
@@ -32,6 +31,12 @@ builder.Services.Configure<LongTermMemorySettings>(cfg.GetSection("LongTermMemor
 
 var aiSettings = cfg.GetSection("AzureOpenAI").Get<AzureOpenAiSettings>()
     ?? throw new InvalidOperationException("AzureOpenAI config section missing");
+
+// Telemetry:EnableSensitiveData — controls whether gen_ai.input.messages,
+// gen_ai.output.messages and other sensitive attributes are captured in traces.
+// Set via Azure Container App env var: Telemetry__EnableSensitiveData=true
+// Defaults to false so PII is not accidentally captured in production.
+var enableSensitiveData = cfg.GetValue<bool>("Telemetry:EnableSensitiveData");
 var authSettings = cfg.GetSection("EntraAuth").Get<EntraAuthSettings>()
     ?? throw new InvalidOperationException("EntraAuth config section missing");
 
@@ -137,7 +142,7 @@ builder.Services.AddChatClient(azureClient)
         services.GetRequiredService<ILoggerFactory>().CreateLogger<UsageCapturingChatClient>()))
     .Use((inner, _) => new AGUIHistoryNormalizingClient(inner))
     .UseLogging()
-    .UseOpenTelemetry(configure: c => c.EnableSensitiveData = !builder.Environment.IsProduction());
+    .UseOpenTelemetry(configure: c => c.EnableSensitiveData = enableSensitiveData);
 
 // v2 chat client: separate deployment for the multi-agent workflow (falls back to v1 deployment if not set).
 var v2Deployment = !string.IsNullOrWhiteSpace(aiSettings.ChatDeploymentV2)
@@ -169,7 +174,7 @@ builder.Services.AddKeyedSingleton("v2-chat", (services, _) =>
             svc.GetRequiredService<ILoggerFactory>().CreateLogger<UsageCapturingChatClient>()))
         .Use((inner, _) => new AGUIHistoryNormalizingClient(inner))
         .UseLogging()
-        .UseOpenTelemetry()
+        .UseOpenTelemetry(configure: c => c.EnableSensitiveData = enableSensitiveData)
         .Build(services);
     return pipeline;
 });
@@ -187,10 +192,6 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
 
 builder.Services.AddMemoryCache();
 
-// Custom ActivitySource for agent invocation spans — emits "invoke_agent" spans
-// that populate the Agents (Preview) view in Azure Monitor Application Insights.
-var agentActivitySource = new ActivitySource("HelpdeskAI.AgentHost");
-
 builder.Services.AddOpenTelemetry()
     .UseAzureMonitor()
     .WithTracing(tracing => tracing.AddHelpdeskTracing())
@@ -205,7 +206,7 @@ app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
-app.UseAgentRequestContext(agentActivitySource);
+app.UseAgentRequestContext();
 
 var chatClient = app.Services.GetRequiredService<IChatClient>();
 
@@ -257,7 +258,32 @@ var toolSelectionProvider = new DynamicToolSelectionProvider(
     topK,
     loggerFactory.CreateLogger<DynamicToolSelectionProvider>());
 
-var agent = HelpdeskAgentFactory.Create(chatClient, historyProvider, userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider);
+// Agent Skills (FileAgentSkillsProvider): loads behavioral SKILL.md files from the skills/
+// directory. Skills are advertised in the system prompt (~100 tokens/skill) and loaded on
+// demand via the load_skill tool. The path resolves against AppContext.BaseDirectory so it
+// works both in local dev (bin/Debug/skills/) and in the Container Apps image.
+var skillsRelPath = cfg["Skills:Path"] ?? "skills";
+var skillsAbsPath = Path.IsPathRooted(skillsRelPath)
+    ? skillsRelPath
+    : Path.Combine(AppContext.BaseDirectory, skillsRelPath);
+FileAgentSkillsProvider? skillsProvider = null;
+if (Directory.Exists(skillsAbsPath))
+{
+    skillsProvider = new FileAgentSkillsProvider(skillsAbsPath, loggerFactory: loggerFactory);
+    app.Logger.LogInformation("Agent skills loaded from {SkillsPath}", skillsAbsPath);
+}
+else
+{
+    app.Logger.LogWarning("Skills directory not found at {SkillsPath} — skills disabled.", skillsAbsPath);
+}
+
+var agent = new OpenTelemetryAgent(
+    HelpdeskAgentFactory.Create(chatClient, historyProvider, userProvider, memoryProvider,
+        turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider, skillsProvider),
+    "HelpdeskAI.AgentHost")
+{
+    EnableSensitiveData = enableSensitiveData
+};
 
 app.MapAGUI("/agent", agent).RequireAuthorization();
 
@@ -294,6 +320,8 @@ var helpdeskWorkflow = HelpdeskWorkflowFactory.BuildWorkflow(
     v2OrchestratorAttachmentProvider,                // orchestrator: PEEK (sees attachment to route)
     frontendToolProvider,
     ticketToolProvider, kbToolProvider, incidentToolProvider,
+    skillsProvider,
+    enableSensitiveData: enableSensitiveData,
     loggerFactory);
 
 // Use AIAgentBuilder.Use() middleware to capture CopilotKit frontend tools from
@@ -302,7 +330,7 @@ var helpdeskWorkflow = HelpdeskWorkflowFactory.BuildWorkflow(
 // stripped at the child-agent boundary.
 var rawWorkflowAgent = helpdeskWorkflow.AsAIAgent("helpdesk-v2", "HelpdeskAI Multi-Agent");
 var toolCapturingLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost.ToolCapturingMiddleware");
-var wrappedWorkflowAgent = new AIAgentBuilder(rawWorkflowAgent)
+var toolCapturingAgent = new AIAgentBuilder(rawWorkflowAgent)
     .Use(async (messages, session, options, next, ct) =>
     {
         // Capture CopilotKit frontend tools from the AG-UI AgentRunOptions before
@@ -324,12 +352,22 @@ var wrappedWorkflowAgent = new AIAgentBuilder(rawWorkflowAgent)
         await next(messages, session, options, ct);
     })
     .Build(app.Services);
+
+// Outermost wrapper: OpenTelemetryAgent emits the top-level "invoke_agent helpdesk-v2" span.
+// Per-specialist child spans come from the OpenTelemetryAgent wrapping inside BuildWorkflow.
+var wrappedWorkflowAgent = new OpenTelemetryAgent(toolCapturingAgent, "HelpdeskAI.AgentHost")
+{
+    EnableSensitiveData = enableSensitiveData
+};
 app.MapAGUI("/agent/v2", wrappedWorkflowAgent).RequireAuthorization();
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
 app.MapIncidentEndpoints();
-// Eval endpoint is not safe for production — exposes synchronous agent execution without auth.
-if (!app.Environment.IsProduction()) app.MapEvalEndpoints();
+// Eval endpoint: enabled in any environment when Evaluation:ApiKey is configured.
+// Callers must send the key as X-Eval-Key header. Empty/absent = endpoint not registered.
+var evalApiKey = cfg["Evaluation:ApiKey"];
+if (!string.IsNullOrWhiteSpace(evalApiKey))
+    app.MapEvalEndpoints(evalApiKey);
 
 app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
 {

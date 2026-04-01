@@ -7,7 +7,7 @@
     <RootNamespace>HelpdeskAI.AgentHost</RootNamespace>
     <AssemblyName>HelpdeskAI.AgentHost</AssemblyName>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <NoWarn>MEAI001</NoWarn>
+    <NoWarn>MEAI001;MAAI001</NoWarn>
     <UserSecretsId>bb1809ac-63a3-46e8-920a-c2c4d47215e0</UserSecretsId>
   </PropertyGroup>
 
@@ -27,17 +27,27 @@
     <PackageReference Include="Azure.AI.OpenAI" Version="2.8.0-beta.1" />
     <PackageReference Include="Azure.Search.Documents" Version="11.8.0-beta.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
-    <PackageReference Include="Azure.Identity" Version="1.19.0" />
+    <PackageReference Include="Azure.Identity" Version="1.20.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.4.0" />
 
     <!-- LAYER 4 - MCP client -->
-    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
+    <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
 
     <!-- Infrastructure -->
-    <PackageReference Include="StackExchange.Redis" Version="2.12.4" />
+    <PackageReference Include="StackExchange.Redis" Version="2.12.8" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0-preview.2.26159.112" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- CopyToPublishDirectory ensures skills are included in 'dotnet publish' output
+         (and therefore in the Docker image). CopyToOutputDirectory covers local dev. -->
+    <Content Include="skills\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

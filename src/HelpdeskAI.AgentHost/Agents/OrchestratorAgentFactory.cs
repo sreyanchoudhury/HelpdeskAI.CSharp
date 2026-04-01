@@ -115,12 +115,15 @@ internal static class OrchestratorAgentFactory
         AIContextProvider turnGuardProvider,
         AIContextProvider attachmentProvider,
         AIContextProvider frontendToolProvider,
+        AIContextProvider? skillsProvider = null,
         ILoggerFactory? loggerFactory = null) =>
         new(chatClient, new ChatClientAgentOptions
         {
             Name = AgentName,
             Description = "Routes user intent to the correct HelpdeskAI specialist agent",
             ChatOptions = new ChatOptions { Instructions = Instructions },
-            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, attachmentProvider, frontendToolProvider],
+            AIContextProviders = skillsProvider is null
+                ? [userProvider, memoryProvider, turnGuardProvider, attachmentProvider, frontendToolProvider]
+                : [userProvider, memoryProvider, turnGuardProvider, attachmentProvider, frontendToolProvider, skillsProvider],
         }, loggerFactory);
 }
