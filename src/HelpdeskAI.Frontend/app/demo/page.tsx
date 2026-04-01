@@ -3,25 +3,30 @@
 import { CopilotKit } from "@copilotkit/react-core";
 import { HelpdeskChat } from "@/components/HelpdeskChat";
 
-const BANNER_H = 34; // px — keep in sync with the style override below
+const BANNER_H = 34; // px
 
 export default function DemoPage() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
-      {/* Scoped overrides — globals.css has different rules per breakpoint:
-          Desktop: .hd-shell{height:100dvh}  .hd-main{height:100vh}
-          Mobile:  .hd-shell{height:auto; min-height:100dvh}  .hd-main{height:auto}
-          Both need the banner height subtracted at every breakpoint. */}
+    <div className="hd-demo-root">
       <style>{`
-        .hd-shell { height: calc(100dvh - ${BANNER_H}px) !important; }
-        .hd-main  { height: calc(100dvh - ${BANNER_H}px) !important; }
+        /* ── Desktop: fixed viewport layout (mirrors the normal app shell) ───── */
+        .hd-demo-root    { display: flex; flex-direction: column;
+                           height: 100dvh; overflow: hidden; }
+        .hd-demo-content { flex: 1; overflow: hidden; }
+        .hd-shell        { height: calc(100dvh - ${BANNER_H}px) !important; }
+        .hd-main         { height: calc(100dvh - ${BANNER_H}px) !important; }
+
+        /* ── Mobile (≤960px): natural height, body scrolls ────────────────── */
         @media (max-width: 960px) {
-          .hd-shell { height: auto !important; min-height: calc(100dvh - ${BANNER_H}px) !important; }
-          .hd-main  { height: auto !important; }
+          .hd-demo-root    { height: auto; min-height: 100dvh; overflow: visible; }
+          .hd-demo-content { overflow: visible; }
+          .hd-shell        { height: auto !important;
+                             min-height: calc(100dvh - ${BANNER_H}px) !important; }
+          .hd-main         { height: auto !important; }
         }
       `}</style>
 
-      {/* Banner — in normal flow so it participates in flex sizing */}
+      {/* Banner — always in normal flow, participates in flex sizing */}
       <div
         style={{
           height: BANNER_H,
@@ -39,8 +44,7 @@ export default function DemoPage() {
         ⚠️ Demo Mode — Internal preview only. Not for production use.
       </div>
 
-      {/* Chat fills the remaining height exactly */}
-      <div style={{ flex: 1, overflow: "hidden" }}>
+      <div className="hd-demo-content">
         <CopilotKit runtimeUrl="/api/copilotkit/demo" agent="HelpdeskAgent">
           <HelpdeskChat currentUser={{ name: "Demo User", email: "" }} />
         </CopilotKit>
