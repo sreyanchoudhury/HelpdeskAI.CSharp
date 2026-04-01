@@ -27,6 +27,8 @@ internal static class HelpdeskWorkflowFactory
     /// Builds the handoff workflow. Each specialist receives only its domain-specific tool
     /// subset via a pre-filtered <see cref="DynamicToolSelectionProvider"/> instance.
     /// </summary>
+    private const string TelemetrySource = "HelpdeskAI.AgentHost";
+
     public static Workflow BuildWorkflow(
         IChatClient chatClient,
         AIContextProvider userProvider,
@@ -39,36 +41,37 @@ internal static class HelpdeskWorkflowFactory
         AIContextProvider ticketToolProvider,
         AIContextProvider kbToolProvider,
         AIContextProvider incidentToolProvider,
+        AIContextProvider? skillsProvider = null,
+        bool enableSensitiveData = false,
         ILoggerFactory? loggerFactory = null)
     {
-        // orchestratorAttachmentProvider is peek-mode (reads without clearing) so the
-        // orchestrator can see the attachment to route correctly, and diagnostic_agent
-        // can still consume it via the clearing attachmentProvider below.
-        // frontendToolProvider captures CopilotKit render tools (show_ticket_created, etc.)
-        // and forwards them to the orchestrator, working around the MAF AgentRunOptions: null limitation.
-        ChatClientAgent orchestratorAgent = OrchestratorAgentFactory.Create(
-            chatClient, userProvider, memoryProvider, turnGuardProvider,
-            orchestratorAttachmentProvider, frontendToolProvider, loggerFactory);
+        // Wrap each agent with OpenTelemetryAgent so the Agents (Preview) view in App Insights
+        // shows per-specialist spans (invoke_agent orchestrator, invoke_agent ticket_agent, etc.)
+        // with proper gen_ai.agent.name attribution and model info as child LLM spans.
+        AIAgent orchestratorAgent = new OpenTelemetryAgent(
+            OrchestratorAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
+                orchestratorAttachmentProvider, frontendToolProvider, skillsProvider, loggerFactory),
+            TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
-        // Each specialist receives frontendToolProvider so it can call render tools
-        // (show_ticket_created, show_kb_article, etc.) directly after MCP tool calls.
-        // The CopilotKit action tools write to the AG-UI SSE stream when invoked by
-        // UseFunctionInvocation — this works because all agents share the same IChatClient pipeline.
-        ChatClientAgent ticketAgent = TicketAgentFactory.Create(
-            chatClient, userProvider, memoryProvider, turnGuardProvider, ticketToolProvider,
-            frontendToolProvider, loggerFactory);
+        AIAgent ticketAgent = new OpenTelemetryAgent(
+            TicketAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
+                ticketToolProvider, frontendToolProvider, loggerFactory),
+            TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
-        ChatClientAgent kbAgent = KBAgentFactory.Create(
-            chatClient, userProvider, memoryProvider, turnGuardProvider, searchProvider, kbToolProvider,
-            frontendToolProvider, loggerFactory);
+        AIAgent kbAgent = new OpenTelemetryAgent(
+            KBAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
+                searchProvider, kbToolProvider, frontendToolProvider, loggerFactory),
+            TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
-        ChatClientAgent incidentAgent = IncidentAgentFactory.Create(
-            chatClient, userProvider, memoryProvider, turnGuardProvider, incidentToolProvider,
-            frontendToolProvider, loggerFactory);
+        AIAgent incidentAgent = new OpenTelemetryAgent(
+            IncidentAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
+                incidentToolProvider, frontendToolProvider, loggerFactory),
+            TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
-        ChatClientAgent diagnosticAgent = DiagnosticAgentFactory.Create(
-            chatClient, userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider,
-            frontendToolProvider, loggerFactory);
+        AIAgent diagnosticAgent = new OpenTelemetryAgent(
+            DiagnosticAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
+                searchProvider, attachmentProvider, frontendToolProvider, skillsProvider, loggerFactory),
+            TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
         return AgentWorkflowBuilder
             .CreateHandoffBuilderWith(orchestratorAgent)

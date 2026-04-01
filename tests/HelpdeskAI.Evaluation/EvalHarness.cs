@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Azure;
@@ -42,6 +43,17 @@ internal static class EvalHarness
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HelpdeskAI", "EvalResults");
 
+    /// <summary>
+    /// Optional API key sent as <c>X-Eval-Key</c> when targeting a remote AgentHost.
+    /// Required when EVAL_AGENT_URL is set (remote); ignored for localhost (no key needed locally).
+    /// Set via: EVAL_API_KEY env var = value of Evaluation:ApiKey in the deployed Container App.
+    /// </summary>
+    private static readonly string? EvalApiKey =
+        Environment.GetEnvironmentVariable("EVAL_API_KEY");
+
+    private static readonly bool IsRemote =
+        !AgentBaseUrl.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase);
+
     // ── Pre-flight guard ─────────────────────────────────────────────────────
 
     /// <summary>
@@ -53,17 +65,17 @@ internal static class EvalHarness
     internal static void EnsureConfigured()
     {
         var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(OaiApiKey))       missing.Add("EVAL_OPENAI_API_KEY");
-        if (string.IsNullOrWhiteSpace(OaiEndpoint))     missing.Add("EVAL_OPENAI_ENDPOINT");
-        if (string.IsNullOrWhiteSpace(AgentBaseUrl))    missing.Add("EVAL_AGENT_URL");
+        if (string.IsNullOrWhiteSpace(OaiApiKey))             missing.Add("EVAL_OPENAI_API_KEY");
+        if (string.IsNullOrWhiteSpace(OaiEndpoint))           missing.Add("EVAL_OPENAI_ENDPOINT");
+        if (IsRemote && string.IsNullOrWhiteSpace(EvalApiKey)) missing.Add("EVAL_API_KEY");
 
         if (missing.Count > 0)
             Assert.Inconclusive(
-                $"Eval tests skipped — set the following environment variables before running: " +
+                $"Eval tests skipped — set the following environment variables: " +
                 $"{string.Join(", ", missing)}. " +
-                $"EVAL_OPENAI_API_KEY and EVAL_OPENAI_ENDPOINT match the values in " +
-                $"appsettings.Development.json; EVAL_AGENT_URL points at the deployed AgentHost " +
-                $"(e.g. https://helpdeskaiapp-dev-agenthost.azurecontainerapps.io).");
+                $"EVAL_OPENAI_API_KEY/ENDPOINT match appsettings.Development.json. " +
+                $"EVAL_AGENT_URL targets the deployed AgentHost (default: localhost:5200). " +
+                $"EVAL_API_KEY must match Evaluation__ApiKey set in the Container App env vars.");
     }
 
     // ── Evaluators ───────────────────────────────────────────────────────────
@@ -118,7 +130,13 @@ internal static class EvalHarness
         HttpClient http, string message, CancellationToken ct = default)
     {
         var payload = new { message };
-        using var resp = await http.PostAsJsonAsync("/agent/eval", payload, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/agent/eval")
+        {
+            Content = JsonContent.Create(payload)
+        };
+        if (!string.IsNullOrWhiteSpace(EvalApiKey))
+            request.Headers.Add("X-Eval-Key", EvalApiKey);
+        using var resp = await http.SendAsync(request, ct);
         resp.EnsureSuccessStatusCode();
 
         var json = await resp.Content.ReadAsStringAsync(ct);

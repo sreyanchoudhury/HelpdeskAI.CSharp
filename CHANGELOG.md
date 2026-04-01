@@ -4,6 +4,43 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-01
+
+### Added
+
+- **MAF Agent Skills (M2)** — `FileAgentSkillsProvider` wired into V1 (`HelpdeskAgentFactory`), V2 orchestrator (`OrchestratorAgentFactory`), and V2 diagnostic specialist (`DiagnosticAgentFactory`). Skills use the [agentskills.io](https://agentskills.io/) progressive disclosure protocol: skill names/descriptions are advertised in the system prompt each turn; full body is loaded on demand via the `load_skill` tool. Skills path is configurable via `Skills:Path` in `appsettings.json` (defaults to `"skills"`, resolved against `AppContext.BaseDirectory`).
+- **5 behavioral SKILL.md files** (`src/HelpdeskAI.AgentHost/skills/`):
+  - `escalation-protocol` — when and how to escalate to L2/L3/management with communication templates
+  - `frustrated-user` — de-escalation techniques, empathy-first response patterns, what to avoid
+  - `major-incident` — P1/P2 response playbook: confirm scope, triage, communication cadence, post-incident steps
+  - `security-incident` — phishing/breach/malware response: contain → report (ext. 9911) → preserve evidence → communicate
+  - `vip-request` — white-glove handling for executives: speed over process, dedicated ownership, adjusted SLAs
+- **Telemetry fix — `OpenTelemetryAgent` wrapping** — V1 `HelpdeskAgent` and V2 `helpdesk-v2` workflow agent are now wrapped with `OpenTelemetryAgent` so App Insights Agents (Preview) shows top-level `invoke_agent` spans. V2 specialists (orchestrator, ticket, KB, incident, diagnostic) are also individually wrapped inside `HelpdeskWorkflowFactory` for per-specialist span attribution.
+- **Telemetry fix — wildcard source/meter names** — `TraceSourceNames` and `MeterNames` in `AgentHostCompositionExtensions` now use wildcard patterns (`"*Microsoft.Extensions.AI"`, `"*Microsoft.Extensions.Agents*"`) to capture both current `Experimental.*` prefixed names and future stable renames. Fixes empty Models section and Token Consumption charts in App Insights.
+- **Telemetry fix — v2 pipeline OTel config** — v2 `IChatClient` pipeline `.UseOpenTelemetry()` now passes `EnableSensitiveData` consistently with v1.
+
+### Changed
+
+- **`HelpdeskWorkflowFactory.BuildWorkflow`** — added optional `AIContextProvider? skillsProvider` and `bool enableSensitiveData` parameters; all 5 agents wrapped with `OpenTelemetryAgent`.
+- **`OrchestratorAgentFactory.Create`** / **`DiagnosticAgentFactory.Create`** / **`HelpdeskAgentFactory.Create`** — added optional `AIContextProvider? skillsProvider` parameter; injected as the last provider when non-null.
+- **`Evaluation:ApiKey` config key + `X-Eval-Key` header guard** — `/agent/eval` endpoint is now enabled in any environment when `Evaluation:ApiKey` is set (non-empty). Callers send the key as `X-Eval-Key` header. Empty = endpoint not registered. Removes the `!IsProduction()` gate, enabling CI/CD and remote eval runs against the deployed Azure Container App. Test harness reads `EVAL_API_KEY` env var and injects it automatically; `EnsureConfigured()` requires it when `EVAL_AGENT_URL` points at a non-localhost host.
+- **`Telemetry:EnableSensitiveData` config key** — replaces `!IsProduction()` guard for all `EnableSensitiveData` settings (IChatClient OTel pipeline × 2, OpenTelemetryAgent × 3 specialist wraps, `BuildWorkflow` param). Defaults to `false`; enable per-environment via Container App env var `Telemetry__EnableSensitiveData=true`. When `true`, captures `gen_ai.input.messages`, `gen_ai.output.messages`, and other PII-bearing span attributes in App Insights.
+- **Skills `CopyToPublishDirectory`** — changed from `<None CopyToOutputDirectory>` to `<Content CopyToPublishDirectory>` so skill SKILL.md files are included in `dotnet publish -c Release` output and therefore in the Docker image. Previously skills were only available in local dev build output.
+- **Package upgrades** (AgentHost): `ModelContextProtocol` 1.1.0 → 1.2.0, `StackExchange.Redis` 2.12.4 → 2.12.8, `Azure.Identity` 1.19.0 → 1.20.0.
+- **Package upgrades** (McpServer): `Microsoft.Azure.Cosmos` 3.57.1 → 3.58.0, `ModelContextProtocol.AspNetCore` 1.1.0 → 1.2.0.
+- **`<NoWarn>`** in `HelpdeskAI.AgentHost.csproj` — added `MAAI001` alongside existing `MEAI001` to suppress the evaluation-only diagnostic for `FileAgentSkillsProvider`.
+- **`AgentHostCompositionExtensions.cs`** — removed `ActivitySource agentActivitySource` parameter from `UseAgentRequestContext` and removed `StartAgentInvocationSpan` helper; `OpenTelemetryAgent` now owns all agent-level spans.
+- **`EvalEndpoints.cs`** — added `X-Eval-Key` header validation; `MapEvalEndpoints` now takes the configured API key and rejects requests with wrong/missing key with 401.
+- **`EvalHarness.cs`** (test project) — added `EVAL_API_KEY` env var support; `CallEvalAsync` sends `X-Eval-Key` header when set; `EnsureConfigured()` requires the key when targeting non-localhost.
+
+### Fixed
+
+- **App Insights Models section empty** — was caused by wrong meter/source names (`"Microsoft.Extensions.AI"` instead of `"Experimental.Microsoft.Extensions.AI"`). Fixed by wildcard patterns.
+- **App Insights Token Consumption charts empty** — `gen_ai.client.token.usage` metric was not reaching the meter pipeline. Fixed by wildcard meter registration.
+- **Duplicate `invoke_agent` spans** — custom `ActivitySource` hand-rolling in `UseAgentRequestContext` was emitting manual spans alongside MAF's own. Removed custom span; `OpenTelemetryAgent` is the sole emitter.
+
+---
+
 ## [Unreleased] - 2026-03-31
 
 ### Added

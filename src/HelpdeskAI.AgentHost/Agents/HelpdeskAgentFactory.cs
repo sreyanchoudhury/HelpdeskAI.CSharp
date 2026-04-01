@@ -101,7 +101,8 @@ public static class HelpdeskAgentFactory
         AIContextProvider turnGuardProvider,
         AIContextProvider searchProvider,
         AIContextProvider attachmentProvider,
-        AIContextProvider toolSelectionProvider) =>
+        AIContextProvider toolSelectionProvider,
+        AIContextProvider? skillsProvider = null) =>
         chatClient.AsAIAgent(new ChatClientAgentOptions
         {
             Name = AgentName,
@@ -110,6 +111,8 @@ public static class HelpdeskAgentFactory
                 Instructions = BaseInstructions,
             },
             ChatHistoryProvider = historyProvider,
-            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider]
+            AIContextProviders = skillsProvider is null
+                ? [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider]
+                : [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, toolSelectionProvider, skillsProvider]
         });
 }
