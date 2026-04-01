@@ -13,5 +13,5 @@ export default withAuth({
 });
 
 export const config = {
-  matcher: ["/((?!api/auth|sign-in|signed-out|_next|favicon.ico).*)"],
+  matcher: ["/((?!api/auth|sign-in|signed-out|_next|favicon.ico|demo|api/copilotkit/demo).*)"],
 };

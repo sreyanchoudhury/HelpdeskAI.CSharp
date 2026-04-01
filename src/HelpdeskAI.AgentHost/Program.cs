@@ -286,6 +286,8 @@ var agent = new OpenTelemetryAgent(
 };
 
 app.MapAGUI("/agent", agent).RequireAuthorization();
+// Demo endpoint — same V1 agent, no auth required (internal feedback only)
+app.MapAGUI("/agent/demo", agent);
 
 // === Multi-Agent Workflow — /agent/v2 (additive, single-agent route above is unchanged) ===
 // Each specialist gets a DynamicToolSelectionProvider scoped to its own tool subset.
