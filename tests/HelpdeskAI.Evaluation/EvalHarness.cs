@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Azure;
 using Azure.AI.OpenAI;
+using Azure.Storage.Files.DataLake;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.AI.Evaluation;
 using Microsoft.Extensions.AI.Evaluation.Quality;
@@ -42,6 +43,19 @@ internal static class EvalHarness
         ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HelpdeskAI", "EvalResults");
+
+    /// <summary>
+    /// Optional Azure Storage connection string for blob-backed result persistence.
+    /// When set, results are written to Azure Blob Storage (ADLS Gen2) so the
+    /// frontend Evaluations dashboard can read them.
+    /// Set via: EVAL_BLOB_CONNECTION_STRING env var.
+    /// Falls back to disk-based storage when absent (preserves local dev behaviour).
+    /// </summary>
+    private static readonly string? BlobConnectionString =
+        Environment.GetEnvironmentVariable("EVAL_BLOB_CONNECTION_STRING");
+
+    private static readonly string BlobContainerName =
+        Environment.GetEnvironmentVariable("EVAL_BLOB_CONTAINER") ?? "eval-results";
 
     /// <summary>
     /// Optional API key sent as <c>X-Eval-Key</c> when targeting a remote AgentHost.
@@ -109,15 +123,34 @@ internal static class EvalHarness
 
     /// <summary>
     /// Creates the <see cref="ReportingConfiguration"/> that drives all scenario runs.
-    /// Results are written to disk (EVAL_REPORT_PATH / %LOCALAPPDATA%\HelpdeskAI\EvalResults).
-    /// Response caching is ON — re-runs are fast (no LLM calls) unless scenario input changes.
+    /// When EVAL_BLOB_CONNECTION_STRING is set, results are persisted to Azure Storage
+    /// (ADLS Gen2) so the frontend Evaluations dashboard can read them.
+    /// Otherwise, falls back to disk (EVAL_REPORT_PATH / %LOCALAPPDATA%\HelpdeskAI\EvalResults)
+    /// with response caching ON for fast local re-runs.
     /// </summary>
-    internal static ReportingConfiguration BuildReportingConfig() =>
-        DiskBasedReportingConfiguration.Create(
+    internal static ReportingConfiguration BuildReportingConfig()
+    {
+        if (!string.IsNullOrWhiteSpace(BlobConnectionString))
+        {
+            // Azure Storage (ADLS Gen2) — requires hierarchical namespace enabled on the account.
+            var serviceClient   = new DataLakeServiceClient(BlobConnectionString);
+            var fileSystemClient = serviceClient.GetFileSystemClient(BlobContainerName);
+            var dirClient       = fileSystemClient.GetDirectoryClient("/");
+            return AzureStorageReportingConfiguration.Create(
+                client: dirClient,
+                evaluators: AllEvaluators,
+                chatConfiguration: BuildEvaluatorChatConfig(),
+                enableResponseCaching: false,   // no cache in blob mode — always fresh
+                executionName: DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss"));
+        }
+
+        // Local disk (default) — fast re-runs via response caching.
+        return DiskBasedReportingConfiguration.Create(
             storageRootPath: ReportStoragePath,
             evaluators: AllEvaluators,
             chatConfiguration: BuildEvaluatorChatConfig(),
             enableResponseCaching: true);
+    }
 
     // ── Agent caller ─────────────────────────────────────────────────────────
 

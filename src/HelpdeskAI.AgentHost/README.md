@@ -301,6 +301,7 @@ HelpdeskAI.AgentHost/
 │   ├── KBAgentFactory.cs               # V2 specialist — knowledge base search and indexing
 │   ├── IncidentAgentFactory.cs          # V2 specialist — system status and incident checks
 │   ├── FrontendToolForwardingProvider.cs # Captures CopilotKit frontend tools for v2 agents
+│   ├── EvalRunnerService.cs             # UI-triggered eval runner — 15 scenarios, multi-turn support, blob result storage
 │   ├── AzureAiSearchContextProvider.cs  # RAG injection before each LLM call
 │   ├── AttachmentContextProvider.cs     # Injects staged attachment content (peek or clear mode)
 │   ├── LongTermMemoryContextProvider.cs # Injects remembered profile facts and preferences
@@ -311,6 +312,7 @@ HelpdeskAI.AgentHost/
 ├── Endpoints/
 │   ├── AttachmentEndpoints.cs      # POST /api/attachments — upload, OCR, Blob staging
 │   ├── EvalEndpoints.cs            # POST /agent/eval — synchronous eval endpoint for test harness
+│   ├── EvalResultsEndpoints.cs     # GET/POST /agent/eval/results — blob-backed results + run trigger for UI dashboard
 │   └── TicketEndpoints.cs          # GET /api/tickets — proxy to McpServer /tickets
 ├── Infrastructure/
 │   ├── AGUIHistoryNormalizingClient.cs  # Merges consecutive assistant tool-call messages for OpenAI parallel tool-call compatibility
@@ -397,6 +399,9 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | `POST` | `/agent` | AG-UI v1 streaming endpoint — single agent (SSE) |
 | `POST` | `/agent/v2` | AG-UI v2 streaming endpoint — multi-agent MAF workflow (SSE) |
 | `POST` | `/agent/eval` | Synchronous eval endpoint for the HelpdeskAI.Evaluation harness. Enabled when Evaluation:ApiKey is configured (any environment). Requires X-Eval-Key header matching the configured key. |
+| `GET` | `/agent/eval/results` | List all eval execution summaries (pass/fail counts per run) from Blob Storage. Requires X-Eval-Key. |
+| `GET` | `/agent/eval/results/{executionName}` | Full scenario-level results for a specific run including per-metric ratings and agent responses. Requires X-Eval-Key. |
+| `POST` | `/agent/eval/run` | Trigger a new eval run in the background; returns 202 with `executionName`. Requires X-Eval-Key. |
 | `GET` | `/healthz` | Liveness / readiness probe (does not fail on Redis loss) |
 | `GET` | `/agent/info` | Stack metadata — library names, runtime info |
 | `GET` | `/agent/usage?threadId=` | Token usage for the most recent response — returns `{promptTokens, completionTokens}` from the thread-scoped Redis key written by `UsageCapturingChatClient` |
@@ -482,7 +487,7 @@ For model-specific render-action behavior, see [docs/model-compatibility.md](../
 
 ## Running Evaluations
 
-The `HelpdeskAI.Evaluation` project runs 12 golden tests against the live agent using the Microsoft.Extensions.AI.Evaluation framework.
+The `HelpdeskAI.Evaluation` project runs 15 golden scenarios against the live agent using the Microsoft.Extensions.AI.Evaluation framework. Scenarios cover single-turn and multi-turn conversations and are also triggerable from the UI via the Evaluations sidebar page.
 
 ### Against Local AgentHost (default)
 
@@ -614,8 +619,11 @@ cd ../HelpdeskAI.McpServer && dotnet run
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `Microsoft.Extensions.AI` | 10.4.0 | `IChatClient`, `AIFunction`, `DelegatingAIFunction` |
-| `Microsoft.Extensions.AI.OpenAI` | 10.4.0 | Azure OpenAI adapter (`AsIChatClient()`) |
+| `Microsoft.Extensions.AI` | 10.4.1 | `IChatClient`, `AIFunction`, `DelegatingAIFunction` |
+| `Microsoft.Extensions.AI.OpenAI` | 10.4.1 | Azure OpenAI adapter (`AsIChatClient()`) |
+| `Microsoft.Extensions.AI.Evaluation.Quality` | 10.4.0 | IntentResolution, TaskAdherence, Relevance, Coherence evaluators |
+| `Microsoft.Extensions.AI.Evaluation.Reporting` | 10.4.0 | `ReportingConfiguration`, `ChatConfiguration` |
+| `Microsoft.Extensions.AI.Evaluation.Reporting.Azure` | 10.4.0 | `AzureStorageReportingConfiguration` for blob-backed eval reports |
 | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
 | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
 | `ModelContextProtocol` | 1.2.0 | MCP client — `McpClientTool` implements `AIFunction` |

@@ -379,4 +379,6 @@ body {
   .hd-chat-wrapper .copilotKitMessage.copilotKitUserMessage::after {
     right: -36px;
   }
+
+  .hd-eval-col-primary { display: none; }
 }

@@ -4,6 +4,27 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-02
+
+### Added
+
+- **M3 — Eval Dashboard** — new **Evaluations** sidebar page in the frontend. Click **▶ Run Evals** to trigger a run of 15 golden scenarios; results auto-refresh every 8 s while in progress and are stored as JSON blobs in Azure Blob Storage (`eval-results` container). Pass/fail and per-metric ratings (IntentResolution, TaskAdherence, Relevance, Coherence) are displayed per scenario with color-coded badges. The table is mobile-responsive (horizontal scroll + Primary column hidden on ≤640 px).
+- **`EvalRunnerService`** — background service that runs 15 eval scenarios against the live agent pipeline and persists `ScenarioResultDto` JSON blobs. Supports both single-turn and multi-turn scenarios (intermediate turns build real conversation history before the evaluated final turn).
+- **`EvalResultsEndpoints`** — three blob-backed endpoints: `GET /agent/eval/results` (execution summaries), `GET /agent/eval/results/{executionName}` (scenario detail), `POST /agent/eval/run` (trigger). All guarded by `X-Eval-Key`.
+- **3 new eval scenarios** (15 total, up from 12): `Test13_MultiTurn_VpnThenTicket`, `Test14_MultiTurn_SearchThenClose` (multi-turn TaskAdherence), `Test15_OutOfScope` (Coherence — agent should politely decline non-IT requests).
+- **Demo endpoint** — `/demo` route exposes the app without Azure AD auth for internal sharing. Renders a yellow warning banner; uses the same v1 agent pipeline via `/api/copilotkit/demo`. Mobile-responsive with a scoped CSS override for the full-height shell.
+- **`/api/eval-results` Next.js route** — frontend API proxy that forwards eval list/detail/run requests to AgentHost with `X-Eval-Key`, requiring an authenticated user session.
+
+### Changed
+
+- **Eval user identity** — `POST /agent/eval` and `EvalRunnerService` now inject a synthetic eval persona (`eval-user@contoso.com`, Engineering team) into the system prompt so ticket and search tools have a userId to work with. Fixes 10 previously failing TaskAdherence scenarios where tool calls silently returned empty results.
+- **Pass/fail metric lookup** — fixed: MEAI metric names have spaces (`"Intent Resolution"`, `"Task Adherence"`) but the lookup was searching for `"IntentResolution"` / `"TaskAdherence"`. Now uses `IntentResolutionEvaluator.IntentResolutionMetricName` etc. (static constants) for exact dictionary lookup.
+- **Hardcoded "12 scenarios" references removed** — button text, in-progress status, and final count now derive from the actual `total` field returned by the backend.
+- **Package version: `Microsoft.Extensions.AI`** — 10.4.0 → 10.4.1 (AgentHost).
+- **Package version: `Microsoft.Extensions.AI.OpenAI`** — 10.4.0 → 10.4.1 (AgentHost).
+
+---
+
 ## [Unreleased] - 2026-04-01
 
 ### Added
