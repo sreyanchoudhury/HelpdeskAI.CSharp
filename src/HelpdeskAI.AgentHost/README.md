@@ -301,7 +301,7 @@ HelpdeskAI.AgentHost/
 │   ├── KBAgentFactory.cs               # V2 specialist — knowledge base search and indexing
 │   ├── IncidentAgentFactory.cs          # V2 specialist — system status and incident checks
 │   ├── FrontendToolForwardingProvider.cs # Captures CopilotKit frontend tools for v2 agents
-│   ├── EvalRunnerService.cs             # UI-triggered eval runner — 15 scenarios, multi-turn support, blob result storage
+│   ├── EvalRunnerService.cs             # UI-triggered eval runner — 20 scenarios (15 v1 + 5 v2), HTTP loopback for v2, blob result storage
 │   ├── AzureAiSearchContextProvider.cs  # RAG injection before each LLM call
 │   ├── AttachmentContextProvider.cs     # Injects staged attachment content (peek or clear mode)
 │   ├── LongTermMemoryContextProvider.cs # Injects remembered profile facts and preferences
@@ -399,6 +399,7 @@ If AI Search fails or is unconfigured, the context is skipped — the agent cont
 | `POST` | `/agent` | AG-UI v1 streaming endpoint — single agent (SSE) |
 | `POST` | `/agent/v2` | AG-UI v2 streaming endpoint — multi-agent MAF workflow (SSE) |
 | `POST` | `/agent/eval` | Synchronous eval endpoint for the HelpdeskAI.Evaluation harness. Enabled when Evaluation:ApiKey is configured (any environment). Requires X-Eval-Key header matching the configured key. |
+| `POST` | `/agent/eval-v2` | AG-UI v2 eval endpoint — same `wrappedWorkflowAgent`, X-Eval-Key auth only (no Entra). Used by `EvalRunnerService` for v2 scenario HTTP loopback calls. Only registered when `Evaluation:ApiKey` is configured. |
 | `GET` | `/agent/eval/results` | List all eval execution summaries (pass/fail counts per run) from Blob Storage. Requires X-Eval-Key. |
 | `GET` | `/agent/eval/results/{executionName}` | Full scenario-level results for a specific run including per-metric ratings and agent responses. Requires X-Eval-Key. |
 | `POST` | `/agent/eval/run` | Trigger a new eval run in the background; returns 202 with `executionName`. Requires X-Eval-Key. |
@@ -487,7 +488,9 @@ For model-specific render-action behavior, see [docs/model-compatibility.md](../
 
 ## Running Evaluations
 
-The `HelpdeskAI.Evaluation` project runs 15 golden scenarios against the live agent using the Microsoft.Extensions.AI.Evaluation framework. Scenarios cover single-turn and multi-turn conversations and are also triggerable from the UI via the Evaluations sidebar page.
+The `HelpdeskAI.Evaluation` project runs 20 golden scenarios (15 v1 + 5 v2) against the live agent using the Microsoft.Extensions.AI.Evaluation framework. Scenarios cover single-turn and multi-turn conversations and are also triggerable from the UI via the Evaluations sidebar page.
+
+V2 scenarios use HTTP loopback: `EvalRunnerService` posts AG-UI requests to `/agent/eval-v2` (X-Eval-Key auth, no Entra) and parses the SSE stream to extract the assembled assistant text. The self-call base URL is controlled by the `AgentHost:BaseUrl` config key (default: `http://localhost:5200`; set to `http://localhost:8080` in Azure Container Apps).
 
 ### Against Local AgentHost (default)
 

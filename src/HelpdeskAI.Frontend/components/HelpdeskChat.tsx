@@ -1025,8 +1025,25 @@ function EvalPage() {
                     <tbody>
                       {scenarios.map(sc => (
                         <tr key={sc.scenarioName} style={{ borderTop: "1px solid #ffffff06" }}>
-                          <td style={{ padding: "8px 8px 8px 0", color: "#9098b0", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {sc.scenarioName.replace(/^Test\d+_/, "").replace(/_/g, " ")}
+                          <td style={{ padding: "8px 8px 8px 0", color: "#9098b0", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {(() => {
+                              const isV2 = sc.scenarioName.includes("_V2_");
+                              const label = sc.scenarioName
+                                .replace(/^Test\d+_V2_/, "")
+                                .replace(/^Test\d+_/, "")
+                                .replace(/_/g, " ");
+                              return (
+                                <>
+                                  <span style={{
+                                    padding: "1px 5px", borderRadius: 3, fontSize: 9, fontWeight: 700,
+                                    background: isV2 ? "#7c3aed18" : "#1d4ed818",
+                                    color: isV2 ? "#a78bfa" : "#60a5fa",
+                                    marginRight: 5, flexShrink: 0,
+                                  }}>{isV2 ? "V2" : "V1"}</span>
+                                  {label}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td className="hd-eval-col-primary" style={{ padding: "8px", color: "#5a6280" }}>{sc.primaryEvaluator}</td>
                           <td style={{ padding: "8px" }}>

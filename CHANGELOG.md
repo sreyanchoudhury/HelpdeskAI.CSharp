@@ -4,6 +4,26 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-02 (M4 — V2 Eval Coverage)
+
+### Added
+
+- **5 v2 eval scenarios** (Test16–Test20) targeting the multi-agent orchestrator workflow: `Test16_V2_TicketRouting`, `Test17_V2_KbRouting`, `Test18_V2_IncidentRouting`, `Test19_V2_MultiStep_TicketThenKb`, `Test20_V2_MultiTurn_SearchThenClose`. Eval suite now covers 20 scenarios (15 v1 + 5 v2).
+- **`/agent/eval-v2` endpoint** — maps the same `wrappedWorkflowAgent` with X-Eval-Key auth (no Entra). Used exclusively by `EvalRunnerService` for v2 scenario runs via HTTP loopback. Only registered when `Evaluation:ApiKey` is configured.
+- **V2 SSE loopback eval** — `EvalRunnerService.RunV2ScenarioAsync` posts AG-UI requests to `/agent/eval-v2`, parses the SSE stream (`TEXT_MESSAGE_CONTENT` delta events → assembled assistant text), and evaluates with the same `CompositeEvaluator` as v1.
+- **V1/V2 route badge** in the Evaluations page scenario table — blue `V1` or purple `V2` badge in each row's Scenario column derived from the scenario name (`Test\d+_V2_` prefix). Scenario label strips both `V2_` prefix variants correctly.
+- **`-CleanBlobs` switch** in `infra/cleanup-demo-data.ps1` — deletes eval blobs from the `eval-results` container older than `BlobAgeDays` (default 30) days. Requires `-BlobConnectionString` or `$env:AZURE_STORAGE_CONNECTION_STRING`.
+- **`AgentHost:BaseUrl` config key** — controls the loopback URL used by `EvalRunnerService` for v2 self-calls. Defaults to `http://localhost:5200`; override to `http://localhost:8080` in Azure Container Apps (Dockerfile port).
+
+### Changed
+
+- **`EvalRunnerService` constructor** — now accepts `evalApiKey` and `selfBaseUrl` (injected via DI factory in `Program.cs`). DI registration changed from `AddSingleton<EvalRunnerService>()` to a factory overload.
+- **`ScenarioSpec` record** — added `bool IsV2 = false` flag to route scenarios to either the v1 direct-call path or the v2 HTTP loopback path.
+- **`RunScenarioAsync` refactored** into `RunV1ScenarioAsync` and `RunV2ScenarioAsync` with shared `EvaluateAndBuildResultAsync` and `PersistResultAsync` helpers.
+- **Redis LTM cleanup** — `-ClearLongTermMemory` switch in `infra/cleanup-demo-data.ps1` now targets `ltm:*` (all LTM keys) rather than the narrower `ltm:*:profile` pattern, ensuring evaluation-temp memory is also cleared.
+
+---
+
 ## [Unreleased] - 2026-04-02
 
 ### Added
@@ -181,6 +201,55 @@ All notable changes to HelpdeskAI are recorded here.
 - **AI Search transient failures** — retry policy added to the `McpServer` `HttpClient`; `AzureAiSearchService` handles transient 503/429 responses gracefully.
 - **Ticket detail card blank** — `show_ticket_details` prompt updated to require `get_ticket` before rendering; field extraction from the tool's text response made explicit so title/description/status are never omitted.
 - **CopilotKit frontend instructions duplication** — removed the duplicate `instructions` prop from `<CopilotChat>`; `BaseInstructions` in `HelpdeskAgentFactory` is the single source of truth.
+
+---
+
+## [1.3.0] — 2026-03-20
+
+**Auth, Persistence, and Memory**
+
+- Added Microsoft Entra sign-in on the frontend via NextAuth and bearer-token validation in AgentHost
+- Persisted tickets in Azure Cosmos DB instead of the earlier transient store
+- Added `search_kb_articles` alongside KB indexing flows and aligned render-action guidance for ticket, incident, and KB cards
+- Added long-term Redis-backed profile memory plus simple remembered user preferences
+- Added turn-level telemetry and repeated-tool visibility to help diagnose multi-step workflow drift in Azure
+
+---
+
+## [1.2.0] — 2026-03-17
+
+**Response Token Usage Stats**
+
+- **`UsageCapturingChatClient`** (AgentHost) — new `DelegatingChatClient` that intercepts each streaming response, aggregates token usage from the final chunk, and writes `{promptTokens, completionTokens}` to Redis under `usage:{threadId}:latest`
+- **`GET /agent/usage?threadId=`** (AgentHost) — new lightweight endpoint that reads the usage key from Redis and returns JSON; returns `404` if the key has not yet been written
+- **`/api/copilotkit/usage/route.ts`** (Frontend) — Next.js proxy that forwards to the AgentHost usage endpoint
+- **Response stats chip** (Frontend) — after each assistant response, `HelpdeskChat` fetches token usage and injects a `⏱ Xs · 📥 N in / 📤 M out` chip inline with the message's copy/thumbs action buttons
+
+---
+
+## [1.1.0] — 2026-03-13
+
+**Refactoring & Upgrades**
+
+- **Package upgrades:** `ModelContextProtocol.AspNetCore` 1.0.0 → 1.1.0; HealthChecks preview.1 → preview.2
+- **C# refactor:** Extracted `ServiceStatus.cs`; de-duplicated helpers; replaced magic numbers with named constants; cleaned XML doc comments; removed `KbSearchResult` duplicate
+- **TypeScript refactor:** Centralised display maps into `lib/constants.ts`; removed duplicate `const` declarations; extracted `AGENT_INSTRUCTIONS` to module scope
+- **Redis:** Per-session cache keys now derived from the AG-UI `threadId`; each browser tab has fully isolated chat history
+
+---
+
+## [1.0.0] — Initial release
+
+**Features**
+
+- **AI helpdesk chat** — real-time streaming via AG-UI protocol; system prompt with user context injected via `useCopilotReadable`
+- **Generative UI render actions** — `show_ticket_created`, `show_incident_alert`, `show_my_tickets` render inline cards in the chat
+- **RAG** — `AzureAiSearchContextProvider` injects top-K KB articles from Azure AI Search on every turn
+- **File attachments** — upload `.txt`, `.pdf`, `.docx` (OCR via Azure Document Intelligence), and `.png`/`.jpg`/`.jpeg` (vision) via `POST /api/attachments`
+- **Knowledge Base, My Tickets, and Settings tabs** in the frontend shell
+- **MCP tools (10 total):** ticket CRUD, system status, incidents, KB indexing and search
+- **Conversation summarisation** — `SummarizingChatReducer` compresses history after N messages
+- **Azure infrastructure** — Bicep one-click provisioning (`infra/deploy.ps1`) for Azure OpenAI + Azure AI Search
 
 ---
 

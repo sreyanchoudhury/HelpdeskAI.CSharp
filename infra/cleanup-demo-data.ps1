@@ -1,17 +1,22 @@
 <#
 .SYNOPSIS
-    Removes demo-created AI Search and Cosmos DB data while preserving repository seed data.
+    Removes demo-created data from AI Search, Cosmos DB, Redis, and Blob Storage
+    while preserving repository seed data.
 
 .DESCRIPTION
     This script is intended for regression-cycle cleanup. It preserves:
       - KB articles whose IDs are present in infra/seed-data.json
       - Seeded ticket documents whose seq is <= SeedTicketMaxSeq
-      - Long-term Redis memory unless -ClearLongTermMemory is supplied
+      - Long-term Redis memory (ltm:*) unless -ClearLongTermMemory is supplied
+      - Recent eval blobs (within BlobAgeDays) and all non-eval blobs
 
     It deletes:
       - Agent-indexed or manually added KB documents not present in seed-data.json
       - Cosmos ticket documents above the configured seed threshold
       - Ephemeral Redis state for chat history, attachments, usage snapshots, and retry-safe side-effect ledgers
+      - (-CleanBlobs) Eval result blobs in the eval-results container older than BlobAgeDays days
+
+    Switches -CleanBlobs and -ClearLongTermMemory are opt-in and off by default.
 #>
 
 param(
@@ -25,7 +30,12 @@ param(
     [int]$SeedTicketMaxSeq = 1013,
     [string]$RedisContainerAppName,
     [string]$RedisResourceGroupName,
-    [switch]$ClearLongTermMemory
+    [switch]$ClearLongTermMemory,
+    # Blob cleanup — requires -BlobConnectionString (or $env:AZURE_STORAGE_CONNECTION_STRING).
+    [switch]$CleanBlobs,
+    [string]$BlobConnectionString,
+    [string]$EvalBlobContainer = "eval-results",
+    [int]$BlobAgeDays = 30
 )
 
 $ErrorActionPreference = "Stop"
@@ -218,7 +228,9 @@ if ($RedisContainerAppName -and $RedisResourceGroupName) {
     )
 
     if ($ClearLongTermMemory) {
-        $patterns += "ltm:*:profile"
+        # Delete ALL long-term memory profiles (helpdesk:ltm:* pattern via the key prefix).
+        $patterns += "ltm:*"
+        Write-Host "  Long-term memory (ltm:*) will also be cleared." -ForegroundColor Yellow
     }
 
     foreach ($pattern in $patterns) {
@@ -237,6 +249,53 @@ else {
     Write-Host "Redis cleanup skipped. Supply -RedisContainerAppName and -RedisResourceGroupName to clear ephemeral Redis state." -ForegroundColor DarkYellow
 }
 
+Write-Host ""
+if ($CleanBlobs) {
+    $connStr = if ($BlobConnectionString) { $BlobConnectionString } else { $env:AZURE_STORAGE_CONNECTION_STRING }
+    if (-not $connStr) {
+        Write-Warning "Blob cleanup skipped: provide -BlobConnectionString or set `$env:AZURE_STORAGE_CONNECTION_STRING."
+    }
+    else {
+        $cutoff = (Get-Date).AddDays(-$BlobAgeDays).ToString("o")
+        Write-Host "Cleaning eval blobs in '$EvalBlobContainer' older than $BlobAgeDays days (before $cutoff)..." -ForegroundColor Cyan
+
+        # List blobs and filter by LastModified < cutoff to avoid the --if-unmodified-since
+        # batch quirk that deletes EVERYTHING when the header is mis-formatted.
+        $blobList = az storage blob list `
+            --container-name $EvalBlobContainer `
+            --connection-string $connStr `
+            --query "[].{name:name, modified:properties.lastModified}" `
+            --output json `
+            --only-show-errors 2>$null | ConvertFrom-Json
+
+        if ($null -eq $blobList -or $blobList.Count -eq 0) {
+            Write-Host "Blob cleanup: no blobs found in '$EvalBlobContainer'." -ForegroundColor Green
+        }
+        else {
+            $toDelete = $blobList | Where-Object { [datetime]$_.modified -lt [datetime]$cutoff }
+            if ($toDelete.Count -eq 0) {
+                Write-Host "Blob cleanup: no blobs older than $BlobAgeDays days. Nothing to delete." -ForegroundColor Green
+            }
+            else {
+                Write-Host "Found $($toDelete.Count) blob(s) to delete. Proceeding..." -ForegroundColor Yellow
+                foreach ($blob in $toDelete) {
+                    az storage blob delete `
+                        --container-name $EvalBlobContainer `
+                        --name $blob.name `
+                        --connection-string $connStr `
+                        --only-show-errors | Out-Null
+                    Write-Host "  Deleted: $($blob.name)" -ForegroundColor DarkGray
+                }
+                Write-Host "Blob cleanup complete. $($toDelete.Count) eval blob(s) removed." -ForegroundColor Green
+            }
+        }
+    }
+}
+else {
+    Write-Host "Blob cleanup skipped. Pass -CleanBlobs (with -BlobConnectionString or `$env:AZURE_STORAGE_CONNECTION_STRING) to remove old eval results." -ForegroundColor DarkYellow
+}
+
+Write-Host ""
 Write-Host "Cleanup finished. Seed KB data and seed tickets were preserved." -ForegroundColor Cyan
 if (-not $ClearLongTermMemory) {
     Write-Host "Long-term memory in Redis was preserved." -ForegroundColor Cyan
