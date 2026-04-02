@@ -10,7 +10,7 @@ import type { AttachedFile } from "./AttachmentBar";
 import { PRIORITY_COLOR, CATEGORY_ICON, KB_CATEGORY_COLOR } from "../lib/constants";
 import { CitationBadge, KB_CITATION_REGEX } from "./CitationBadge";
 
-type Page = "chat" | "tickets" | "kb" | "settings";
+type Page = "chat" | "tickets" | "kb" | "settings" | "eval";
 
 const ckTheme: CopilotKitCSSProperties = {
   "--copilot-kit-primary-color":            "#3d5afe",
@@ -31,6 +31,7 @@ const NAV_ITEMS: { id: Page; icon: string; label: string; subtitle: string }[] =
   { id: "tickets",  icon: "📋", label: "My Tickets",     subtitle: "View and track your support tickets" },
   { id: "kb",       icon: "📚", label: "Knowledge Base", subtitle: "Browse IT articles and guides" },
   { id: "settings", icon: "⚙️", label: "Settings",       subtitle: "Manage your preferences" },
+  { id: "eval",     icon: "📊", label: "Evaluations",    subtitle: "Agent quality metrics and eval runs" },
 ];
 
 interface ServerTicket {
@@ -836,6 +837,233 @@ function CustomChatInput({ inProgress, onSend, onStop }: InputProps) {
 }
 
 
+// ── Evaluations page ─────────────────────────────────────────────────────────
+interface EvalMetric   { name: string; rating: string; reason: string; }
+interface EvalScenario { scenarioName: string; message: string; passed: boolean; primaryEvaluator: string; metrics: EvalMetric[]; createdAt: string; agentResponse?: string; }
+interface EvalSummary  { executionName: string; total: number; passed: number; failed: number; isComplete: boolean; isRunning: boolean; completedAt: string | null; }
+
+function ratingColor(rating: string): string {
+  if (rating === "Good" || rating === "Exceptional") return "#22c55e";
+  if (rating === "Poor" || rating === "Unacceptable") return "#ef4444";
+  return "#9098b0";
+}
+
+function EvalPage() {
+  const [summaries, setSummaries]         = React.useState<EvalSummary[]>([]);
+  const [selected, setSelected]           = React.useState<string | null>(null);
+  const [scenarios, setScenarios]         = React.useState<EvalScenario[]>([]);
+  const [loadingList, setLoadingList]     = React.useState(true);
+  const [loadingDetail, setLoadingDetail] = React.useState(false);
+  const [running, setRunning]             = React.useState(false);
+  const [runExec, setRunExec]             = React.useState<string | null>(null);
+  const [error, setError]                 = React.useState<string | null>(null);
+
+  const fetchSummaries = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/eval-results", { cache: "no-store" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      setSummaries(await res.json());
+      setError(null);
+    } catch (e) {
+      setError(`Failed to load eval results: ${e}`);
+    } finally {
+      setLoadingList(false);
+    }
+  }, []);
+
+  // Initial load
+  React.useEffect(() => { void fetchSummaries(); }, [fetchSummaries]);
+
+  // Auto-refresh while a run is in progress
+  React.useEffect(() => {
+    const anyRunning = running || summaries.some(s => s.isRunning);
+    if (!anyRunning) return;
+    const timer = setInterval(() => { void fetchSummaries(); }, 8000);
+    return () => clearInterval(timer);
+  }, [running, summaries, fetchSummaries]);
+
+  // Stop "running" indicator once the new execution appears and is complete
+  React.useEffect(() => {
+    if (!runExec) return;
+    const exec = summaries.find(s => s.executionName === runExec);
+    if (exec?.isComplete) { setRunning(false); setRunExec(null); }
+  }, [summaries, runExec]);
+
+  const handleRunEvals = async () => {
+    setRunning(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/eval-results", { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const body = await res.json() as { executionName?: string };
+      setRunExec(body.executionName ?? null);
+      void fetchSummaries();
+    } catch (e) {
+      setError(`Failed to start eval run: ${e}`);
+      setRunning(false);
+    }
+  };
+
+  const handleSelectExecution = async (execName: string) => {
+    if (selected === execName) { setSelected(null); setScenarios([]); return; }
+    setSelected(execName);
+    setLoadingDetail(true);
+    try {
+      const res = await fetch(`/api/eval-results?run=${encodeURIComponent(execName)}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      setScenarios(await res.json());
+    } catch (e) {
+      setError(`Failed to load run details: ${e}`);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const passRate = (s: EvalSummary) =>
+    s.total > 0 ? Math.round((s.passed / s.total) * 100) : 0;
+
+  return (
+    <div className="hd-page-scroll">
+      <div className="hd-page-stack" style={{ maxWidth: 860 }}>
+        {/* ── Header ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5a6280", marginBottom: 4 }}>Agent Quality</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#e8eaf0" }}>Evaluations</div>
+          </div>
+          <button
+            onClick={() => { void handleRunEvals(); }}
+            disabled={running}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: running ? "#1c2030" : "#3d5afe",
+              color: running ? "#5a6280" : "#fff",
+              border: "1px solid " + (running ? "#ffffff12" : "#3d5afe"),
+              borderRadius: 8, padding: "9px 18px",
+              fontSize: 13, fontWeight: 600, cursor: running ? "not-allowed" : "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {running ? (
+              <>
+                <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid #5a6280", borderTopColor: "#9098b0", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                Running scenarios…
+              </>
+            ) : "▶ Run Evals"}
+          </button>
+        </div>
+
+        {error && (
+          <div style={{ background: "#ef444412", border: "1px solid #ef444430", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#ef4444" }}>
+            {error}
+          </div>
+        )}
+
+        {/* ── Execution list ── */}
+        {loadingList ? (
+          <div style={{ color: "#5a6280", fontSize: 13, padding: "24px 0" }}>Loading results…</div>
+        ) : summaries.length === 0 ? (
+          <div className="hd-settings-card" style={{ textAlign: "center", padding: "40px 24px", color: "#5a6280", fontSize: 13 }}>
+            No eval runs yet. Click <strong style={{ color: "#9098b0" }}>▶ Run Evals</strong> to start the first run.
+          </div>
+        ) : summaries.map(s => (
+          <div key={s.executionName} className="hd-settings-card" style={{ padding: 0, overflow: "hidden" }}>
+            {/* Execution summary row */}
+            <button
+              onClick={() => { void handleSelectExecution(s.executionName); }}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 16,
+                padding: "16px 20px", background: "none", border: "none",
+                cursor: "pointer", textAlign: "left",
+              }}
+            >
+              {/* Pass rate badge */}
+              <div style={{
+                flexShrink: 0, width: 52, height: 52, borderRadius: "50%",
+                background: `conic-gradient(${passRate(s) === 100 ? "#22c55e" : passRate(s) >= 70 ? "#f59e0b" : "#ef4444"} ${passRate(s) * 3.6}deg, #ffffff0a 0deg)`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 700,
+                color: passRate(s) === 100 ? "#22c55e" : passRate(s) >= 70 ? "#f59e0b" : "#ef4444",
+              }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#0f1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {passRate(s)}%
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#e8eaf0", marginBottom: 3 }}>
+                  {s.executionName.replace(/_/g, " ")}
+                </div>
+                <div style={{ fontSize: 11, color: "#5a6280" }}>
+                  {s.isRunning ? (
+                    <span style={{ color: "#f59e0b" }}>● Running — {s.total} complete</span>
+                  ) : (
+                    <span>{s.passed} passed · {s.failed} failed · {s.total} scenarios</span>
+                  )}
+                </div>
+              </div>
+
+              <span style={{ fontSize: 12, color: "#5a6280", flexShrink: 0, transform: selected === s.executionName ? "rotate(90deg)" : "rotate(0)", transition: "transform 0.2s", display: "inline-block" }}>▶</span>
+            </button>
+
+            {/* Expanded scenario table */}
+            {selected === s.executionName && (
+              <div style={{ borderTop: "1px solid #ffffff0c", padding: "12px 20px 16px" }}>
+                {loadingDetail ? (
+                  <div style={{ fontSize: 13, color: "#5a6280", padding: "8px 0" }}>Loading scenarios…</div>
+                ) : (
+                  <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 480 }}>
+                    <thead>
+                      <tr style={{ color: "#5a6280", textAlign: "left" }}>
+                        <th style={{ padding: "4px 8px 8px 0", fontWeight: 600 }}>Scenario</th>
+                        <th className="hd-eval-col-primary" style={{ padding: "4px 8px 8px", fontWeight: 600 }}>Primary</th>
+                        <th style={{ padding: "4px 8px 8px", fontWeight: 600 }}>Result</th>
+                        <th style={{ padding: "4px 0 8px 8px", fontWeight: 600 }}>Metrics</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scenarios.map(sc => (
+                        <tr key={sc.scenarioName} style={{ borderTop: "1px solid #ffffff06" }}>
+                          <td style={{ padding: "8px 8px 8px 0", color: "#9098b0", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {sc.scenarioName.replace(/^Test\d+_/, "").replace(/_/g, " ")}
+                          </td>
+                          <td className="hd-eval-col-primary" style={{ padding: "8px", color: "#5a6280" }}>{sc.primaryEvaluator}</td>
+                          <td style={{ padding: "8px" }}>
+                            <span style={{
+                              padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700,
+                              background: sc.passed ? "#22c55e18" : "#ef444418",
+                              color: sc.passed ? "#22c55e" : "#ef4444",
+                            }}>
+                              {sc.passed ? "PASS" : "FAIL"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "8px 0 8px 8px" }}>
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                              {sc.metrics.map(m => (
+                                <span key={m.name} title={`${m.name}: ${m.rating}${m.reason ? ` — ${m.reason}` : ""}`}
+                                  style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700, background: ratingColor(m.rating) + "18", color: ratingColor(m.rating), cursor: "help" }}>
+                                  {m.name.replace("Evaluator", "").replace("Evaluation", "")}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 // ── Citation markdown renderers ───────────────────────────────────────────────
 // Processes [KB-xxx] patterns in agent markdown and renders them as styled badges.
 function processCitationChildren(children: React.ReactNode): React.ReactNode {
@@ -1302,6 +1530,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
         {page === "tickets"  && <TicketsPage agentTickets={tickets} refreshKey={refreshKey} currentUser={currentUser} />}
         {page === "kb"       && <KbPage />}
         {page === "settings" && <SettingsPage currentUser={currentUser} />}
+        {page === "eval"     && <EvalPage />}
       </main>
     </div>
   );

@@ -31,6 +31,8 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 - Local development can still run against Azure-hosted dependencies directly; a separate local sandbox is not required.
 - The frontend shell is now responsive across desktop, tablet, and mobile widths, with a Settings toggle to hide CopilotKit developer controls when a cleaner UI is preferred.
 - A proactive live-incident banner can now be shown or hidden from Settings, giving the app a lightweight monitoring surface without forcing it on every session.
+- **Eval Dashboard** — an Evaluations sidebar page lets you trigger a run of 15 golden scenarios and view pass/fail results (with per-metric ratings) directly in the UI. Results are stored in Azure Blob Storage and auto-refresh while a run is in progress.
+- **Demo endpoint** — `/demo` exposes the app without Azure AD auth for internal sharing. A banner distinguishes it from the production route.
 
 ## Configuration & Environment Setup
 
@@ -412,18 +414,19 @@ npm install
 
 | Layer | Package | Version | Purpose |
 |-------|---------|---------|---------|
-| AI abstractions | `Microsoft.Extensions.AI` | 10.4.0 | `IChatClient`, `AIFunction`, `ChatMessage` |
-| Azure OpenAI adapter | `Microsoft.Extensions.AI.OpenAI` | 10.4.0 | `AsIChatClient()` |
+| AI abstractions | `Microsoft.Extensions.AI` | 10.4.1 | `IChatClient`, `AIFunction`, `ChatMessage` |
+| Azure OpenAI adapter | `Microsoft.Extensions.AI.OpenAI` | 10.4.1 | `AsIChatClient()` |
+| AI Evaluation | `Microsoft.Extensions.AI.Evaluation.Quality` | 10.4.0 | IntentResolution, TaskAdherence, Relevance, Coherence evaluators |
 | AG-UI hosting | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
 | Agent + MAF providers | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
-| MCP client | `ModelContextProtocol` | 1.1.0 | `McpClientTool` implements `AIFunction` — zero adapter |
-| MCP server | `ModelContextProtocol.AspNetCore` | 1.1.0 | `AddMcpServer().WithHttpTransport()` |
+| MCP client | `ModelContextProtocol` | 1.2.0 | `McpClientTool` implements `AIFunction` — zero adapter |
+| MCP server | `ModelContextProtocol.AspNetCore` | 1.2.0 | `AddMcpServer().WithHttpTransport()` |
 | Azure OpenAI SDK | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
 | Azure AI Search | `Azure.Search.Documents` | 11.8.0-beta.1 | Semantic search / RAG |
-| Redis | `StackExchange.Redis` | 2.12.1 | Chat history Sorted Sets |
+| Redis | `StackExchange.Redis` | 2.12.8 | Chat history Sorted Sets |
 | Azure Blob Storage | `Azure.Storage.Blobs` | 12.27.0 | Attachment archival |
 | Document Intelligence | `Azure.AI.DocumentIntelligence` | 1.0.0 | PDF/DOCX OCR |
-| Azure Identity | `Azure.Identity` | 1.19.0 | `DefaultAzureCredential` |
+| Azure Identity | `Azure.Identity` | 1.20.0 | `DefaultAzureCredential` |
 
 ### Frontend
 
@@ -504,7 +507,7 @@ the agent continues without RAG context.
 
 `McpToolsProvider` connects to `HelpdeskAI.McpServer` at startup via
 `HttpClientTransport` and loads all tools as `AIFunction[]`. Because
-`ModelContextProtocol 1.1.0` makes `McpClientTool` implement `AIFunction`
+`ModelContextProtocol 1.2.0` makes `McpClientTool` implement `AIFunction`
 directly, they integrate seamlessly into the agent pipeline.
 A `RetryingMcpTool` wrapper catches `Session not found` (HTTP -32001) after McpServer restarts, reconnects transparently, and retries the call once.
 

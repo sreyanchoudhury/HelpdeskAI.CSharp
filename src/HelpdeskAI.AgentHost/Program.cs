@@ -132,6 +132,7 @@ builder.Services.AddHttpClient("McpServer", c =>
     });
 builder.Services.AddSingleton<IAttachmentStore, RedisAttachmentStore>();
 builder.Services.AddSingleton<IDocumentIntelligenceService, DocumentIntelligenceService>();
+builder.Services.AddSingleton<EvalRunnerService>();
 
 builder.Services.AddChatClient(azureClient)
     .UseFunctionInvocation()
@@ -369,7 +370,10 @@ app.MapIncidentEndpoints();
 // Callers must send the key as X-Eval-Key header. Empty/absent = endpoint not registered.
 var evalApiKey = cfg["Evaluation:ApiKey"];
 if (!string.IsNullOrWhiteSpace(evalApiKey))
+{
     app.MapEvalEndpoints(evalApiKey);
+    app.MapEvalResultsEndpoints(evalApiKey, app.Services.GetRequiredService<EvalRunnerService>());
+}
 
 app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
 {

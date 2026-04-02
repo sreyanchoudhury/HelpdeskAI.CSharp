@@ -19,6 +19,12 @@ internal static class EvalEndpoints
     internal record EvalRequest(string Message, string? ThreadId = null);
     internal record EvalResponse(string Response, long PromptTokens, long CompletionTokens);
 
+    // Synthetic eval persona injected so ticket/search tools have a userId to work with.
+    private const string EvalUserCtx =
+        "\n\nFor this evaluation session you are assisting: " +
+        "eval-user@contoso.com (Eval User, Engineering team). " +
+        "Use this identity whenever a tool requires a user email or userId.";
+
     internal static IEndpointRouteBuilder MapEvalEndpoints(
         this IEndpointRouteBuilder app, string apiKey)
     {
@@ -46,7 +52,7 @@ internal static class EvalEndpoints
 
         var messages = new List<ChatMessage>
         {
-            new(ChatRole.System, HelpdeskAgentFactory.BaseInstructions),
+            new(ChatRole.System, HelpdeskAgentFactory.BaseInstructions + EvalUserCtx),
             new(ChatRole.User, req.Message),
         };
 
