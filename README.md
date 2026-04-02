@@ -31,7 +31,7 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 - Local development can still run against Azure-hosted dependencies directly; a separate local sandbox is not required.
 - The frontend shell is now responsive across desktop, tablet, and mobile widths, with a Settings toggle to hide CopilotKit developer controls when a cleaner UI is preferred.
 - A proactive live-incident banner can now be shown or hidden from Settings, giving the app a lightweight monitoring surface without forcing it on every session.
-- **Eval Dashboard** — an Evaluations sidebar page lets you trigger a run of 15 golden scenarios and view pass/fail results (with per-metric ratings) directly in the UI. Results are stored in Azure Blob Storage and auto-refresh while a run is in progress.
+- **Eval Dashboard** — an Evaluations sidebar page lets you trigger a run of 20 golden scenarios (15 v1 + 5 v2) and view pass/fail results (with per-metric ratings) directly in the UI. V1/V2 route badges distinguish single-agent from multi-agent scenarios. Results are stored in Azure Blob Storage and auto-refresh while a run is in progress.
 - **Demo endpoint** — `/demo` exposes the app without Azure AD auth for internal sharing. A banner distinguishes it from the production route.
 
 ## Configuration & Environment Setup
@@ -1248,63 +1248,4 @@ Expected chain:
 
 ## Changelog
 
-### [1.3.0] — 2026-03-20
-
-**Auth, Persistence, and Memory**
-
-- Added Microsoft Entra sign-in on the frontend via NextAuth and bearer-token validation in AgentHost
-- Persisted tickets in Azure Cosmos DB instead of the earlier transient store
-- Added `search_kb_articles` alongside KB indexing flows and aligned render-action guidance for ticket, incident, and KB cards
-- Added long-term Redis-backed profile memory plus simple remembered user preferences
-- Added turn-level telemetry and repeated-tool visibility to help diagnose multi-step workflow drift in Azure
- 
----
-
-### [1.2.0] — 2026-03-17
-
-**Response Token Usage Stats**
-
-- **`UsageCapturingChatClient`** (AgentHost) — new `DelegatingChatClient` that intercepts each streaming response, aggregates token usage from the final chunk, and writes `{promptTokens, completionTokens}` to Redis under `usage:{threadId}:latest`
-- **`GET /agent/usage?threadId=`** (AgentHost) — new lightweight endpoint that reads the usage key from Redis and returns JSON; returns `404` if the key has not yet been written
-- **`/api/copilotkit/usage/route.ts`** (Frontend) — Next.js proxy that forwards to the AgentHost usage endpoint
-- **Response stats chip** (Frontend) — after each assistant response, `HelpdeskChat` fetches token usage and injects a `⏱ Xs · 📥 N in / 📤 M out` chip inline with the message's copy/thumbs action buttons; the chip is re-injected by a `MutationObserver` if CopilotKit re-renders the message list; correctly handles multi-turn tool-call responses by clearing and re-fetching stats on each intermediate `inProgress` transition
-
----
-
-### [1.1.0] — 2026-03-13
-
-**Refactoring & Upgrades**
-
-- **Package upgrades:** `ModelContextProtocol.AspNetCore` 1.0.0 → 1.1.0; HealthChecks preview.1 → preview.2
-- **C# refactor:**
-  - Extracted `ServiceStatus.cs` + `ServiceHealth` enum from `SystemStatusTools.cs` into `Models/`
-  - De-duplicated `BuildSearchOptions()` and `GetSeverityLabel()` by extraction into named methods
-  - Replaced all magic numbers/strings with named constants (`SemanticConfigName`, `SeparatorWidth`, `MaxSearchResults`, `InitialTicketNumber`)
-  - Cleaned XML doc comments — removed misleading SDK references and stale changelog bullets
-  - Removed `KbSearchResult` duplicate from `AzureAiSearchService.cs`; moved to `Models/Models.cs`
-- **TypeScript refactor:**
-  - Centralised all display maps into `lib/constants.ts` (`PRIORITY_COLOR`, `PRIORITY_BG`, `CATEGORY_ICON`, `HEALTH_COLOR`, `HEALTH_BG`, `HEALTH_ICON`, `KB_CATEGORY_COLOR`, `KB_CAT_ICON`, `DEMO_USER`)
-  - Removed duplicate `const` declarations from both `HelpdeskChat.tsx` and `HelpdeskActions.tsx`
-  - Extracted `AGENT_INSTRUCTIONS` to module scope (was an inline 40-line string)
-  - Fixed `React.KeyboardEvent` / `React.ChangeEvent` → named imports; removed unused default React import
-- **Redis:** Per-session cache keys now derived from the AG-UI `threadId` (read from the POST body by ASP.NET Core middleware via `ThreadIdContext`) — each browser tab has fully isolated chat history
-
----
-
-### [1.0.0] — Initial release
-
-**Features**
-
-- **AI helpdesk chat** — real-time streaming via AG-UI protocol; system prompt with user context injected via `useCopilotReadable`
-- **Generative UI render actions** — `show_ticket_created`, `show_incident_alert`, `show_my_tickets` render inline cards in the chat
-- **RAG (Retrieval-Augmented Generation)** — `AzureAiSearchContextProvider` injects top-K KB articles from Azure AI Search on every turn
-- **File attachments** — upload `.txt`, `.pdf`, `.docx` (OCR via Azure Document Intelligence), and `.png`/`.jpg`/`.jpeg` (vision) via `POST /api/attachments`; staged in Redis for one-shot injection into the next agent turn
-- **Knowledge Base tab** — live search via `/api/kb?q=...`; displays `KbArticleCard` results from Azure AI Search
-- **My Tickets tab** — live ticket list fetched via AgentHost `GET /api/tickets` proxy (which internally calls McpServer `GET /tickets`)
-- **Settings panel** — dual health-check pinging McpServer + AgentHost `/healthz`
-- **MCP tools (10 total):**
-  - Ticket: `create_ticket`, `get_ticket`, `search_tickets`, `update_ticket_status`, `add_ticket_comment`, `assign_ticket`
-  - System status: `get_system_status`, `get_active_incidents`, `check_impact_for_team`
-  - Knowledge base: `index_kb_article`
-- **Conversation summarisation** — `SummarizingChatReducer` compresses history after N messages
-- **Azure infrastructure** — Bicep one-click provisioning (`infra/deploy.ps1`) for Azure OpenAI + Azure AI Search
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.

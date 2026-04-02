@@ -119,7 +119,7 @@ internal static class EvalResultsEndpoints
             });
         })
         .WithName("TriggerEvalRun")
-        .WithDescription("Starts a new background eval run of all 12 golden scenarios. Requires X-Eval-Key header.");
+        .WithDescription("Starts a new background eval run of all 20 golden scenarios (15 v1 + 5 v2). Requires X-Eval-Key header.");
 
         return app;
     }

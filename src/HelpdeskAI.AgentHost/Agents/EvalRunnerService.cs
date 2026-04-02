@@ -1,10 +1,13 @@
 using Azure.Storage.Blobs;
 using HelpdeskAI.AgentHost.Abstractions;
+using HelpdeskAI.AgentHost.Endpoints;
 using HelpdeskAI.AgentHost.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.AI.Evaluation;
 using Microsoft.Extensions.AI.Evaluation.Quality;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.AI.OpenAI;
@@ -12,8 +15,13 @@ using Azure.AI.OpenAI;
 namespace HelpdeskAI.AgentHost.Agents;
 
 /// <summary>
-/// Runs 15 eval scenarios against the live agent pipeline and persists per-scenario
+/// Runs 20 eval scenarios against the live agent pipeline and persists per-scenario
 /// JSON results to Azure Blob Storage (container: <c>eval-results</c>).
+///
+/// V1 scenarios (Test01–Test15) call the single-agent pipeline directly.
+/// V2 scenarios (Test16–Test20) call the multi-agent workflow via HTTP loopback to
+/// <c>/agent/eval-v2</c> (X-Eval-Key authenticated, no Entra), parse the AG-UI SSE
+/// stream, and evaluate the assembled assistant text.
 ///
 /// Single-turn scenarios exercise one user message → agent response.
 /// Multi-turn scenarios build a real conversation history by running each intermediate
@@ -27,7 +35,9 @@ internal sealed class EvalRunnerService(
     IMcpToolsProvider toolsProvider,
     IOptions<AzureOpenAiSettings> aiSettings,
     IOptions<AzureBlobStorageSettings> blobSettings,
-    ILogger<EvalRunnerService> log)
+    ILogger<EvalRunnerService> log,
+    string evalApiKey,
+    string selfBaseUrl)
 {
     internal const string EvalContainerName = "eval-results";
 
@@ -41,8 +51,16 @@ internal sealed class EvalRunnerService(
     /// Supports both single-turn (UserTurns.Length == 1) and multi-turn scenarios.
     /// For multi-turn, each turn except the last is executed to build conversation history;
     /// only the final exchange is evaluated.
+    /// <para>
+    /// <paramref name="IsV2"/> = true routes the scenario through <c>/agent/eval-v2</c>
+    /// (the multi-agent workflow) via HTTP loopback instead of the direct v1 agent client.
+    /// </para>
     /// </summary>
-    internal record ScenarioSpec(string Name, string[] UserTurns, string PrimaryEvaluator);
+    internal record ScenarioSpec(
+        string Name,
+        string[] UserTurns,
+        string PrimaryEvaluator,
+        bool IsV2 = false);
 
     internal static readonly ScenarioSpec[] Scenarios =
     [
@@ -131,6 +149,33 @@ internal sealed class EvalRunnerService(
         new("Test15_OutOfScope",
             new[] { "Can you write me a poem about Monday mornings? I need it for a team email." },
             "Coherence"),
+
+        // ── V2 multi-agent workflow ────────────────────────────────────────────
+        new("Test16_V2_TicketRouting",
+            new[] { "Please create a support ticket — my monitor keeps flickering." },
+            "TaskAdherence", IsV2: true),
+
+        new("Test17_V2_KbRouting",
+            new[] { "How do I set up a VPN connection on a Mac? Step-by-step please." },
+            "Relevance", IsV2: true),
+
+        new("Test18_V2_IncidentRouting",
+            new[] { "Is there any ongoing outage affecting email right now?" },
+            "IntentResolution", IsV2: true),
+
+        new("Test19_V2_MultiStep_TicketThenKb",
+            new[] {
+                "Create a ticket for 'Teams calls keep dropping for everyone in my team'. " +
+                "Then search the KB for any related articles on Teams connectivity."
+            },
+            "TaskAdherence", IsV2: true),
+
+        new("Test20_V2_MultiTurn_SearchThenClose",
+            new[] {
+                "Show me my open tickets.",
+                "Close the most recent one — I've resolved it myself."
+            },
+            "TaskAdherence", IsV2: true),
     ];
 
     private volatile string? _runningExecution;
@@ -183,7 +228,10 @@ internal sealed class EvalRunnerService(
                 if (ct.IsCancellationRequested) break;
 
                 log.LogInformation("Eval {Exec} — starting {Scenario}", executionName, scenario.Name);
-                await RunScenarioAsync(executionName, scenario, tools, composite, chatConfig, container, ct);
+                if (scenario.IsV2)
+                    await RunV2ScenarioAsync(executionName, scenario, composite, chatConfig, container, ct);
+                else
+                    await RunV1ScenarioAsync(executionName, scenario, tools, composite, chatConfig, container, ct);
             }
 
             log.LogInformation("Eval run {Exec} completed", executionName);
@@ -198,7 +246,9 @@ internal sealed class EvalRunnerService(
         }
     }
 
-    private async Task RunScenarioAsync(
+    // ── V1: direct agent pipeline call ───────────────────────────────────────
+
+    private async Task RunV1ScenarioAsync(
         string executionName,
         ScenarioSpec scenario,
         List<AITool> tools,
@@ -235,44 +285,11 @@ internal sealed class EvalRunnerService(
             var agentResp = await agentClient.GetResponseAsync(history, agentOptions, ct);
             var agentText = agentResp.Text ?? string.Empty;
 
-            // ── Evaluate ─────────────────────────────────────────────────────
-            // Evaluate only the final user turn and agent response.
-            var evalMessages  = new List<ChatMessage> { new(ChatRole.User, finalMessage) };
-            var modelResponse = new ChatResponse([new ChatMessage(ChatRole.Assistant, agentText)]);
-            var evalResult    = await composite.EvaluateAsync(evalMessages, modelResponse, chatConfig, null, ct);
-
-            // Use the evaluator's own static metric name constant — the actual names
-            // have spaces ("Intent Resolution", "Task Adherence") and won't match
-            // a simple substring search on the evaluator class name prefix.
-            var primaryMetricName = scenario.PrimaryEvaluator switch
-            {
-                "IntentResolution" => IntentResolutionEvaluator.IntentResolutionMetricName,
-                "TaskAdherence"    => TaskAdherenceEvaluator.TaskAdherenceMetricName,
-                "Relevance"        => RelevanceEvaluator.RelevanceMetricName,
-                "Coherence"        => CoherenceEvaluator.CoherenceMetricName,
-                _                  => scenario.PrimaryEvaluator,
-            };
-            evalResult.Metrics.TryGetValue(primaryMetricName, out var primaryMetric);
-            bool passed = primaryMetric?.Interpretation?.Rating is
-                EvaluationRating.Good or EvaluationRating.Exceptional;
-
-            result = new ScenarioResultDto(
-                ExecutionName:    executionName,
-                ScenarioName:     scenario.Name,
-                Message:          finalMessage,
-                AgentResponse:    agentText,
-                PrimaryEvaluator: scenario.PrimaryEvaluator,
-                Passed:           passed,
-                Metrics: evalResult.Metrics
-                    .Select(kv => new MetricResultDto(
-                        kv.Key,
-                        kv.Value.Interpretation?.Rating.ToString() ?? "Inconclusive",
-                        kv.Value.Interpretation?.Reason ?? string.Empty))
-                    .ToArray(),
-                CreatedAt: DateTime.UtcNow);
+            result = await EvaluateAndBuildResultAsync(
+                executionName, scenario, finalMessage, agentText, composite, chatConfig, ct);
 
             log.LogInformation("Eval {Exec} — {Scenario}: {Result}",
-                executionName, scenario.Name, passed ? "PASSED" : "FAILED");
+                executionName, scenario.Name, result.Passed ? "PASSED" : "FAILED");
         }
         catch (Exception ex)
         {
@@ -283,18 +300,191 @@ internal sealed class EvalRunnerService(
                 scenario.PrimaryEvaluator, Passed: false, [], DateTime.UtcNow);
         }
 
-        // ── Persist to blob: eval-results/{executionName}/{scenarioName}.json ──
+        await PersistResultAsync(executionName, scenario.Name, result, container, ct);
+    }
+
+    // ── V2: HTTP loopback → /agent/eval-v2 SSE stream ────────────────────────
+
+    private async Task RunV2ScenarioAsync(
+        string executionName,
+        ScenarioSpec scenario,
+        IEvaluator composite,
+        ChatConfiguration chatConfig,
+        BlobContainerClient container,
+        CancellationToken ct)
+    {
+        ScenarioResultDto result;
+        try
+        {
+            // Build AG-UI message list. For multi-turn scenarios, run intermediate
+            // turns via SSE loopback so the orchestrator sees realistic context.
+            var aguiMessages = new List<object>();
+            var evaluatedUserMessage = scenario.UserTurns[^1];
+
+            foreach (var turn in scenario.UserTurns[..^1])
+            {
+                aguiMessages.Add(new { id = Guid.NewGuid().ToString("N"), role = "user", content = turn });
+                var midResponse = await CallV2EvalAsync(aguiMessages, ct);
+                aguiMessages.Add(new { id = Guid.NewGuid().ToString("N"), role = "assistant", content = midResponse });
+                log.LogDebug("Eval {Exec} — {Scenario}: v2 intermediate turn complete", executionName, scenario.Name);
+            }
+
+            aguiMessages.Add(new { id = Guid.NewGuid().ToString("N"), role = "user", content = evaluatedUserMessage });
+            var agentText = await CallV2EvalAsync(aguiMessages, ct);
+
+            result = await EvaluateAndBuildResultAsync(
+                executionName, scenario, evaluatedUserMessage, agentText, composite, chatConfig, ct);
+
+            log.LogInformation("Eval {Exec} — {Scenario}: {Result}",
+                executionName, scenario.Name, result.Passed ? "PASSED" : "FAILED");
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Eval {Exec} — {Scenario}: exception", executionName, scenario.Name);
+            result = new ScenarioResultDto(
+                executionName, scenario.Name, scenario.UserTurns[^1],
+                $"ERROR: {ex.Message}",
+                scenario.PrimaryEvaluator, Passed: false, [], DateTime.UtcNow);
+        }
+
+        await PersistResultAsync(executionName, scenario.Name, result, container, ct);
+    }
+
+    /// <summary>
+    /// Posts an AG-UI request to <c>/agent/eval-v2</c> and returns the assembled
+    /// assistant text by parsing the SSE stream.
+    /// </summary>
+    private async Task<string> CallV2EvalAsync(IEnumerable<object> messages, CancellationToken ct)
+    {
+        var body = new
+        {
+            threadId = $"eval-{Guid.NewGuid():N}",
+            runId    = Guid.NewGuid().ToString("N"),
+            messages,
+        };
+
+        using var http = new HttpClient { BaseAddress = new Uri(selfBaseUrl) };
+        http.DefaultRequestHeaders.Add(EvalEndpoints.EvalKeyHeader, evalApiKey);
+        http.Timeout = TimeSpan.FromMinutes(3);
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/agent/eval-v2")
+        {
+            Content = JsonContent.Create(body),
+        };
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        resp.EnsureSuccessStatusCode();
+
+        return await ParseAguiSseAsync(resp.Content, ct);
+    }
+
+    /// <summary>
+    /// Reads an AG-UI SSE stream and concatenates all <c>TEXT_MESSAGE_CONTENT</c> delta values.
+    /// Stops on <c>RUN_FINISHED</c>, <c>RUN_ERROR</c>, or end-of-stream.
+    /// </summary>
+    private static async Task<string> ParseAguiSseAsync(HttpContent content, CancellationToken ct)
+    {
+        await using var stream = await content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+        var sb = new StringBuilder();
+
+        while (!ct.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (line is null) break;  // end of stream
+            if (!line.StartsWith("data: ")) continue;
+
+            var json = line["data: ".Length..];
+            if (json == "[DONE]") break;
+
+            try
+            {
+                using var doc  = JsonDocument.Parse(json);
+                var root  = doc.RootElement;
+                if (!root.TryGetProperty("type", out var typeEl)) continue;
+
+                var type = typeEl.GetString();
+                if (type == "TEXT_MESSAGE_CONTENT" &&
+                    root.TryGetProperty("delta", out var delta))
+                {
+                    sb.Append(delta.GetString());
+                }
+                else if (type is "RUN_FINISHED" or "RUN_ERROR")
+                {
+                    break;
+                }
+            }
+            catch (JsonException) { /* skip malformed SSE chunks */ }
+        }
+
+        return sb.ToString();
+    }
+
+    // ── Shared: evaluate + build result DTO ──────────────────────────────────
+
+    private static async Task<ScenarioResultDto> EvaluateAndBuildResultAsync(
+        string executionName,
+        ScenarioSpec scenario,
+        string finalMessage,
+        string agentText,
+        IEvaluator composite,
+        ChatConfiguration chatConfig,
+        CancellationToken ct)
+    {
+        var evalMessages  = new List<ChatMessage> { new(ChatRole.User, finalMessage) };
+        var modelResponse = new ChatResponse([new ChatMessage(ChatRole.Assistant, agentText)]);
+        var evalResult    = await composite.EvaluateAsync(evalMessages, modelResponse, chatConfig, null, ct);
+
+        // Use the evaluator's own static metric name constant — the actual names
+        // have spaces ("Intent Resolution", "Task Adherence") and won't match
+        // a simple substring search on the evaluator class name prefix.
+        var primaryMetricName = scenario.PrimaryEvaluator switch
+        {
+            "IntentResolution" => IntentResolutionEvaluator.IntentResolutionMetricName,
+            "TaskAdherence"    => TaskAdherenceEvaluator.TaskAdherenceMetricName,
+            "Relevance"        => RelevanceEvaluator.RelevanceMetricName,
+            "Coherence"        => CoherenceEvaluator.CoherenceMetricName,
+            _                  => scenario.PrimaryEvaluator,
+        };
+        evalResult.Metrics.TryGetValue(primaryMetricName, out var primaryMetric);
+        bool passed = primaryMetric?.Interpretation?.Rating is
+            EvaluationRating.Good or EvaluationRating.Exceptional;
+
+        return new ScenarioResultDto(
+            ExecutionName:    executionName,
+            ScenarioName:     scenario.Name,
+            Message:          finalMessage,
+            AgentResponse:    agentText,
+            PrimaryEvaluator: scenario.PrimaryEvaluator,
+            Passed:           passed,
+            Metrics: evalResult.Metrics
+                .Select(kv => new MetricResultDto(
+                    kv.Key,
+                    kv.Value.Interpretation?.Rating.ToString() ?? "Inconclusive",
+                    kv.Value.Interpretation?.Reason ?? string.Empty))
+                .ToArray(),
+            CreatedAt: DateTime.UtcNow);
+    }
+
+    // ── Shared: blob persistence ──────────────────────────────────────────────
+
+    private async Task PersistResultAsync(
+        string executionName,
+        string scenarioName,
+        ScenarioResultDto result,
+        BlobContainerClient container,
+        CancellationToken ct)
+    {
         try
         {
             var json     = JsonSerializer.SerializeToUtf8Bytes(result, EvalJsonContext.Default.ScenarioResultDto);
-            var blobName = $"{executionName}/{scenario.Name}.json";
+            var blobName = $"{executionName}/{scenarioName}.json";
             using var ms = new MemoryStream(json);
             await container.UploadBlobAsync(blobName, ms, ct);
         }
         catch (Exception ex)
         {
             log.LogError(ex, "Eval {Exec} — {Scenario}: failed to persist result to blob",
-                executionName, scenario.Name);
+                executionName, scenarioName);
         }
     }
 }

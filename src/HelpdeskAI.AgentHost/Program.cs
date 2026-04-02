@@ -132,7 +132,19 @@ builder.Services.AddHttpClient("McpServer", c =>
     });
 builder.Services.AddSingleton<IAttachmentStore, RedisAttachmentStore>();
 builder.Services.AddSingleton<IDocumentIntelligenceService, DocumentIntelligenceService>();
-builder.Services.AddSingleton<EvalRunnerService>();
+// Read eval config early so it's available both for DI factory and route registration.
+var evalApiKey = cfg["Evaluation:ApiKey"] ?? string.Empty;
+// AgentHost:BaseUrl — override in Azure Container Apps to http://localhost:8080
+// (Dockerfile exposes port 8080); local dev default is http://localhost:5200.
+var selfBaseUrl = cfg["AgentHost:BaseUrl"] ?? "http://localhost:5200";
+builder.Services.AddSingleton<EvalRunnerService>(sp => new EvalRunnerService(
+    sp.GetRequiredService<IChatClient>(),
+    sp.GetRequiredService<IMcpToolsProvider>(),
+    sp.GetRequiredService<IOptions<AzureOpenAiSettings>>(),
+    sp.GetRequiredService<IOptions<AzureBlobStorageSettings>>(),
+    sp.GetRequiredService<ILogger<EvalRunnerService>>(),
+    evalApiKey,
+    selfBaseUrl));
 
 builder.Services.AddChatClient(azureClient)
     .UseFunctionInvocation()
@@ -366,13 +378,22 @@ app.MapAGUI("/agent/v2", wrappedWorkflowAgent).RequireAuthorization();
 app.MapAttachmentEndpoints();
 app.MapTicketEndpoints();
 app.MapIncidentEndpoints();
-// Eval endpoint: enabled in any environment when Evaluation:ApiKey is configured.
-// Callers must send the key as X-Eval-Key header. Empty/absent = endpoint not registered.
-var evalApiKey = cfg["Evaluation:ApiKey"];
+// Eval endpoints: enabled when Evaluation:ApiKey is configured.
+// Callers must send the key as X-Eval-Key header. Empty/absent = endpoints not registered.
 if (!string.IsNullOrWhiteSpace(evalApiKey))
 {
     app.MapEvalEndpoints(evalApiKey);
     app.MapEvalResultsEndpoints(evalApiKey, app.Services.GetRequiredService<EvalRunnerService>());
+    // eval-v2: maps the same wrappedWorkflowAgent with X-Eval-Key auth (no Entra).
+    // Used exclusively by EvalRunnerService to run v2 scenarios via HTTP loopback.
+    app.MapAGUI("/agent/eval-v2", wrappedWorkflowAgent)
+       .AddEndpointFilter(async (ctx, next) =>
+       {
+           if (!ctx.HttpContext.Request.Headers.TryGetValue(
+                   EvalEndpoints.EvalKeyHeader, out var key) || key != evalApiKey)
+               return Results.Unauthorized();
+           return await next(ctx);
+       });
 }
 
 app.MapGet("/agent/usage", async (string? threadId, IRedisService redis) =>
