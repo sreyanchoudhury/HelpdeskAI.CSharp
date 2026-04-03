@@ -478,6 +478,57 @@ This removes the resource group and all resources within it.
 
 ---
 
+---
+
+## Monitoring Workbook
+
+`infra/workbooks/helpdesk-ai-monitoring.json` is an ARM template that deploys a
+parameterized **Azure Monitor Workbook** to the same resource group as App Insights.
+
+### What it shows
+
+| Panel | Description |
+|---|---|
+| Conversation Trace | All `invoke_agent` spans for a selected `thread.id`, ordered by timestamp |
+| Agent Routing (V2) | Pie chart + table of specialist invocations (orchestrator, ticket, KB, incident) |
+| V1 vs V2 Throughput | Request volume, p50/p95 latency, and error count side by side |
+| Token Usage | Top 10 conversations by total prompt + completion token consumption |
+| Eval Run Quality | Pass/fail counts per eval execution + time-series bar chart |
+| Error Rate | Exceptions and failed dependency spans as a time-series line chart |
+
+> **Prerequisite:** `thread.id` tags on spans require AgentHost with `ThreadIdEnrichingProcessor` deployed (included since 2026-04-03). Panel 1 returns no data if the tag is absent.
+
+### Deploy
+
+```powershell
+az deployment group create `
+  --resource-group rg-helpdeskaiapp-dev `
+  --template-file infra/workbooks/helpdesk-ai-monitoring.json `
+  --parameters appInsightsName=<your-appinsights-name>
+```
+
+The `appInsightsName` parameter defaults to `helpdeskaiapp-dev-ai-vlfb75zl` (matching the standard AZD provisioned name). Override if your resource has a different name.
+
+### Finding the workbook in Azure Portal
+
+1. Open the [Azure Portal](https://portal.azure.com)
+2. Navigate to your **Application Insights** resource
+3. Click **Workbooks** in the left menu
+4. Select **HelpdeskAI Monitoring**
+
+### Conversation Trace KQL (standalone)
+
+```kql
+dependencies
+| where customDimensions["thread.id"] == "<paste-threadId-here>"
+| project timestamp, name, duration, customDimensions["gen_ai.agent.name"], success
+| order by timestamp asc
+```
+
+The `thread.id` value for any session appears in the browser DevTools → Network tab → any `POST /agent*` request body as `threadId`.
+
+---
+
 ## Learn More
 
 - **Bicep Docs:** https://learn.microsoft.com/azure/azure-resource-manager/bicep/
