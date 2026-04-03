@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json;
 using HelpdeskAI.AgentHost.Agents;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 
@@ -35,6 +37,11 @@ internal static class AgentHostCompositionExtensions
 
     public static TracerProviderBuilder AddHelpdeskTracing(this TracerProviderBuilder tracing)
     {
+        // Enrich every span with the current conversation's threadId and user email so that
+        // all turns of one conversation are filterable in App Insights Log Analytics by a
+        // single `thread.id` custom dimension — even though each HTTP request is its own trace.
+        tracing.AddProcessor(new ThreadIdEnrichingProcessor());
+
         foreach (var sourceName in TraceSourceNames)
             tracing.AddSource(sourceName);
 
@@ -216,4 +223,26 @@ internal static class AgentHostCompositionExtensions
     }
 
     private sealed record AgentRequestState(string? ThreadId, string? LatestUserMessage);
+
+    /// <summary>
+    /// OTel span processor that stamps every span with <c>thread.id</c> and
+    /// <c>enduser.id</c> so all turns of a conversation are filterable in App Insights
+    /// Log Analytics by a single threadId across multiple HTTP requests.
+    ///
+    /// Both values are read from AsyncLocal stores (<see cref="ThreadIdContext"/> and
+    /// <see cref="UserContext"/>) that are set by <c>UseAgentRequestContext</c> middleware
+    /// for every agent POST request.  Non-agent spans (health checks, info routes) carry
+    /// null values and are left untagged.
+    /// </summary>
+    private sealed class ThreadIdEnrichingProcessor : BaseProcessor<Activity>
+    {
+        public override void OnStart(Activity activity)
+        {
+            if (ThreadIdContext.Current is { } tid)
+                activity.SetTag("thread.id", tid);
+
+            if (UserContext.Email is { } email)
+                activity.SetTag("enduser.id", email);
+        }
+    }
 }

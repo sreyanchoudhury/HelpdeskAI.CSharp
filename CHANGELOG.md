@@ -4,6 +4,35 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-03 (Telemetry Enrichment + Azure Monitor Workbook)
+
+### Added
+
+- **`ThreadIdEnrichingProcessor`** — OTel `BaseProcessor<Activity>` registered in `AddHelpdeskTracing()`. Fires on every span start and stamps `thread.id` (from `ThreadIdContext.Current`) and `enduser.id` (from `UserContext.Email`) as span tags. After this change, every `invoke_agent` span — across all turns of a conversation — carries the conversation's threadId as a filterable custom dimension in App Insights.
+- **Azure Monitor Workbook** (`infra/workbooks/helpdesk-ai-monitoring.json`) — parameterized 6-panel workbook deployed to the same resource group as App Insights. Panels:
+  1. **Conversation Trace** — all `invoke_agent` spans for a selected `thread.id`, ordered by timestamp
+  2. **Agent Routing (V2)** — pie chart + table of specialist invocation counts and average duration
+  3. **V1 vs V2 Throughput** — request volume, p50/p95 latency, and error count side by side
+  4. **Token Usage** — top 10 conversations by total prompt+completion token consumption
+  5. **Eval Run Quality** — pass/fail counts per execution run + time-series bar chart
+  6. **Error Rate** — exceptions and failed dependency spans as a time-series line chart
+- **Workbook deploy command** — `az deployment group create --template-file infra/workbooks/helpdesk-ai-monitoring.json` — documented in `infra/README.md`.
+
+### Changed
+
+- **`AgentHostCompositionExtensions.cs`** — added `using System.Diagnostics` and `using OpenTelemetry`; `AddHelpdeskTracing()` now registers `ThreadIdEnrichingProcessor` before adding activity sources.
+
+### KQL — Conversation correlation query
+
+```kql
+dependencies
+| where customDimensions["thread.id"] == "<your-threadId>"
+| project timestamp, name, duration, customDimensions["gen_ai.agent.name"], success
+| order by timestamp asc
+```
+
+---
+
 ## [Unreleased] - 2026-04-02 (M4 — V2 Eval Coverage)
 
 ### Added

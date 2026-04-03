@@ -32,6 +32,8 @@ An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the 
 - The frontend shell is now responsive across desktop, tablet, and mobile widths, with a Settings toggle to hide CopilotKit developer controls when a cleaner UI is preferred.
 - A proactive live-incident banner can now be shown or hidden from Settings, giving the app a lightweight monitoring surface without forcing it on every session.
 - **Eval Dashboard** — an Evaluations sidebar page lets you trigger a run of 20 golden scenarios (15 v1 + 5 v2) and view pass/fail results (with per-metric ratings) directly in the UI. V1/V2 route badges distinguish single-agent from multi-agent scenarios. Results are stored in Azure Blob Storage and auto-refresh while a run is in progress.
+- **Span-level telemetry correlation** — every `invoke_agent` span carries `thread.id` and `enduser.id` as OTel tags (via `ThreadIdEnrichingProcessor`), enabling full conversation trace correlation across turns in App Insights Log Analytics with a single KQL query on `customDimensions["thread.id"]`.
+- **Azure Monitor Workbook** — `infra/workbooks/helpdesk-ai-monitoring.json` deploys a parameterized 6-panel workbook (Conversation Trace, Agent Routing, V1/V2 Throughput, Token Usage, Eval Quality, Error Rate) to the App Insights resource group.
 - **Demo endpoint** — `/demo` exposes the app without Azure AD auth for internal sharing. A banner distinguishes it from the production route.
 
 ## Configuration & Environment Setup
