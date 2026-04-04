@@ -7,7 +7,7 @@
     <RootNamespace>HelpdeskAI.AgentHost</RootNamespace>
     <AssemblyName>HelpdeskAI.AgentHost</AssemblyName>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <NoWarn>MEAI001;MAAI001;AIEVAL001</NoWarn>
+    <NoWarn>MEAI001;MAAI001;MAAIW001;AIEVAL001</NoWarn>
     <UserSecretsId>bb1809ac-63a3-46e8-920a-c2c4d47215e0</UserSecretsId>
   </PropertyGroup>
 
@@ -20,10 +20,11 @@
     <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Reporting.Azure" Version="10.4.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.1" />
 
-    <!-- LAYER 2 - Microsoft Agent Framework (AG-UI hosting, NOT Semantic Kernel) -->
+    <!-- LAYER 2 - Microsoft Agent Framework v1 (.NET package line) -->
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.0.0-preview.260311.1" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-rc4" />
-    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-rc4" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0" />
 
     <!-- LAYER 3 - Azure SDK -->
     <PackageReference Include="Azure.AI.DocumentIntelligence" Version="1.0.0" />
@@ -38,7 +39,7 @@
     <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
 
     <!-- Infrastructure -->
-    <PackageReference Include="StackExchange.Redis" Version="2.12.8" />
+    <PackageReference Include="StackExchange.Redis" Version="2.12.14" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0-preview.2.26159.112" />
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
   </ItemGroup>

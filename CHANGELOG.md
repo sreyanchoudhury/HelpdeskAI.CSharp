@@ -4,6 +4,20 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-04 (Conference-Safe MAF v1 Upgrade)
+
+### Added
+
+- **Conference-safe solution package upgrade pass** — HelpdeskAI is now aligned to the official .NET Microsoft Agents Framework v1 core package line: `Microsoft.Agents.AI`, `Microsoft.Agents.AI.OpenAI`, and `Microsoft.Agents.AI.Workflows` are on `1.0.0`, while `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` remains on the latest compatible AG-UI hosting preview companion (`1.0.0-preview.260311.1`).
+- **Frontend/runtime dependency refresh** — Next.js `16.2.2`, CopilotKit `1.54.1`, AG-UI client/core `0.0.50`, and `@types/node` `25.5.2`.
+- **Test/tooling dependency refresh** — `Microsoft.NET.Test.Sdk` `18.3.0`, `MSTest.TestAdapter` `4.1.0`, `MSTest.TestFramework` `4.1.0`, and `StackExchange.Redis` `2.12.14`.
+
+### Changed
+
+- **Stable MAF API migration** — agent skills now use `AgentSkillsProvider` on the stable MAF v1 core package line instead of the old preview-era `FileAgentSkillsProvider` type name.
+
+---
+
 ## [Unreleased] - 2026-04-03 (Telemetry Enrichment + Azure Monitor Workbook)
 
 ### Added

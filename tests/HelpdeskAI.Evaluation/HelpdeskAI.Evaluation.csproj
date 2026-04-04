@@ -16,9 +16,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Reporting.Azure" Version="10.4.0" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
-    <PackageReference Include="MSTest.TestAdapter" Version="3.8.3" />
-    <PackageReference Include="MSTest.TestFramework" Version="3.8.3" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="4.1.0" />
+    <PackageReference Include="MSTest.TestFramework" Version="4.1.0" />
 
     <!-- AI Evaluation stack — same version as AgentHost's MEAI packages -->
     <PackageReference Include="Microsoft.Extensions.AI.Evaluation" Version="10.4.0" />
