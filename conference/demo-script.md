@@ -12,7 +12,7 @@ Opening line:
 Architecture framing:
 
 This demo shows what a real MAF-based multi-agent system looks like when you combine:
-- Microsoft Agents Framework for agents, handoffs, AG-UI hosting, and observability hooks
+- Microsoft Agents Framework for agents, handoffs, skills, AG-UI hosting, and observability hooks
 - MCP for tools
 - OpenTelemetry + Azure Monitor for traceability
 - Azure OpenAI, Document Intelligence, Redis, Cosmos DB, and AI Search as the backing services
@@ -45,8 +45,9 @@ Show 4 things in one flow:
 
 1. MAF can host both a single-agent route and a workflow route in the same app.
 2. A real support workflow can combine incidents, KB, ticketing, and attachments.
-3. AG-UI streaming and tool-driven cards create an actual product experience, not a console toy.
-4. OpenTelemetry + App Insights make the system traceable by thread, route, and specialist.
+3. Skills let the agent load specialized behavior without collapsing everything into one giant prompt.
+4. AG-UI streaming and tool-driven cards create an actual product experience, not a console toy.
+5. OpenTelemetry + App Insights make the system traceable by thread, route, and specialist.
 
 ---
 
@@ -61,6 +62,9 @@ Show 4 things in one flow:
 
 **Say:**
 > "Right here you can see the route toggle. `v1` is the simpler agent route. `v2` is the workflow route with an orchestrator and focused specialists. Same product surface, different MAF composition underneath."
+
+**Optional architecture line if the audience is technical early:**
+> "And beyond routes, the app is also using MAF skills, context providers, and telemetry wrappers under the hood. So this is not just prompt engineering with a nicer UI."
 
 **Do:** Select `v2`, then return to chat.
 
@@ -110,6 +114,9 @@ What is this incident about? Once you've analyzed it, do the following in order:
 
 **Say while it runs:**
 > "Now we're seeing why a framework matters. MAF is handling the agent boundary, the workflow path, the handoff model, the context surface, and the streaming contract. The business actions sit on top through MCP, and the attachment path is where Azure Document Intelligence and vision services start adding multimodal capability."
+
+**Optional follow-up line while the turn is still running:**
+> "This is also where skills matter. If the issue looks like a major incident, a security issue, or an escalation case, the agent can load that behavior progressively instead of hardcoding everything into one prompt."
 
 **Point out while it completes:**
 - KB card
@@ -164,6 +171,9 @@ What can you help me with in this app?
 
 **Say:**
 > "That contrast is important. MAF is not just one agent pattern. It lets you evolve from simpler agent handling to orchestration-heavy workflows without rewriting the whole product."
+
+**Optional skills line here:**
+> "And that evolution is not only about routing. It also includes things like skills, memory, tools, and observability staying consistent across both shapes."
 
 ---
 
@@ -238,6 +248,9 @@ The fallback story is still strong if you can show:
 **Q: What else besides MAF is important in this architecture?**
 > MCP for tools, AG-UI for streaming, OpenTelemetry for traceability, and Azure services for the operational substrate. MAF is the lead framework, but the surrounding protocols matter a lot.
 
+**Q: Are you using skills, or only prompts and tools?**
+> We are using skills today through `FileAgentSkillsProvider`. They are loaded progressively and help shape behavior for cases like escalation, major incidents, security-sensitive requests, VIP handling, and frustrated users.
+
 **Q: Is this production-ready?**
 > It is an MVP designed to be production-shaped. It already includes auth, memory, ticket persistence, knowledge indexing, observability, responsive UX, and workflow routing. A real production rollout would still need deeper hardening, governance, and organizational readiness.
 
@@ -246,6 +259,26 @@ The fallback story is still strong if you can show:
 
 **Q: Where is the business data stored?**
 > Tickets are persisted in Cosmos DB. KB content is stored in Azure AI Search. History and memory surfaces are Redis-backed. That separation is important and deliberate.
+
+**Q: Where does Document Intelligence fit?**
+> In the attachment pipeline. It extracts text from PDF and DOCX so the agent can reason over uploaded documents as part of the workflow. Images flow through the vision path.
+
+---
+
+## No-Miss Talking Points
+
+If you get interrupted, rushed, or pulled into questions, make sure these points land somewhere:
+
+- MAF is the hero. HelpdeskAI is the proof point.
+- `v1` and `v2` show two different MAF compositions in the same app.
+- MCP gives the tool contract.
+- AG-UI gives the streaming contract.
+- OpenTelemetry gives the traceability story.
+- Skills are in use today, not just future-looking.
+- Redis is history and long-term memory.
+- Cosmos is ticket persistence, not memory.
+- AI Search is KB persistence and retrieval.
+- Document Intelligence is part of the multimodal attachment path.
 
 ---
 
