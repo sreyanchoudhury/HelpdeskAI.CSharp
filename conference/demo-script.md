@@ -15,7 +15,7 @@ This demo shows what a real MAF-based multi-agent system looks like when you com
 - Microsoft Agents Framework for agents, handoffs, AG-UI hosting, and observability hooks
 - MCP for tools
 - OpenTelemetry + Azure Monitor for traceability
-- Azure OpenAI, Redis, Cosmos DB, and AI Search as the backing services
+- Azure OpenAI, Document Intelligence, Redis, Cosmos DB, and AI Search as the backing services
 
 Repeat this mentally all the way through:
 - MAF is the hero
@@ -109,7 +109,7 @@ What is this incident about? Once you've analyzed it, do the following in order:
 ```
 
 **Say while it runs:**
-> "Now we're seeing why a framework matters. MAF is handling the agent boundary, the workflow path, the handoff model, the context surface, and the streaming contract. The business actions sit on top through MCP."
+> "Now we're seeing why a framework matters. MAF is handling the agent boundary, the workflow path, the handoff model, the context surface, and the streaming contract. The business actions sit on top through MCP, and the attachment path is where Azure Document Intelligence and vision services start adding multimodal capability."
 
 **Point out while it completes:**
 - KB card
