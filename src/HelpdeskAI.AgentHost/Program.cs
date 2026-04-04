@@ -271,7 +271,7 @@ var toolSelectionProvider = new DynamicToolSelectionProvider(
     topK,
     loggerFactory.CreateLogger<DynamicToolSelectionProvider>());
 
-// Agent Skills (FileAgentSkillsProvider): loads behavioral SKILL.md files from the skills/
+// Agent Skills (AgentSkillsProvider): loads behavioral SKILL.md files from the skills/
 // directory. Skills are advertised in the system prompt (~100 tokens/skill) and loaded on
 // demand via the load_skill tool. The path resolves against AppContext.BaseDirectory so it
 // works both in local dev (bin/Debug/skills/) and in the Container Apps image.
@@ -279,10 +279,10 @@ var skillsRelPath = cfg["Skills:Path"] ?? "skills";
 var skillsAbsPath = Path.IsPathRooted(skillsRelPath)
     ? skillsRelPath
     : Path.Combine(AppContext.BaseDirectory, skillsRelPath);
-FileAgentSkillsProvider? skillsProvider = null;
+AgentSkillsProvider? skillsProvider = null;
 if (Directory.Exists(skillsAbsPath))
 {
-    skillsProvider = new FileAgentSkillsProvider(skillsAbsPath, loggerFactory: loggerFactory);
+    skillsProvider = new AgentSkillsProvider(skillsAbsPath, loggerFactory: loggerFactory);
     app.Logger.LogInformation("Agent skills loaded from {SkillsPath}", skillsAbsPath);
 }
 else

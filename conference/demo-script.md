@@ -17,6 +17,9 @@ This demo shows what a real MAF-based multi-agent system looks like when you com
 - OpenTelemetry + Azure Monitor for traceability
 - Azure OpenAI, Document Intelligence, Redis, Cosmos DB, and AI Search as the backing services
 
+Conference note worth calling out once:
+- The demo is now aligned to the official .NET MAF v1 core package line, with AG-UI hosting still on the compatible preview companion package.
+
 Repeat this mentally all the way through:
 - MAF is the hero
 - HelpdeskAI is the example

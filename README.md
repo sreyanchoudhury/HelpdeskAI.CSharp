@@ -2,6 +2,8 @@
 
 An AI-powered IT helpdesk assistant built on **.NET 10**, **React 19**, and the **AG-UI protocol**. Ships with two agent modes — a single-agent **v1** route and a multi-agent **v2** handoff workflow powered by the **Microsoft Agents Framework (MAF)**. The agent answers IT questions, searches a knowledge base (RAG via Azure AI Search), manages support tickets, and processes file attachments (PDFs, DOCX, images) — all streamed in real time to the browser via Server-Sent Events. Each response shows a `⏱ latency · 📥 in / 📤 out` token stats chip in the header. Microsoft Entra SSO protects the frontend and bearer-token validation secures AgentHost, so the app can run locally or on Azure while authenticating against the same enterprise identity boundary.
 
+> **MAF v1 alignment:** HelpdeskAI is now aligned to the official .NET MAF v1 core package line published by Microsoft: `Microsoft.Agents.AI`, `Microsoft.Agents.AI.OpenAI`, and `Microsoft.Agents.AI.Workflows` are on `1.0.0`, while `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` remains on the latest compatible AG-UI hosting preview companion (`1.0.0-preview.260311.1`) until a stable host package is published. Official references: [Microsoft Agent Framework overview](https://learn.microsoft.com/en-us/agent-framework/overview/) and [OpenAI integration guide](https://learn.microsoft.com/en-us/agent-framework/integrations/openai-endpoints).
+
 <table>
   <tr>
     <td><img alt="IT Support chat" src="images/it_support.png" /></td>
@@ -419,8 +421,10 @@ npm install
 | AI abstractions | `Microsoft.Extensions.AI` | 10.4.1 | `IChatClient`, `AIFunction`, `ChatMessage` |
 | Azure OpenAI adapter | `Microsoft.Extensions.AI.OpenAI` | 10.4.1 | `AsIChatClient()` |
 | AI Evaluation | `Microsoft.Extensions.AI.Evaluation.Quality` | 10.4.0 | IntentResolution, TaskAdherence, Relevance, Coherence evaluators |
-| AG-UI hosting | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
-| Agent + MAF providers | `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
+| AG-UI hosting | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint — latest compatible hosting companion for the official MAF v1 core package line |
+| MAF core | `Microsoft.Agents.AI` | 1.0.0 | `AgentSkillsProvider`, `OpenTelemetryAgent` |
+| Agent + MAF providers | `Microsoft.Agents.AI.OpenAI` | 1.0.0 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
+| MAF workflows | `Microsoft.Agents.AI.Workflows` | 1.0.0 | `AgentWorkflowBuilder`, handoff workflow orchestration |
 | MCP client | `ModelContextProtocol` | 1.2.0 | `McpClientTool` implements `AIFunction` — zero adapter |
 | MCP server | `ModelContextProtocol.AspNetCore` | 1.2.0 | `AddMcpServer().WithHttpTransport()` |
 | Azure OpenAI SDK | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |

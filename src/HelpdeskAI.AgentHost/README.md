@@ -1,5 +1,7 @@
 # HelpdeskAI.AgentHost
 
+> **MAF v1 alignment:** AgentHost is now aligned to the official .NET MAF v1 core package line published by Microsoft: `Microsoft.Agents.AI`, `Microsoft.Agents.AI.OpenAI`, and `Microsoft.Agents.AI.Workflows` are on `1.0.0`, while `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` remains on the latest compatible AG-UI hosting preview companion (`1.0.0-preview.260311.1`) until a stable host package is published. Official references: [Microsoft Agent Framework overview](https://learn.microsoft.com/en-us/agent-framework/overview/) and [OpenAI integration guide](https://learn.microsoft.com/en-us/agent-framework/integrations/openai-endpoints).
+
 The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the AI agent via the **AG-UI protocol**.
 
 ---
@@ -19,7 +21,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 - **Captures turn-level telemetry** — repeated tool calls and latest user message are logged with per-turn scope data for Azure investigation
 - **App Insights Agents (Preview)** — `OpenTelemetryAgent` wrapping emits `invoke_agent` spans with `gen_ai.agent.name`, `gen_ai.request.model` and other Gen AI semantic attributes. `Telemetry:EnableSensitiveData` config controls whether `gen_ai.input.messages` / `gen_ai.output.messages` span attributes are captured. Set `Telemetry__EnableSensitiveData=true` in Container App env vars to enable full message tracing.
 - **Conversation span correlation** — `ThreadIdEnrichingProcessor` (`BaseProcessor<Activity>`, registered in `AddHelpdeskTracing()`) stamps every span with `thread.id` (from `ThreadIdContext.Current`) and `enduser.id` (from `UserContext.Email`). Enables filtering all turns of a conversation in App Insights Log Analytics with a single KQL query: `dependencies | where customDimensions["thread.id"] == "<threadId>"`. The **Azure Monitor Workbook** (`infra/workbooks/helpdesk-ai-monitoring.json`) surfaces this and 5 other panels in the Azure Portal.
-- **Agent Skills (FileAgentSkillsProvider)** — behavioral SKILL.md files in the `skills/` directory are discovered at startup and advertised to agents via the [agentskills.io](https://agentskills.io/) progressive disclosure protocol. Skills are loaded on demand (`load_skill` tool) so context stays lean. Skills are included in the Docker image via `CopyToPublishDirectory`. Path is configurable via `Skills:Path`.
+- **Agent Skills (AgentSkillsProvider)** — behavioral SKILL.md files in the `skills/` directory are discovered at startup and advertised to agents via the [agentskills.io](https://agentskills.io/) progressive disclosure protocol. Skills are loaded on demand (`load_skill` tool) so context stays lean. Skills are included in the Docker image via `CopyToPublishDirectory`. Path is configurable via `Skills:Path`.
 
 ---
 
@@ -629,7 +631,9 @@ cd ../HelpdeskAI.McpServer && dotnet run
 | `Microsoft.Extensions.AI.Evaluation.Reporting` | 10.4.0 | `ReportingConfiguration`, `ChatConfiguration` |
 | `Microsoft.Extensions.AI.Evaluation.Reporting.Azure` | 10.4.0 | `AzureStorageReportingConfiguration` for blob-backed eval reports |
 | `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` | 1.0.0-preview.260311.1 | `MapAGUI()` SSE endpoint |
-| `Microsoft.Agents.AI.OpenAI` | 1.0.0-rc4 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
+| `Microsoft.Agents.AI` | 1.0.0 | `AgentSkillsProvider`, `OpenTelemetryAgent` |
+| `Microsoft.Agents.AI.OpenAI` | 1.0.0 | `AsAIAgent()`, `ChatHistoryProvider`, `AIContextProvider` |
+| `Microsoft.Agents.AI.Workflows` | 1.0.0 | `AgentWorkflowBuilder`, `Workflow`, handoff orchestration |
 | `ModelContextProtocol` | 1.2.0 | MCP client — `McpClientTool` implements `AIFunction` |
 | `Azure.AI.OpenAI` | 2.8.0-beta.1 | `AzureOpenAIClient` |
 | `Azure.AI.DocumentIntelligence` | 1.0.0 | PDF/DOCX OCR via Azure Document Intelligence |
@@ -637,9 +641,8 @@ cd ../HelpdeskAI.McpServer && dotnet run
 | `Azure.Storage.Blobs` | 12.27.0 | Attachment archival to Blob Storage |
 | `Azure.Identity` | 1.20.0 | `DefaultAzureCredential` (managed identity) |
 | `Azure.Monitor.OpenTelemetry.AspNetCore` | 1.4.0 | Application Insights telemetry |
-| `StackExchange.Redis` | 2.12.8 | Chat history + attachment staging |
+| `StackExchange.Redis` | 2.12.14 | Chat history + attachment staging |
 | `AspNetCore.HealthChecks.Redis` | 9.0.0 | Redis health check package retained for future explicit probes; current `/healthz` does not fail on Redis loss |
-| `Microsoft.Agents.AI` (rc4) | — | `FileAgentSkillsProvider`, `OpenTelemetryAgent` (in Microsoft.Agents.AI package) |
 
 ---
 
