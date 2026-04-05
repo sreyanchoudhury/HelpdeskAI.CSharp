@@ -51,9 +51,18 @@ internal sealed class UsageCapturingChatClient(
             yield return update;
         }
 
-        var aggregated = updates.ToChatResponse();
-        if (aggregated.Usage is { } u)
-            await PersistUsageAsync(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0);
+        // All content already yielded to the frontend — Redis failure here must not
+        // prevent the iterator from completing and RUN_FINISHED being dispatched.
+        try
+        {
+            var aggregated = updates.ToChatResponse();
+            if (aggregated.Usage is { } u)
+                await PersistUsageAsync(u.InputTokenCount ?? 0, u.OutputTokenCount ?? 0);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to persist usage stats after streaming; stream already complete.");
+        }
     }
 
     private async Task PersistUsageAsync(long promptTokens, long completionTokens)

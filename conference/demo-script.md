@@ -16,6 +16,7 @@ This demo shows what a real MAF-based multi-agent system looks like when you com
 - MCP for tools
 - OpenTelemetry + Azure Monitor for traceability
 - Azure OpenAI, Document Intelligence, Redis, Cosmos DB, and AI Search as the backing services
+- Azure content safety filters with graceful SSE-safe exception handling
 
 Conference note worth calling out once:
 - The demo is now aligned to the official .NET MAF v1 core package line, with AG-UI hosting still on the compatible preview companion package.
@@ -198,6 +199,17 @@ What can you help me with in this app?
 
 **If the workflow route was used:**
 > "In the workflow route, this is where I can see which specialists were invoked and how the conversation progressed across the handoff chain."
+
+---
+
+## Step 7 - Content Safety (30 sec)
+
+**Do:** Stay on the App Insights / workbook view or switch to the content safety slide.
+
+**Say:**
+> "The last thing worth calling out — because Azure mandated it on my models — is content safety in production. Azure OpenAI content filters are active on these deployments. If a request is blocked, we do not want the SSE stream to abruptly terminate with an unhandled exception and leave the frontend hanging. The system catches those before they propagate, clears the conversation history so a poisoned thread does not keep re-triggering the filter on every subsequent turn, and returns a user-readable explanation. The event is also logged with the thread ID for App Insights investigation."
+
+**Note:** No live trigger needed — this is a callout moment, not an interactive step. Point to the content safety slide or the code snippet if the audience is technical.
 
 ---
 

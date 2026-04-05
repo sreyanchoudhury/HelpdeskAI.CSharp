@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ChangeEvent } from "react";
 import { CopilotChat, CopilotKitCSSProperties, type InputProps } from "@copilotkit/react-ui";
-import { useCopilotContext } from "@copilotkit/react-core";
+import { useCopilotContext, useCopilotChat } from "@copilotkit/react-core";
 import { signOut } from "next-auth/react";
 import "@copilotkit/react-ui/styles.css";
 import { HelpdeskActions, type CurrentUser, Ticket } from "./HelpdeskActions";
@@ -11,6 +11,8 @@ import { PRIORITY_COLOR, CATEGORY_ICON, KB_CATEGORY_COLOR } from "../lib/constan
 import { CitationBadge, KB_CITATION_REGEX } from "./CitationBadge";
 
 type Page = "chat" | "tickets" | "kb" | "settings" | "eval";
+
+const CONTENT_SAFETY_MARKER = "blocked by Azure content safety";
 
 const ckTheme: CopilotKitCSSProperties = {
   "--copilot-kit-primary-color":            "#3d5afe",
@@ -1128,6 +1130,34 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const [incidentBannerExpanded, setIncidentBannerExpanded] = useState(false);
   const current = NAV_ITEMS.find(n => n.id === page)!;
 
+  const firstName = currentUser.name.split(" ")[0];
+  const defaultGreeting = `Hi ${firstName}! What IT issue can I help you with today?`;
+  const [chatInitial, setChatInitial] = useState(defaultGreeting);
+  const { reset: resetChat } = useCopilotChat();
+
+  const handleCopilotError = useCallback((event: unknown) => {
+    // Extract message from any shape CopilotKit may pass: Error, { message }, { error }, string.
+    const msg = String(
+      event instanceof Error ? event.message
+      : event && typeof event === "object" && "message" in event ? (event as any).message
+      : event && typeof event === "object" && "error" in event ? (event as any).error
+      : event
+    );
+    if (msg.includes("unknown action:") || msg.includes("SharedStorage") || msg.includes("WebSocketConnection")) return;
+    if (msg.includes(CONTENT_SAFETY_MARKER)) {
+      // Reset clears CopilotKit's message list so the jailbreak prompt is not re-sent,
+      // and the new chatInitial becomes the first visible bubble — correct chronological position.
+      resetChat();
+      setChatInitial(
+        "\u26a0\ufe0f Your request was blocked by Azure content safety. " +
+        "The conversation history for this thread has been cleared \u2014 please send a new message to continue."
+      );
+      setTimeout(() => setChatInitial(defaultGreeting), 60_000);
+      return;
+    }
+    console.error("[CopilotKit error]", event);
+  }, [resetChat, defaultGreeting]);
+
   const { threadId } = useCopilotContext();
   const threadIdRef = useRef(threadId);
   threadIdRef.current = threadId;
@@ -1534,9 +1564,10 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
                 <CopilotChat
                   Input={CustomChatInput}
                   markdownTagRenderers={citationTagRenderers}
+                  onError={handleCopilotError}
                   labels={{
                     title: "IT Support",
-                    initial: `Hi ${currentUser.name.split(" ")[0]}! What IT issue can I help you with today?`,
+                    initial: chatInitial,
                     placeholder: "Describe your IT issue…",
                   }}
                 />

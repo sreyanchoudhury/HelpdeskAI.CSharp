@@ -4,6 +4,23 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-05 (Content Safety Guard)
+
+### Added
+
+- **`ContentSafetyGuardChatClient`** — `DelegatingChatClient` that catches Azure OpenAI `content_filter` (HTTP 400) exceptions before they propagate as unhandled errors and abruptly terminate the AG-UI SSE stream.
+  - Handles both streaming (`GetStreamingResponseAsync`) and non-streaming (`GetResponseAsync`) paths.
+  - On filter hit: clears the thread's Redis history (`messages:{threadId}`) to prevent a poisoned conversation from re-triggering the filter on subsequent turns; throws `ContentSafetyException` with a user-facing ⚠️ message; logs a warning with `threadId` for App Insights investigation.
+  - MAF catches the unhandled exception and emits `RUN_ERROR { message }`. The frontend `CopilotChat.onError` handler calls `useCopilotChat().reset()` to clear the jailbreak from CopilotKit's local state and sets `chatInitial` to the ⚠️ text so it appears as the first bubble in chronological position (not after subsequent messages).
+  - Inserted immediately after `UseFunctionInvocation()` in both the v1 default pipeline and the v2 keyed (`"v2-chat"`) pipeline.
+  - Recognises `ClientResultException` (Azure.AI.OpenAI v2 / System.ClientModel), `RequestFailedException` (Azure.Core), and one level of wrapped inner exceptions.
+
+### Fixed
+
+- **`UsageCapturingChatClient`** — wrapped the post-stream Redis usage-persistence call in `try/catch(Exception)` → `LogWarning`. A transient Redis hiccup after all tokens were already yielded previously caused the iterator to throw, which prevented the AG-UI host from dispatching `RUN_FINISHED`, leaving the frontend with a hanging spinner. The happy path is unchanged; content is always fully delivered before this block runs.
+
+---
+
 ## [Unreleased] - 2026-04-04 (Conference-Safe MAF v1 Upgrade)
 
 ### Added

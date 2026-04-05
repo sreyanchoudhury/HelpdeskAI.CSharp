@@ -148,6 +148,10 @@ builder.Services.AddSingleton<EvalRunnerService>(sp => new EvalRunnerService(
 
 builder.Services.AddChatClient(azureClient)
     .UseFunctionInvocation()
+    .Use((inner, svc) => new ContentSafetyGuardChatClient(
+        inner,
+        svc.GetRequiredService<IRedisService>(),
+        svc.GetRequiredService<ILoggerFactory>().CreateLogger<ContentSafetyGuardChatClient>()))
     .Use((inner, services) => new UsageCapturingChatClient(
         inner,
         services.GetRequiredService<IRedisService>(),
@@ -178,6 +182,10 @@ builder.Services.AddKeyedSingleton("v2-chat", (services, _) =>
 {
     IChatClient pipeline = new ChatClientBuilder(azureClientV2)
         .UseFunctionInvocation()
+        .Use((inner, svc) => new ContentSafetyGuardChatClient(
+            inner,
+            svc.GetRequiredService<IRedisService>(),
+            svc.GetRequiredService<ILoggerFactory>().CreateLogger<ContentSafetyGuardChatClient>()))
         .Use((inner, svc) => new ThreadIdPreservingChatClient(
             inner, svc.GetRequiredService<ILoggerFactory>().CreateLogger<ThreadIdPreservingChatClient>()))
         .Use((inner, svc) => new UsageCapturingChatClient(
