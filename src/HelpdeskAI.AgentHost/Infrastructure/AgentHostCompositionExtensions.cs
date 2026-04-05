@@ -211,13 +211,26 @@ internal static class AgentHostCompositionExtensions
             return null;
 
         var text = message.Trim();
-        const string rememberPrefix = "remember that ";
-        if (text.StartsWith(rememberPrefix, StringComparison.OrdinalIgnoreCase))
-            return text[rememberPrefix.Length..].Trim().TrimEnd('.');
 
-        const string rememberPreferencePrefix = "please remember that ";
-        if (text.StartsWith(rememberPreferencePrefix, StringComparison.OrdinalIgnoreCase))
-            return text[rememberPreferencePrefix.Length..].Trim().TrimEnd('.');
+        // Only persist affirmative statements. Questions like "do you remember...?"
+        // should not create long-term memory entries.
+        if (text.EndsWith("?", StringComparison.Ordinal))
+            return null;
+
+        foreach (var prefix in new[]
+        {
+            "please remember that ",
+            "remember that ",
+            "please remember ",
+            "remember "
+        })
+        {
+            if (!text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var preference = text[prefix.Length..].Trim().TrimEnd('.', '!', ' ');
+            return string.IsNullOrWhiteSpace(preference) ? null : preference;
+        }
 
         return null;
     }

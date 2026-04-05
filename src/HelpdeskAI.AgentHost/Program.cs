@@ -223,6 +223,10 @@ builder.Services.AddOpenTelemetry()
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+app.Logger.LogInformation(
+    "Azure OpenAI deployments configured: v1={V1Deployment}, v2={V2Deployment}",
+    aiSettings.ChatDeployment,
+    v2Deployment);
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
