@@ -2,6 +2,22 @@
 
 name: helpdeskaiapp
 
+hooks:
+  preprovision:
+    windows:
+      shell: pwsh
+      run: ./infra/validate-shared-infra-env.ps1
+    posix:
+      shell: sh
+      run: ./infra/validate-shared-infra-env.sh
+  predeploy:
+    windows:
+      shell: pwsh
+      run: ./infra/validate-shared-infra-env.ps1
+    posix:
+      shell: sh
+      run: ./infra/validate-shared-infra-env.sh
+
 infra:
   provider: bicep
   path: infra/app-deploy

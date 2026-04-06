@@ -35,7 +35,7 @@ internal sealed class ContentSafetyGuardChatClient(
     IRedisService redis,
     ILogger<ContentSafetyGuardChatClient> logger) : DelegatingChatClient(inner)
 {
-    private const string UserFacingMessage =
+    internal const string UserFacingMessage =
         "⚠️ Your request was blocked by Azure content safety. " +
         "The conversation history for this thread has been cleared — please send a new message to continue.";
 
@@ -121,8 +121,13 @@ internal sealed class ContentSafetyGuardChatClient(
             try
             {
                 await redis.DeleteAsync($"messages:{tid}");
+                await redis.DeleteAsync($"attachments:{tid}");
+                await redis.DeleteAsync($"usage:{tid}:latest");
+                var sideEffectDeletes = await redis.DeleteByPrefixAsync($"sideeffect:{tid}:");
                 logger.LogInformation(
-                    "Cleared poisoned history for thread {ThreadId} after content_filter.", tid);
+                    "Cleared poisoned transient state for thread {ThreadId} after content_filter. SideEffectKeysDeleted={SideEffectDeletes}",
+                    tid,
+                    sideEffectDeletes);
             }
             catch (Exception redisEx)
             {

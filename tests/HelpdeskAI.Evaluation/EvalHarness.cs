@@ -36,7 +36,7 @@ internal static class EvalHarness
         Environment.GetEnvironmentVariable("EVAL_OPENAI_API_KEY") ?? string.Empty;
 
     private static readonly string OaiDeployment =
-        Environment.GetEnvironmentVariable("EVAL_OPENAI_DEPLOYMENT") ?? "gpt-4.1-mini";
+        Environment.GetEnvironmentVariable("EVAL_OPENAI_DEPLOYMENT") ?? "gpt-5.3-chat";
 
     private static readonly string ReportStoragePath =
         Environment.GetEnvironmentVariable("EVAL_REPORT_PATH")
@@ -187,16 +187,19 @@ internal static class EvalHarness
     /// </summary>
     internal static void AssertPassed(EvaluationResult result, string evaluatorNameOrClass)
     {
-        // Strip "Evaluator" suffix so both "IntentResolutionEvaluator" and "IntentResolution"
-        // match the metric name "IntentResolution" that the evaluator produces.
-        var fragment = evaluatorNameOrClass.Replace(
-            "Evaluator", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+        var metricName = evaluatorNameOrClass switch
+        {
+            nameof(IntentResolutionEvaluator) or "IntentResolution" => IntentResolutionEvaluator.IntentResolutionMetricName,
+            nameof(TaskAdherenceEvaluator) or "TaskAdherence" => TaskAdherenceEvaluator.TaskAdherenceMetricName,
+            nameof(RelevanceEvaluator) or "Relevance" => RelevanceEvaluator.RelevanceMetricName,
+            nameof(CoherenceEvaluator) or "Coherence" => CoherenceEvaluator.CoherenceMetricName,
+            _ => evaluatorNameOrClass.Replace("Evaluator", string.Empty, StringComparison.OrdinalIgnoreCase).Trim(),
+        };
 
-        var metric = result.Metrics.Values.FirstOrDefault(
-            m => m.Name.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+        result.Metrics.TryGetValue(metricName, out var metric);
 
         Assert.IsNotNull(metric,
-            $"No metric matching '{fragment}' found. " +
+            $"No metric matching '{metricName}' found. " +
             $"Available: [{string.Join(", ", result.Metrics.Keys)}]");
 
         Assert.IsTrue(

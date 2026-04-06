@@ -31,7 +31,7 @@ param openAiEndpoint string
 param openAiApiKey string
 
 @description('Chat model deployment name (v1 single-agent)')
-param openAiChatDeployment string = 'gpt-4o'
+param openAiChatDeployment string = 'gpt-5.3-chat'
 
 @description('Chat model deployment name for v2 multi-agent workflow (falls back to v1 deployment if empty)')
 param openAiChatDeploymentV2 string = ''
@@ -40,12 +40,11 @@ param openAiChatDeploymentV2 string = ''
 param openAiEmbeddingDeployment string = 'text-embedding-3-small'
 
 // Azure AI Search
-@secure()
 @description('Azure AI Search endpoint URL')
 param aiSearchEndpoint string
 
 @secure()
-@description('Azure AI Search API key')
+@description('Azure AI Search admin API key')
 param aiSearchApiKey string
 
 @description('AI Search index name')
@@ -53,20 +52,27 @@ param aiSearchIndexName string = 'helpdesk-kb'
 
 // Azure Blob Storage
 @secure()
-@description('Azure Blob Storage connection string')
+@description('Blob Storage connection string')
 param blobConnectionString string
 
 @description('Blob container name for attachments')
 param blobContainerName string = 'helpdesk-attachments'
 
 // Document Intelligence
-@secure()
 @description('Document Intelligence endpoint URL')
 param docIntelligenceEndpoint string
 
 @secure()
 @description('Document Intelligence API key')
 param docIntelligenceKey string
+
+// Cosmos DB
+@description('Cosmos DB endpoint URL')
+param cosmosEndpoint string = ''
+
+@secure()
+@description('Cosmos DB primary key')
+param cosmosPrimaryKey string = ''
 
 // Microsoft Entra ID / NextAuth
 @description('Microsoft Entra tenant ID')
@@ -82,6 +88,20 @@ param azureAdClientSecret string = ''
 @secure()
 @description('NextAuth session secret')
 param nextAuthSecret string = ''
+
+@secure()
+@description('Shared eval API key used by the frontend proxy and AgentHost eval endpoints')
+param evalApiKey string = ''
+
+@description('Optional endpoint for an eval scorer model. Falls back to Azure OpenAI endpoint when empty')
+param evalScorerEndpoint string = ''
+
+@secure()
+@description('Optional API key for the eval scorer model endpoint. Falls back to Azure OpenAI API key when empty')
+param evalScorerApiKey string = ''
+
+@description('Optional deployment name for the eval scorer model. Falls back to AzureOpenAI__ChatDeployment when empty')
+param evalScorerDeployment string = ''
 
 // ─── Derived Names ────────────────────────────────────────────────────────────
 
@@ -212,8 +232,8 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
       secrets: [
         { name: 'acr-password',       value: acr.listCredentials().passwords[0].value }
-        { name: 'ai-search-endpoint', value: aiSearchEndpoint }
         { name: 'ai-search-key',      value: aiSearchApiKey }
+        { name: 'cosmos-primary-key', value: cosmosPrimaryKey }
         { name: 'appinsights-cs',     value: appInsights.properties.ConnectionString }
       ]
     }
@@ -224,9 +244,13 @@ resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
           image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           env: [
             { name: 'ASPNETCORE_URLS',                        value: 'http://+:8080' }
-            { name: 'AzureAISearch__Endpoint',                secretRef: 'ai-search-endpoint' }
+            { name: 'AzureAISearch__Endpoint',                value: aiSearchEndpoint }
             { name: 'AzureAISearch__ApiKey',                  secretRef: 'ai-search-key' }
             { name: 'AzureAISearch__IndexName',               value: aiSearchIndexName }
+            { name: 'CosmosDb__Endpoint',                     value: cosmosEndpoint }
+            { name: 'CosmosDb__PrimaryKey',                   secretRef: 'cosmos-primary-key' }
+            { name: 'CosmosDb__DatabaseName',                 value: 'helpdeskdb' }
+            { name: 'CosmosDb__ContainerName',                value: 'tickets' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',  secretRef: 'appinsights-cs' }
           ]
           resources: {
@@ -265,11 +289,11 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'acr-password',          value: acr.listCredentials().passwords[0].value }
         { name: 'openai-endpoint',        value: openAiEndpoint }
         { name: 'openai-api-key',         value: openAiApiKey }
-        { name: 'ai-search-endpoint',     value: aiSearchEndpoint }
         { name: 'ai-search-key',          value: aiSearchApiKey }
         { name: 'blob-connection-string', value: blobConnectionString }
-        { name: 'doc-intel-endpoint',     value: docIntelligenceEndpoint }
         { name: 'doc-intel-key',          value: docIntelligenceKey }
+        { name: 'eval-api-key',           value: evalApiKey }
+        { name: 'eval-scorer-api-key',    value: evalScorerApiKey }
         { name: 'appinsights-cs',         value: appInsights.properties.ConnectionString }
       ]
     }
@@ -287,7 +311,7 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AzureOpenAI__ChatDeployment',            value: openAiChatDeployment }
             { name: 'AzureOpenAI__ChatDeploymentV2',          value: empty(openAiChatDeploymentV2) ? openAiChatDeployment : openAiChatDeploymentV2 }
             { name: 'AzureOpenAI__EmbeddingDeployment',       value: openAiEmbeddingDeployment }
-            { name: 'AzureAISearch__Endpoint',                secretRef: 'ai-search-endpoint' }
+            { name: 'AzureAISearch__Endpoint',                value: aiSearchEndpoint }
             { name: 'AzureAISearch__ApiKey',                  secretRef: 'ai-search-key' }
             { name: 'AzureAISearch__IndexName',               value: aiSearchIndexName }
             { name: 'DynamicTools__TopK',                     value: '5' }
@@ -296,14 +320,19 @@ resource agentHostApp 'Microsoft.App/containerApps@2024-03-01' = {
             //   TCP apps   → <appname>:<port>          (short name resolves within the environment)
             { name: 'McpServer__Endpoint',                    value: 'http://${names.mcpServer}/mcp' }
             { name: 'ConnectionStrings__Redis',               value: '${names.redis}:6379,abortConnect=false,connectTimeout=5000' }
+            { name: 'AgentHost__BaseUrl',                     value: 'http://localhost:8080' }
+            { name: 'Evaluation__ApiKey',                     secretRef: 'eval-api-key' }
+            { name: 'Evaluation__ScorerEndpoint',             value: evalScorerEndpoint }
+            { name: 'Evaluation__ScorerApiKey',               secretRef: 'eval-scorer-api-key' }
+            { name: 'Evaluation__ScorerDeployment',           value: evalScorerDeployment }
             { name: 'AzureBlobStorage__ConnectionString',     secretRef: 'blob-connection-string' }
             { name: 'AzureBlobStorage__ContainerName',        value: blobContainerName }
-            { name: 'DocumentIntelligence__Endpoint',         secretRef: 'doc-intel-endpoint' }
+            { name: 'DocumentIntelligence__Endpoint',         value: docIntelligenceEndpoint }
             { name: 'DocumentIntelligence__Key',              secretRef: 'doc-intel-key' }
             { name: 'EntraAuth__TenantId',                    value: azureAdTenantId }
             { name: 'EntraAuth__ClientId',                    value: azureAdClientId }
             { name: 'EntraAuth__Audience',                    value: empty(azureAdClientId) ? '' : 'api://${azureAdClientId}' }
-            { name: 'EntraAuth__Authority',                   value: empty(azureAdTenantId) ? '' : 'https://login.microsoftonline.com/${azureAdTenantId}/v2.0' }
+            { name: 'EntraAuth__Authority',                   value: empty(azureAdTenantId) ? '' : '${az.environment().authentication.loginEndpoint}${azureAdTenantId}/v2.0' }
             { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',  secretRef: 'appinsights-cs' }
           ]
           resources: {
@@ -342,6 +371,7 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'acr-password', value: acr.listCredentials().passwords[0].value }
         { name: 'nextauth-secret', value: nextAuthSecret }
         { name: 'azure-ad-client-secret', value: azureAdClientSecret }
+        { name: 'eval-api-key', value: evalApiKey }
       ]
     }
     template: {
@@ -360,6 +390,7 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'MCP_URL',        value: 'http://${names.mcpServer}' }
             { name: 'NEXTAUTH_URL',   value: 'https://${names.frontend}.${caEnv.properties.defaultDomain}' }
             { name: 'NEXTAUTH_SECRET', secretRef: 'nextauth-secret' }
+            { name: 'EVAL_API_KEY', secretRef: 'eval-api-key' }
             { name: 'AZURE_AD_CLIENT_ID', value: azureAdClientId }
             { name: 'AZURE_AD_CLIENT_SECRET', secretRef: 'azure-ad-client-secret' }
             { name: 'AZURE_AD_TENANT_ID', value: azureAdTenantId }

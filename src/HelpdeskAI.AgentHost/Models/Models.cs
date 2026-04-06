@@ -6,10 +6,18 @@ public sealed class AzureOpenAiSettings
 {
     public string Endpoint { get; set; } = string.Empty;
     public string ApiKey { get; set; } = string.Empty;
-    public string ChatDeployment { get; set; } = "gpt-4o";
+    public string ChatDeployment { get; set; } = "gpt-5.3-chat";
     /// <summary>Optional separate deployment for the v2 multi-agent workflow. Falls back to <see cref="ChatDeployment"/> if empty.</summary>
-    public string ChatDeploymentV2 { get; set; } = string.Empty;
+    public string ChatDeploymentV2 { get; set; } = "gpt-5.2-chat";
     public string EmbeddingDeployment { get; set; } = "text-embedding-3-small";
+}
+
+public sealed class EvaluationSettings
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string ScorerEndpoint { get; set; } = string.Empty;
+    public string ScorerApiKey { get; set; } = string.Empty;
+    public string ScorerDeployment { get; set; } = string.Empty;
 }
 
 public sealed class DynamicToolsSettings

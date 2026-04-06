@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CopilotKit } from "@copilotkit/react-core";
 import { HelpdeskChat } from "@/components/HelpdeskChat";
 import { signIn, useSession } from "next-auth/react";
+
+const CHAT_RESET_EVENT = "helpdesk-reset-chat";
 
 function LoadingScreen({ message }: { message: string }) {
   return (
@@ -44,11 +46,19 @@ export default function Home() {
     return localStorage.getItem("copilotkit-controls") === "visible";
   }, []);
 
+  const [chatInstanceKey, setChatInstanceKey] = useState(0);
+
   useEffect(() => {
     if (needsReauth || needsSignIn) {
       void signIn("azure-ad", { callbackUrl: "/" });
     }
   }, [needsReauth, needsSignIn]);
+
+  useEffect(() => {
+    const handleChatReset = () => setChatInstanceKey(current => current + 1);
+    window.addEventListener(CHAT_RESET_EVENT, handleChatReset);
+    return () => window.removeEventListener(CHAT_RESET_EVENT, handleChatReset);
+  }, []);
 
   if (status === "loading") {
     return <LoadingScreen message="Loading your HelpdeskAI session..." />;
@@ -66,6 +76,7 @@ export default function Home() {
 
   return (
     <CopilotKit
+      key={`${agentName}-${chatInstanceKey}`}
       runtimeUrl="/api/copilotkit"
       agent={agentName}
       showDevConsole={showCopilotControls}

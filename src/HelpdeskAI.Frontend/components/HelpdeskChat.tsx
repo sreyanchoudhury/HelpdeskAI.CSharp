@@ -13,6 +13,19 @@ import { CitationBadge, KB_CITATION_REGEX } from "./CitationBadge";
 type Page = "chat" | "tickets" | "kb" | "settings" | "eval";
 
 const CONTENT_SAFETY_MARKER = "blocked by Azure content safety";
+const CHAT_RESET_EVENT = "helpdesk-reset-chat";
+const CONTENT_SAFETY_FLASH_KEY = "helpdesk-content-safety-flash";
+const CONTENT_SAFETY_MESSAGE =
+  "⚠️ Your request was blocked by Azure content safety. " +
+  "The conversation history for this thread has been cleared — please send a new message to continue.";
+
+function consumePendingChatInitial(): string | null {
+  if (typeof window === "undefined") return null;
+  const pending = window.sessionStorage.getItem(CONTENT_SAFETY_FLASH_KEY);
+  if (!pending) return null;
+  window.sessionStorage.removeItem(CONTENT_SAFETY_FLASH_KEY);
+  return pending;
+}
 
 const ckTheme: CopilotKitCSSProperties = {
   "--copilot-kit-primary-color":            "#3d5afe",
@@ -477,7 +490,7 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
                   <div style={{ fontSize: 13, fontWeight: 600, color: active ? "#3d5afe" : "#9098b0" }}>{label}</div>
                   <div style={{ fontSize: 11, color: "#5a6280", marginTop: 4, lineHeight: 1.4 }}>
                     {mode === "v1"
-                      ? "All tools in one agent. Model: gpt-4o."
+                      ? "All tools in one agent. Model: gpt-5.3-chat."
                       : "Orchestrator + specialist agents. Model: gpt-5.2-chat."}
                   </div>
                 </button>
@@ -620,7 +633,7 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
                 : "Microsoft Agents Framework (Single Agent)"],
               ["AI Model", agentMode === "v2"
                 ? "Azure OpenAI (gpt-5.2-chat)"
-                : "Azure OpenAI (gpt-4o)"],
+                : "Azure OpenAI (gpt-5.3-chat)"],
               ["Route",    agentMode === "v2" ? "/agent/v2" : "/agent"],
               ["Search",   "Azure AI Search (Basic tier)"],
             ] as [string, string][]).map(([label, value]) => (
@@ -642,9 +655,9 @@ function SettingsPage({ currentUser }: { currentUser: CurrentUser }) {
           </div>
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
             {([
-              ["✅ v1 (Single Agent)", "gpt-4o, gpt-4o-mini, gpt-4-turbo"],
-              ["✅ v2 (Workflow)", "gpt-5.2-chat (multi-agent orchestration)"],
-              ["⚠️  Use with caution", "model-router (unpredictable routing latency)"],
+              ["✅ Current v1 baseline", "gpt-5.3-chat"],
+              ["✅ Current v2 baseline", "gpt-5.2-chat (multi-agent orchestration)"],
+              ["⚠️  Model changes", "Treat any switch away from the standard pair as a regression event"],
               ["❌ Not compatible", "Models without tool calling or agentic instruction following"],
             ] as [string, string][]).map(([label, value]) => (
               <div key={label} className="hd-model-row">
@@ -1132,8 +1145,14 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
 
   const firstName = currentUser.name.split(" ")[0];
   const defaultGreeting = `Hi ${firstName}! What IT issue can I help you with today?`;
-  const [chatInitial, setChatInitial] = useState(defaultGreeting);
-  const { reset: resetChat } = useCopilotChat();
+  const [chatInitial, setChatInitial] = useState(() => consumePendingChatInitial() ?? defaultGreeting);
+  useCopilotChat();
+
+  useEffect(() => {
+    if (chatInitial === defaultGreeting) return;
+    const timeoutId = window.setTimeout(() => setChatInitial(defaultGreeting), 60_000);
+    return () => window.clearTimeout(timeoutId);
+  }, [chatInitial, defaultGreeting]);
 
   const handleCopilotError = useCallback((event: unknown) => {
     // Extract message from any shape CopilotKit may pass: Error, { message }, { error }, string.
@@ -1145,18 +1164,15 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
     );
     if (msg.includes("unknown action:") || msg.includes("SharedStorage") || msg.includes("WebSocketConnection")) return;
     if (msg.includes(CONTENT_SAFETY_MARKER)) {
-      // Reset clears CopilotKit's message list so the jailbreak prompt is not re-sent,
-      // and the new chatInitial becomes the first visible bubble — correct chronological position.
-      resetChat();
-      setChatInitial(
-        "\u26a0\ufe0f Your request was blocked by Azure content safety. " +
-        "The conversation history for this thread has been cleared \u2014 please send a new message to continue."
-      );
-      setTimeout(() => setChatInitial(defaultGreeting), 60_000);
+      waitingRef.current = false;
+      setLastStats(null);
+      setAttachedFiles([]);
+      window.sessionStorage.setItem(CONTENT_SAFETY_FLASH_KEY, CONTENT_SAFETY_MESSAGE);
+      window.dispatchEvent(new Event(CHAT_RESET_EVENT));
       return;
     }
     console.error("[CopilotKit error]", event);
-  }, [resetChat, defaultGreeting]);
+  }, []);
 
   const { threadId } = useCopilotContext();
   const threadIdRef = useRef(threadId);

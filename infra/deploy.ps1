@@ -31,6 +31,9 @@ param(
     [string]$Location         = "swedencentral",
     [string]$Environment      = "dev",
     [string]$BaseName         = "helpdeskaiapp",
+    [string]$ChatDeployment   = "gpt-5.3-chat",
+    [string]$ChatDeploymentV2 = "gpt-5.2-chat",
+    [string]$EmbeddingDeployment = "text-embedding-3-small",
     [switch]$SkipSeedData,
     [switch]$WhatIf
 )
@@ -201,7 +204,9 @@ $agentSettings = @{
     AzureOpenAI = @{
         Endpoint       = $openAiEndpoint
         ApiKey         = $openAiApiKey
-        ChatDeployment = "gpt-4.1"
+        ChatDeployment = $ChatDeployment
+        ChatDeploymentV2 = $ChatDeploymentV2
+        EmbeddingDeployment = $EmbeddingDeployment
     }
     AzureAISearch = @{
         Endpoint  = $aiSearchEndpoint

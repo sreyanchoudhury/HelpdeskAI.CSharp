@@ -71,6 +71,6 @@ Try following up on an earlier message, asking for
 clarification, or changing direction mid-conversation.
 
 ════════════════════════════════════════════════════════
-Demo:  https://helpdeskaiapp-dev-frontend.purpleground-d164e1be.swedencentral.azurecontainerapps.io/demo
-Built with Microsoft Agent Framework + Azure OpenAI (gpt-4o)
+Demo:  Use the active conference/demo environment URL
+Built with Microsoft Agent Framework + Azure OpenAI (gpt-5.3-chat / gpt-5.2-chat)
 ════════════════════════════════════════════════════════

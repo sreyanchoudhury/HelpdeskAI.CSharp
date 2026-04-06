@@ -4,6 +4,16 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-06 (Model Sync + Wrapper Refactor)
+
+### Changed
+
+- **Repository-wide model baseline sync** — standardized defaults, examples, regression docs, frontend settings copy, evaluation defaults, infra defaults, and conference collateral on `gpt-5.3-chat` for `v1` and `gpt-5.2-chat` for `v2`.
+- **`Program.cs` cleanup** — extracted the v2 workflow tool-capture and content-safety conversion wrapper into `Infrastructure/WorkflowAgentWrapperFactory.cs`, reducing startup-file sprawl before check-in.
+- **Content-safety recovery documentation** — updated the compatibility and regression docs to reflect the current post-block recovery behavior: frontend chat remount plus thread-scoped Redis cleanup.
+
+---
+
 ## [Unreleased] - 2026-04-05 (Content Safety Guard)
 
 ### Added

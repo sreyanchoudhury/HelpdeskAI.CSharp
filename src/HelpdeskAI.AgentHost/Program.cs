@@ -27,6 +27,7 @@ builder.Services.Configure<ConversationSettings>(cfg.GetSection("Conversation"))
 builder.Services.Configure<AzureBlobStorageSettings>(cfg.GetSection("AzureBlobStorage"));
 builder.Services.Configure<DocumentIntelligenceSettings>(cfg.GetSection("DocumentIntelligence"));
 builder.Services.Configure<EntraAuthSettings>(cfg.GetSection("EntraAuth"));
+builder.Services.Configure<EvaluationSettings>(cfg.GetSection("Evaluation"));
 builder.Services.Configure<LongTermMemorySettings>(cfg.GetSection("LongTermMemory"));
 
 var aiSettings = cfg.GetSection("AzureOpenAI").Get<AzureOpenAiSettings>()
@@ -141,6 +142,7 @@ builder.Services.AddSingleton<EvalRunnerService>(sp => new EvalRunnerService(
     sp.GetRequiredService<IChatClient>(),
     sp.GetRequiredService<IMcpToolsProvider>(),
     sp.GetRequiredService<IOptions<AzureOpenAiSettings>>(),
+    sp.GetRequiredService<IOptions<EvaluationSettings>>(),
     sp.GetRequiredService<IOptions<AzureBlobStorageSettings>>(),
     sp.GetRequiredService<ILogger<EvalRunnerService>>(),
     evalApiKey,
@@ -355,30 +357,14 @@ var helpdeskWorkflow = HelpdeskWorkflowFactory.BuildWorkflow(
 // AgentRunOptions BEFORE WorkflowHostAgent drops them (passes null to children).
 // This keeps the render tools available to workflow specialists even though they are
 // stripped at the child-agent boundary.
-var rawWorkflowAgent = helpdeskWorkflow.AsAIAgent("helpdesk-v2", "HelpdeskAI Multi-Agent");
-var toolCapturingLogger = loggerFactory.CreateLogger("HelpdeskAI.AgentHost.ToolCapturingMiddleware");
-var toolCapturingAgent = new AIAgentBuilder(rawWorkflowAgent)
-    .Use(async (messages, session, options, next, ct) =>
-    {
-        // Capture CopilotKit frontend tools from the AG-UI AgentRunOptions before
-        // WorkflowHostAgent strips them by passing null to child agents.
-        if (options is ChatClientAgentRunOptions crao
-            && crao.ChatOptions?.Tools is { Count: > 0 } tools)
-        {
-            var frontendTools = FrontendToolForwardingProvider.CaptureFrontendTools(tools);
-            toolCapturingLogger.LogInformation(
-                "[ToolCapture] Captured {FrontendCount}/{TotalCount} CopilotKit frontend tools from AgentRunOptions",
-                frontendTools.Count, tools.Count);
-        }
-        else
-        {
-            toolCapturingLogger.LogWarning(
-                "[ToolCapture] No tools in AgentRunOptions (options type: {OptionsType})",
-                options?.GetType().Name ?? "null");
-        }
-        await next(messages, session, options, ct);
-    })
-    .Build(app.Services);
+// includeExceptionDetails=true ensures workflow-hosted failures surface in ErrorContent.Message
+// so content-safety failures can be converted back into RUN_ERROR for CopilotKit.
+var rawWorkflowAgent = helpdeskWorkflow.AsAIAgent(
+    "helpdesk-v2",
+    "HelpdeskAI Multi-Agent",
+    includeExceptionDetails: true,
+    includeWorkflowOutputsInResponse: false);
+var toolCapturingAgent = WorkflowAgentWrapperFactory.Create(rawWorkflowAgent, app.Services, loggerFactory);
 
 // Outermost wrapper: OpenTelemetryAgent emits the top-level "invoke_agent helpdesk-v2" span.
 // Per-specialist child spans come from the OpenTelemetryAgent wrapping inside BuildWorkflow.

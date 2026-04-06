@@ -5,12 +5,15 @@ using HelpdeskAI.AgentHost.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.AI.Evaluation;
 using Microsoft.Extensions.AI.Evaluation.Quality;
+using Microsoft.Extensions.AI.Evaluation.Reporting;
+using Microsoft.Extensions.AI.Evaluation.Reporting.Storage;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Azure.AI.OpenAI;
+using System.Collections.Generic;
 
 namespace HelpdeskAI.AgentHost.Agents;
 
@@ -34,6 +37,7 @@ internal sealed class EvalRunnerService(
     IChatClient agentClient,
     IMcpToolsProvider toolsProvider,
     IOptions<AzureOpenAiSettings> aiSettings,
+    IOptions<EvaluationSettings> evalSettings,
     IOptions<AzureBlobStorageSettings> blobSettings,
     ILogger<EvalRunnerService> log,
     string evalApiKey,
@@ -200,26 +204,44 @@ internal sealed class EvalRunnerService(
         try
         {
             var settings  = aiSettings.Value;
+            var evaluationSettings = evalSettings.Value;
             var container = new BlobContainerClient(blobSettings.Value.ConnectionString, EvalContainerName);
             await container.CreateIfNotExistsAsync(Azure.Storage.Blobs.Models.PublicAccessType.None,
                 cancellationToken: ct);
 
+            var scorerEndpoint = !string.IsNullOrWhiteSpace(evaluationSettings.ScorerEndpoint)
+                ? evaluationSettings.ScorerEndpoint
+                : settings.Endpoint;
+            var scorerApiKey = !string.IsNullOrWhiteSpace(evaluationSettings.ScorerApiKey)
+                ? evaluationSettings.ScorerApiKey
+                : settings.ApiKey;
+            var scorerDeployment = !string.IsNullOrWhiteSpace(evaluationSettings.ScorerDeployment)
+                ? evaluationSettings.ScorerDeployment
+                : settings.ChatDeployment;
+
             // Raw evaluator client — no middleware pipeline so evaluator LLM calls
             // don't get wrapped in FunctionInvocation or usage-capture.
-            IChatClient evalClient = string.IsNullOrWhiteSpace(settings.ApiKey)
-                ? new AzureOpenAIClient(new Uri(settings.Endpoint), new Azure.Identity.DefaultAzureCredential())
-                      .GetChatClient(settings.ChatDeployment).AsIChatClient()
+            IChatClient evalClient = string.IsNullOrWhiteSpace(scorerApiKey)
+                ? new AzureOpenAIClient(new Uri(scorerEndpoint), new Azure.Identity.DefaultAzureCredential())
+                      .GetChatClient(scorerDeployment).AsIChatClient()
                 : new AzureOpenAIClient(
-                      new Uri(settings.Endpoint),
-                      new Azure.AzureKeyCredential(settings.ApiKey))
-                      .GetChatClient(settings.ChatDeployment).AsIChatClient();
+                      new Uri(scorerEndpoint),
+                      new Azure.AzureKeyCredential(scorerApiKey))
+                      .GetChatClient(scorerDeployment).AsIChatClient();
 
             var chatConfig = new ChatConfiguration(evalClient);
-            IEvaluator composite = new CompositeEvaluator(
+            IEvaluator[] evaluators =
+            [
                 new IntentResolutionEvaluator(),
                 new TaskAdherenceEvaluator(),
                 new RelevanceEvaluator(),
-                new CoherenceEvaluator());
+                new CoherenceEvaluator(),
+            ];
+            var reporting = DiskBasedReportingConfiguration.Create(
+                storageRootPath: Path.Combine(Path.GetTempPath(), "HelpdeskAI", "EvalRunner", executionName),
+                evaluators: evaluators,
+                chatConfiguration: chatConfig,
+                enableResponseCaching: false);
 
             var tools = (await toolsProvider.GetToolsAsync(ct)).Cast<AITool>().ToList();
 
@@ -229,9 +251,9 @@ internal sealed class EvalRunnerService(
 
                 log.LogInformation("Eval {Exec} — starting {Scenario}", executionName, scenario.Name);
                 if (scenario.IsV2)
-                    await RunV2ScenarioAsync(executionName, scenario, composite, chatConfig, container, ct);
+                    await RunV2ScenarioAsync(executionName, scenario, reporting, container, ct);
                 else
-                    await RunV1ScenarioAsync(executionName, scenario, tools, composite, chatConfig, container, ct);
+                    await RunV1ScenarioAsync(executionName, scenario, tools, reporting, container, ct);
             }
 
             log.LogInformation("Eval run {Exec} completed", executionName);
@@ -252,8 +274,7 @@ internal sealed class EvalRunnerService(
         string executionName,
         ScenarioSpec scenario,
         List<AITool> tools,
-        IEvaluator composite,
-        ChatConfiguration chatConfig,
+        ReportingConfiguration reporting,
         BlobContainerClient container,
         CancellationToken ct)
     {
@@ -286,7 +307,7 @@ internal sealed class EvalRunnerService(
             var agentText = agentResp.Text ?? string.Empty;
 
             result = await EvaluateAndBuildResultAsync(
-                executionName, scenario, finalMessage, agentText, composite, chatConfig, ct);
+                executionName, scenario, finalMessage, agentText, reporting, ct);
 
             log.LogInformation("Eval {Exec} — {Scenario}: {Result}",
                 executionName, scenario.Name, result.Passed ? "PASSED" : "FAILED");
@@ -308,8 +329,7 @@ internal sealed class EvalRunnerService(
     private async Task RunV2ScenarioAsync(
         string executionName,
         ScenarioSpec scenario,
-        IEvaluator composite,
-        ChatConfiguration chatConfig,
+        ReportingConfiguration reporting,
         BlobContainerClient container,
         CancellationToken ct)
     {
@@ -333,7 +353,7 @@ internal sealed class EvalRunnerService(
             var agentText = await CallV2EvalAsync(aguiMessages, ct);
 
             result = await EvaluateAndBuildResultAsync(
-                executionName, scenario, evaluatedUserMessage, agentText, composite, chatConfig, ct);
+                executionName, scenario, evaluatedUserMessage, agentText, reporting, ct);
 
             log.LogInformation("Eval {Exec} — {Scenario}: {Result}",
                 executionName, scenario.Name, result.Passed ? "PASSED" : "FAILED");
@@ -426,13 +446,17 @@ internal sealed class EvalRunnerService(
         ScenarioSpec scenario,
         string finalMessage,
         string agentText,
-        IEvaluator composite,
-        ChatConfiguration chatConfig,
+        ReportingConfiguration reporting,
         CancellationToken ct)
     {
-        var evalMessages  = new List<ChatMessage> { new(ChatRole.User, finalMessage) };
-        var modelResponse = new ChatResponse([new ChatMessage(ChatRole.Assistant, agentText)]);
-        var evalResult    = await composite.EvaluateAsync(evalMessages, modelResponse, chatConfig, null, ct);
+        await using var scenarioRun = await reporting.CreateScenarioRunAsync(
+            $"{executionName}-{scenario.Name}",
+            cancellationToken: ct);
+        var evalResult = await scenarioRun.EvaluateAsync(
+            finalMessage,
+            agentText,
+            additionalContext: null,
+            cancellationToken: ct);
 
         // Use the evaluator's own static metric name constant — the actual names
         // have spaces ("Intent Resolution", "Task Adherence") and won't match

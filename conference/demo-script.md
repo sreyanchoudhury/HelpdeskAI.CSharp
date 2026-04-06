@@ -15,7 +15,7 @@ This demo shows what a real MAF-based multi-agent system looks like when you com
 - Microsoft Agents Framework for agents, handoffs, skills, AG-UI hosting, and observability hooks
 - MCP for tools
 - OpenTelemetry + Azure Monitor for traceability
-- Azure OpenAI, Document Intelligence, Redis, Cosmos DB, and AI Search as the backing services
+- Azure OpenAI-compatible deployments in Azure AI Foundry (`gpt-5.3-chat` for v1 and `gpt-5.2-chat` for v2), plus Document Intelligence, Redis, Cosmos DB, and AI Search as the backing services
 - Azure content safety filters with graceful SSE-safe exception handling
 
 Conference note worth calling out once:
@@ -34,6 +34,7 @@ Repeat this mentally all the way through:
 - [ ] Browser tabs are pre-opened:
   1. HelpdeskAI frontend, already authenticated
   2. Azure Portal -> Application Insights / Workbook for HelpdeskAI tracing
+- [ ] No local config, secret, terminal, or environment tabs are visible when screen sharing
 - [ ] Settings are checked once:
   - route toggle is visible
   - `v2` is available

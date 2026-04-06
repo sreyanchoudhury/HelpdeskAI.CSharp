@@ -17,7 +17,7 @@ This folder contains **Bicep Infrastructure as Code** and deployment scripts to 
 | **AgentHost** | Container App | AG-UI agent, RAG pipeline, attachment processing | 0.5 CPU / 1 Gi |
 | **Frontend** | Container App | Next.js UI | 0.5 CPU / 1 Gi |
 | **Azure Cosmos DB** | `Microsoft.DocumentDB/databaseAccounts` | Durable ticket persistence | Serverless |
-| **Azure OpenAI** | Cognitive Services | `gpt-4o` (v1 chat) + `gpt-5.2-chat` (v2 workflow) + `text-embedding-3-small` (embeddings) | S0 / GlobalStandard |
+| **Azure AI Foundry** | Cognitive Services (`Microsoft.CognitiveServices/accounts`, `kind=AIServices`) | OpenAI-compatible endpoint for `gpt-5.3-chat` / `gpt-5.2-chat` runtime deployments, `gpt-4.1-mini-eval` scoring, and Foundry project management | S0 / GlobalStandard |
 | **Azure AI Search** | Search Service | Semantic KB search (RAG), `helpdesk-kb` index | Basic (1 replica, 1 partition) |
 
 **Total monthly cost:** ~$200–350 (varies by usage; Container Apps, ACR, Blob Storage, Document Intelligence, and App Insights add to the base OpenAI + AI Search cost)
@@ -50,7 +50,7 @@ Before you start, ensure you have:
    - Assign RBAC roles
    - List/retrieve resource keys
 
-5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have quota for `gpt-4o` / `gpt-5.2-chat`
+5. **Azure OpenAI access** — request at https://aka.ms/oai/access if you don't have quota for `gpt-5.3-chat` / `gpt-5.2-chat` / `gpt-4.1-mini`
 
 6. **Logged in to Azure:**
    ```bash
@@ -95,7 +95,7 @@ cd infra
 
 1. **Logs into Azure** — prompts `az login` if not already authenticated
 2. **Creates resource group** — if it doesn't exist
-3. **Deploys Bicep template** — provisions OpenAI, AI Search, and Cosmos DB
+3. **Deploys Bicep template** — provisions the Foundry-hosted OpenAI-compatible account, AI Search, Cosmos DB, Blob Storage, and Document Intelligence
 4. **Creates AI Search index** — `helpdesk-kb` with semantic search config
 5. **Seeds knowledge base** — uploads 5 IT articles from `seed-data.json`
 6. **Generates config** — creates `src/HelpdeskAI.AgentHost/appsettings.Development.json` with credentials
@@ -141,7 +141,7 @@ Three alert rules are deployed as `scheduledQueryRules` in `app-deploy/apps.bice
 
 | File | Purpose |
 |------|---------|
-| `main.bicep` | Bicep infrastructure template (OpenAI + AI Search + Cosmos DB) |
+| `main.bicep` | Shared infrastructure template using Foundry under Cognitive Services with a child project resource, not an Azure ML hub/workspace |
 | `app-deploy/apps.bicep` | Full app stack (Container Apps, Redis, alert rules) |
 | `app-deploy/apps.bicepparam` | `azd` environment variable mappings, including Entra/NextAuth settings |
 | `deploy.ps1` | PowerShell deployment orchestration script |
@@ -156,29 +156,61 @@ Three alert rules are deployed as `scheduledQueryRules` in `app-deploy/apps.bice
 
 Minimal template defining two resources:
 
-### Azure OpenAI Account
+### Foundry-Hosted OpenAI-Compatible Account
+
+This repo uses the Foundry resource model in the Cognitive Services namespace:
+
+- `Microsoft.CognitiveServices/accounts` with `kind: 'AIServices'`
+- `Microsoft.CognitiveServices/accounts/projects` for the default Foundry project
+
+It does **not** use the hub-based Azure ML resource model (`Microsoft.MachineLearningServices/workspace` with `kind: 'hub'` or `kind: 'project'`).
 
 ```bicep
-resource openAiAccount 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
-  name: '${prefix}-openai-${uniqueSuffix}'
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+  name: '${prefix}-fndry-${uniqueSuffix}'
   location: location
-  kind: 'OpenAI'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  kind: 'AIServices'
   sku: { name: 'S0' }
   properties: {
+    allowProjectManagement: true
+    defaultProject: 'default'
     publicNetworkAccess: 'Enabled'
-    customSubDomainName: '${prefix}-openai-${uniqueSuffix}'
+    customSubDomainName: '${prefix}-fndry-${uniqueSuffix}'
   }
 }
 
-resource gpt4oDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
-  parent: openAiAccount
-  name: 'gpt-4o'
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
+  parent: foundryAccount
+  name: 'default'
+  location: location
+  properties: {
+    displayName: 'HelpdeskAI'
+  }
+}
+
+resource primaryChatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: foundryAccount
+  name: 'gpt-5.3-chat'
   sku: { name: 'GlobalStandard', capacity: 10 }  // TPM
   properties: {
-    model: { format: 'OpenAI', name: 'gpt-4o', version: '2024-11-20' }
+    model: { format: 'OpenAI', name: 'gpt-5.3-chat', version: '2025-04-14' }
+  }
+}
+
+resource evalScorerDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+  parent: foundryAccount
+  name: 'gpt-4.1-mini-eval'
+  sku: { name: 'GlobalStandard', capacity: 10 }
+  properties: {
+    model: { format: 'OpenAI', name: 'gpt-4.1-mini', version: '2025-04-14' }
   }
 }
 ```
+
+The scorer deployment is used by the evaluation stack only. Runtime traffic remains pinned to `gpt-5.3-chat` for `v1` and `gpt-5.2-chat` for `v2`.
 
 ### Azure AI Search Service
 
@@ -308,7 +340,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<api-key>",
-    "ChatDeployment": "gpt-4o",
+    "ChatDeployment": "gpt-5.3-chat",
     "ChatDeploymentV2": "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
@@ -336,7 +368,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
 
 ## Regional Availability
 
-**Azure OpenAI deployments such as `gpt-4o` and `gpt-5.2-chat` are available in:**
+**Azure OpenAI deployments such as `gpt-5.3-chat` and `gpt-5.2-chat` are available in:**
 - `swedencentral` ✅ (recommended)
 - `eastus2` ✅
 - `westus2` ✅

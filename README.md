@@ -158,7 +158,7 @@ flowchart TD
     end
 
     subgraph Azure["☁️  Azure Services"]
-        AOA["Azure OpenAI<br/>gpt-4o · gpt-5.2-chat · embeddings"]
+        AOA["Azure OpenAI<br/>gpt-5.3-chat · gpt-5.2-chat · embeddings"]
         AIS["Azure AI Search<br/>helpdesk-kb"]
         ABS["Blob Storage"]
         ADI["Document Intelligence"]
@@ -232,7 +232,7 @@ Create `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<your-resource>.openai.azure.com/",
     "ApiKey": "<your-key>",
-    "ChatDeployment": "gpt-4o",
+    "ChatDeployment": "gpt-5.3-chat",
     "ChatDeploymentV2": "gpt-5.2-chat"
   },
   "AzureAISearch": {
@@ -272,7 +272,7 @@ Then run services (same as above).
 ### Azure Prerequisites (if deploying to cloud)
 
 - Active **Azure subscription** with permission to create resources and assign RBAC roles
-- **Azure OpenAI** resource with `gpt-4o` for v1 and `gpt-5.2-chat` for v2 (or request access at https://aka.ms/oai/access)
+- **Azure OpenAI** resource with `gpt-5.3-chat` for v1 and `gpt-5.2-chat` for v2 (or request access at https://aka.ms/oai/access)
 
 ---
 
@@ -288,7 +288,7 @@ az login
 ```
 
 This provisions:
-- Azure OpenAI (`gpt-4o` for v1, `gpt-5.2-chat` for v2)
+- Azure OpenAI (`gpt-5.3-chat` for v1, `gpt-5.2-chat` for v2)
 - Azure AI Search (Basic tier)
 - Generated `appsettings.Development.json` with credentials
 
@@ -316,7 +316,7 @@ Create this file at `src/HelpdeskAI.AgentHost/appsettings.Development.json`:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4o",
+    "ChatDeployment": "gpt-5.3-chat",
     "ChatDeploymentV2": "gpt-5.2-chat"
   },
   "AzureAISearch": {
@@ -466,7 +466,7 @@ flowchart LR
     AH["🤖 AgentHost<br/>POST /agent"]
     CTX["🔍 Context injection<br/>RAG · LTM · user · attachments"]
     RH["💾 Redis<br/>history load"]
-    LLM(["🧠 Azure OpenAI<br/>gpt-4o / gpt-5.2-chat"])
+    LLM(["🧠 Azure OpenAI<br/>gpt-5.3-chat / gpt-5.2-chat"])
     MCP["🛠 MCP tools<br/>McpServer"]
     SSE["📡 AG-UI SSE stream"]
     RP["💾 Redis<br/>history persist"]
@@ -528,7 +528,7 @@ A `RetryingMcpTool` wrapper catches `Session not found` (HTTP -32001) after McpS
   "AzureOpenAI": {
     "Endpoint":           "https://<resource>.openai.azure.com/",
     "ApiKey":             "",          // leave empty → DefaultAzureCredential (managed identity)
-    "ChatDeployment":     "gpt-4o",
+    "ChatDeployment":     "gpt-5.3-chat",
     "ChatDeploymentV2":   "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
@@ -572,7 +572,7 @@ Install the following before you begin:
 
 You also need:
 - An **Azure subscription** with permission to create resource groups and assign RBAC roles.
-- An **Azure OpenAI** resource with `gpt-4o` for v1 and `gpt-5.2-chat` for v2. Request access at https://aka.ms/oai/access if you don't have them.
+- An **Azure OpenAI** resource with `gpt-5.3-chat` for v1 and `gpt-5.2-chat` for v2. Request access at https://aka.ms/oai/access if you don't have them.
 
 ---
 
@@ -588,7 +588,7 @@ The `infra/` folder contains a fully automated deployment script that provisions
 
 | Resource | Purpose |
 |----------|---------|
-| Azure OpenAI | `gpt-4o` for v1 and `gpt-5.2-chat` for v2 |
+| Azure OpenAI | `gpt-5.3-chat` for v1 and `gpt-5.2-chat` for v2 |
 | Azure AI Search (Basic) | Knowledge-base RAG — index `helpdesk-kb` |
 
 ### Step 1 — Log in to Azure
@@ -684,7 +684,7 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
   "AzureOpenAI": {
     "Endpoint":           "https://<your-resource>.openai.azure.com/",
     "ApiKey":             "<your-api-key>",
-    "ChatDeployment":     "gpt-4o",
+    "ChatDeployment":     "gpt-5.3-chat",
     "ChatDeploymentV2":   "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
@@ -715,7 +715,7 @@ Create the file at `src/HelpdeskAI.AgentHost/appsettings.Development.json` with 
 > - Go to https://portal.azure.com → your Azure OpenAI resource → **Keys and Endpoint**.
 > - `Endpoint` — the URL ending in `.openai.azure.com/`
 > - `ApiKey` — either Key 1 or Key 2
-> - `ChatDeployment` — the v1 deployment name in Azure OpenAI Studio, e.g. `gpt-4o`
+> - `ChatDeployment` — the v1 deployment name in Azure OpenAI Studio, e.g. `gpt-5.3-chat`
 > - `ChatDeploymentV2` — the optional v2 workflow deployment name, e.g. `gpt-5.2-chat`
 > - `EmbeddingDeployment` — an embedding model deployment in the same resource, e.g. `text-embedding-3-small`
 

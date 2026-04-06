@@ -10,7 +10,7 @@ The backend Agent Host — an **ASP.NET Core (.NET 10)** web API that hosts the 
 
 - **Hosts the AI agent** — AG-UI endpoint at `/agent` (v1 single agent) and `/agent/v2` (multi-agent handoff workflow via MAF)
 - **Multi-agent workflow (v2)** — orchestrator routes to specialist agents (diagnostic, ticket, KB, incident) using MAF `HandoffsWorkflow`; each specialist has scoped MCP tools and context providers
-- **Integrates Azure OpenAI** — v1 uses `gpt-4o`; v2 uses `ChatDeploymentV2` (configurable, falls back to `ChatDeployment`). See [docs/model-compatibility.md](../../docs/model-compatibility.md) — `gpt-5.2-chat` is **not compatible** with render-action cards; use `gpt-4o` for both routes to get cards in v2
+- **Integrates Azure OpenAI** — v1 uses `gpt-5.3-chat`; v2 uses `gpt-5.2-chat` by default through `ChatDeploymentV2` (and falls back to `ChatDeployment` if empty). See [docs/model-compatibility.md](../../docs/model-compatibility.md) for the current pinned baseline.
 - **Provides RAG context** — injects knowledge-base articles from Azure AI Search before each LLM call
 - **Bridges to MCP tools** — connects to `HelpdeskAI.McpServer` for ticketing, system status monitoring, and KB search/index flows
 - **Applies render-action guidance** — follows `_renderAction` / `_renderArgs` from MCP tool results so the frontend can render structured cards when appropriate
@@ -110,7 +110,7 @@ flowchart TD
     end
 
     MCPSRV(["🛠 McpServer  ·  port 5100"])
-    AOA["☁️ Azure OpenAI<br/>gpt-4o · gpt-5.2-chat · embeddings"]
+    AOA["☁️ Azure OpenAI<br/>gpt-5.3-chat · gpt-5.2-chat · embeddings"]
     AIS["🔍 Azure AI Search"]
     ABS["📦 Blob Storage"]
     ADI["📄 Document Intelligence"]
@@ -179,7 +179,7 @@ Create `appsettings.Development.json` at project root:
   "AzureOpenAI": {
     "Endpoint": "https://<resource>.openai.azure.com/",
     "ApiKey": "<admin-key>",
-    "ChatDeployment": "gpt-4o",
+    "ChatDeployment": "gpt-5.3-chat",
     "ChatDeploymentV2": "gpt-5.2-chat",
     "EmbeddingDeployment": "text-embedding-3-small"
   },
@@ -242,7 +242,7 @@ npm run dev
 |---------|-----|------|----------|---------|
 | `AzureOpenAI` | `Endpoint` | string | ✅ | Azure OpenAI resource endpoint (ends with `/`) |
 | `AzureOpenAI` | `ApiKey` | string | ✅ | Admin API key for Azure OpenAI |
-| `AzureOpenAI` | `ChatDeployment` | string | ✅ | v1 chat model deployment name (e.g., `gpt-4o`) |
+| `AzureOpenAI` | `ChatDeployment` | string | ✅ | v1 chat model deployment name (e.g., `gpt-5.3-chat`) |
 | `AzureOpenAI` | `ChatDeploymentV2` | string | | v2 workflow deployment name (e.g., `gpt-5.2-chat`); falls back to `ChatDeployment` if empty |
 | `AzureOpenAI` | `EmbeddingDeployment` | string | ✅ | Embedding model deployment for dynamic tool selection (e.g., `text-embedding-3-small`) |
 | `DynamicTools` | `TopK` | int | | Top-K tools to inject per turn via cosine similarity (default: `8`) |
@@ -359,7 +359,7 @@ flowchart LR
     S1(["🌐 Browser<br/>POST /agent"])
     S2["🔐 Auth + Middleware<br/>Entra · thread ID · telemetry"]
     S3["🔍 Context Injection<br/>RAG · LTM · user · attachments<br/>+ dynamic tool selection"]
-    S4(["🧠 Azure OpenAI<br/>gpt-4o or gpt-5.2-chat reasoning"])
+    S4(["🧠 Azure OpenAI<br/>gpt-5.3-chat or gpt-5.2-chat reasoning"])
     S5["🛠 MCP Tool Calls<br/>McpServer"]
     S6["📡 AG-UI SSE Stream<br/>render actions · text chunks"]
     S7(["✅ Browser updated<br/>cards · alerts · KB"])

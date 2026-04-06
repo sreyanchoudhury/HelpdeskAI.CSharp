@@ -9,6 +9,7 @@ public interface IRedisService
     Task SetAsync(string key, string value, TimeSpan ttl);
     Task<bool> TrySetAsync(string key, string value, TimeSpan ttl);
     Task DeleteAsync(string key);
+    Task<long> DeleteByPrefixAsync(string prefix);
 }
 
 /// <summary>RAG retrieval - returns a formatted context block or null if no results.</summary>

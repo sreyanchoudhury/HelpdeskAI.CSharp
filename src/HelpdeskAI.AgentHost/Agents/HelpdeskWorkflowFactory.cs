@@ -75,6 +75,7 @@ internal static class HelpdeskWorkflowFactory
 
         return AgentWorkflowBuilder
             .CreateHandoffBuilderWith(orchestratorAgent)
+            .WithToolCallFilteringBehavior(HandoffToolCallFilteringBehavior.All)
             .WithHandoffs(orchestratorAgent, [ticketAgent, kbAgent, incidentAgent, diagnosticAgent])
             .WithHandoffs([ticketAgent, kbAgent, incidentAgent, diagnosticAgent], orchestratorAgent)
             .Build();

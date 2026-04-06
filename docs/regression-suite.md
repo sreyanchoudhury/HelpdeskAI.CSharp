@@ -11,8 +11,14 @@ Run the suite in Azure after each non-trivial change. Unless a scenario explicit
 
 | Route | Mode | Model | Expected Stability |
 |------|------|-------|--------------------|
-| `v1` | Single-agent | `gpt-4o` | Primary route - should remain broadly reliable |
+| `v1` | Single-agent | `gpt-5.3-chat` | Primary route - should remain broadly reliable |
 | `v2` | Multi-agent workflow | `gpt-5.2-chat` | Experimental route - may still need occasional follow-up nudges on long chains |
+
+## Current Baseline
+
+- The standardized production pairing is `gpt-5.3-chat` for `v1` and `gpt-5.2-chat` for `v2`.
+- Any model switch away from that pair should be treated as a regression event and re-run against this suite before check-in or deployment.
+- After content-safety trips, verify that the next turn starts on a fresh conversation state and that attachments still work on the following turn.
 
 ## Core Regression Flow
 
