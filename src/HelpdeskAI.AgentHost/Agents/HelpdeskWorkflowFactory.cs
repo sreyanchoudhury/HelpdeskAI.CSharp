@@ -37,7 +37,6 @@ internal static class HelpdeskWorkflowFactory
         AIContextProvider searchProvider,
         AIContextProvider attachmentProvider,
         AIContextProvider orchestratorAttachmentProvider,
-        AIContextProvider frontendToolProvider,
         AIContextProvider ticketToolProvider,
         AIContextProvider kbToolProvider,
         AIContextProvider incidentToolProvider,
@@ -50,32 +49,43 @@ internal static class HelpdeskWorkflowFactory
         // with proper gen_ai.agent.name attribution and model info as child LLM spans.
         AIAgent orchestratorAgent = new OpenTelemetryAgent(
             OrchestratorAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
-                orchestratorAttachmentProvider, frontendToolProvider, skillsProvider, loggerFactory),
+                orchestratorAttachmentProvider, skillsProvider, loggerFactory),
             TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
         AIAgent ticketAgent = new OpenTelemetryAgent(
             TicketAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
-                ticketToolProvider, frontendToolProvider, loggerFactory),
+                ticketToolProvider, loggerFactory),
             TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
         AIAgent kbAgent = new OpenTelemetryAgent(
             KBAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
-                searchProvider, kbToolProvider, frontendToolProvider, loggerFactory),
+                searchProvider, kbToolProvider, loggerFactory),
             TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
         AIAgent incidentAgent = new OpenTelemetryAgent(
             IncidentAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
-                incidentToolProvider, frontendToolProvider, loggerFactory),
+                incidentToolProvider, loggerFactory),
             TelemetrySource) { EnableSensitiveData = enableSensitiveData };
 
         AIAgent diagnosticAgent = new OpenTelemetryAgent(
             DiagnosticAgentFactory.Create(chatClient, userProvider, memoryProvider, turnGuardProvider,
-                searchProvider, attachmentProvider, frontendToolProvider, skillsProvider, loggerFactory),
+                searchProvider, attachmentProvider, skillsProvider, loggerFactory),
             TelemetrySource) { EnableSensitiveData = enableSensitiveData };
+
+        // Override MAF's default "if appropriate" handoff instructions with mandatory language.
+        // The default says agents CAN hand off — we need them to ALWAYS hand off when done.
+        const string mandatoryHandoffInstructions =
+            "You are one specialist agent in a multi-agent helpdesk system. " +
+            "Handoffs are achieved by calling a handoff function (named handoff_to_1, handoff_to_2, etc.). " +
+            "MANDATORY: You MUST call a handoff function when you have finished your work. " +
+            "Calling the handoff function is the ONLY way to signal completion — do not skip it. " +
+            "Never narrate or mention the handoff in your text response.";
 
         return AgentWorkflowBuilder
             .CreateHandoffBuilderWith(orchestratorAgent)
-            .WithToolCallFilteringBehavior(HandoffToolCallFilteringBehavior.All)
+            .WithHandoffInstructions(mandatoryHandoffInstructions)
+            // HandoffOnly: strips handoff_to_N calls from history but keeps domain tool results
+            // (create_ticket, index_kb_article etc.) so specialists see prior outputs for dedup.
             .WithHandoffs(orchestratorAgent, [ticketAgent, kbAgent, incidentAgent, diagnosticAgent])
             .WithHandoffs([ticketAgent, kbAgent, incidentAgent, diagnosticAgent], orchestratorAgent)
             .Build();

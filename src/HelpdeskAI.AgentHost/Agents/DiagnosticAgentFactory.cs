@@ -40,14 +40,15 @@ internal static class DiagnosticAgentFactory
         4. Keep your response focused on the diagnostic findings only.
         5. If the user describes a team-wide or multi-user problem, call that out clearly so the orchestrator can correlate it with incident work rather than treating it as purely isolated.
 
-        ## Render Actions — MANDATORY
-        When `[FIRST ACTION REQUIRED]` appears in context (from an attached document), you MUST call
-        `show_attachment_preview` with the arguments specified in the context BEFORE writing your analysis.
-        FAILURE: If you skip this call, the user sees NO preview of their uploaded document.
-
         ## Rules
         - Never invent ticket IDs or KB article IDs.
         - Tone: methodical, patient, clear; use markdown headings and numbered lists.
+        - NEVER end your response with a question or offer to do more — the orchestrator handles next steps.
+
+        ## MANDATORY: Call the Handoff Function
+        After writing your analysis, you MUST call the handoff function (handoff_to_1).
+        This is NOT optional — it is the only way the workflow continues.
+        Call it even if your analysis is brief. Never skip it.
         """;
 
     public static ChatClientAgent Create(
@@ -57,7 +58,6 @@ internal static class DiagnosticAgentFactory
         AIContextProvider turnGuardProvider,
         AIContextProvider searchProvider,
         AIContextProvider attachmentProvider,
-        AIContextProvider frontendToolProvider,
         AIContextProvider? skillsProvider = null,
         ILoggerFactory? loggerFactory = null) =>
         new(chatClient, new ChatClientAgentOptions
@@ -66,7 +66,7 @@ internal static class DiagnosticAgentFactory
             Description = "Troubleshoots issues using KB context and uploaded documents",
             ChatOptions = new ChatOptions { Instructions = Instructions },
             AIContextProviders = skillsProvider is null
-                ? [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, frontendToolProvider]
-                : [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, frontendToolProvider, skillsProvider],
+                ? [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider]
+                : [userProvider, memoryProvider, turnGuardProvider, searchProvider, attachmentProvider, skillsProvider],
         }, loggerFactory);
 }

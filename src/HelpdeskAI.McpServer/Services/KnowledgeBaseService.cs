@@ -100,7 +100,9 @@ public sealed class KnowledgeBaseService(
                 MatchQuality: "exact");
         }
 
+        // Only consider agent-indexed articles for refresh; never overwrite seeded KB articles.
         var sameTopic = candidates.FirstOrDefault(article =>
+            article.Id.StartsWith("KB-up-", StringComparison.OrdinalIgnoreCase) &&
             Normalize(article.Category) == normalizedCategory &&
             AreTopicsSimilar(normalizedTitle, Normalize(article.Title), normalizedContent, Normalize(article.Content)));
 

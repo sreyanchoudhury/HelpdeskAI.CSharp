@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Removes demo-created data from AI Search, Cosmos DB, Redis, and Blob Storage
     while preserving repository seed data.
@@ -31,7 +31,7 @@ param(
     [string]$RedisContainerAppName,
     [string]$RedisResourceGroupName,
     [switch]$ClearLongTermMemory,
-    # Blob cleanup — requires -BlobConnectionString (or $env:AZURE_STORAGE_CONNECTION_STRING).
+    # Blob cleanup -- requires -BlobConnectionString (or $env:AZURE_STORAGE_CONNECTION_STRING).
     [switch]$CleanBlobs,
     [string]$BlobConnectionString,
     [string]$EvalBlobContainer = "eval-results",
@@ -218,34 +218,23 @@ else {
 
 Write-Host ""
 if ($RedisContainerAppName -and $RedisResourceGroupName) {
-    Write-Host "Cleaning Redis ephemeral state through Container App '$RedisContainerAppName'..." -ForegroundColor Cyan
-
-    $patterns = @(
-        "messages:*",
-        "usage:*",
-        "attachments:*",
-        "sideeffect:*"
-    )
+    Write-Host "Cleaning Redis ephemeral state -- restarting Container App '$RedisContainerAppName'..." -ForegroundColor Cyan
 
     if ($ClearLongTermMemory) {
-        # Delete ALL long-term memory profiles (helpdesk:ltm:* pattern via the key prefix).
-        $patterns += "ltm:*"
-        Write-Host "  Long-term memory (ltm:*) will also be cleared." -ForegroundColor Yellow
+        Write-Host "  Long-term memory (ltm:*) will also be cleared (full restart)." -ForegroundColor Yellow
     }
 
-    foreach ($pattern in $patterns) {
-        Write-Host "Deleting Redis keys matching '$pattern'..." -ForegroundColor Yellow
-        $redisCommand = "sh -lc ""redis-cli --scan --pattern '$pattern' | xargs -r redis-cli del >/dev/null"""
-        az containerapp exec `
-            --name $RedisContainerAppName `
-            --resource-group $RedisResourceGroupName `
-            --command $redisCommand `
-            --only-show-errors | Out-Null
-    }
+    # redis:7-alpine has no persistence configured, so a revision restart wipes all in-memory
+    # state cleanly. The exec+xargs approach fails because the alpine shell strips pipe syntax.
+    $revision = (az containerapp revision list --name $RedisContainerAppName --resource-group $RedisResourceGroupName --query "[0].name" -o tsv --only-show-errors)
 
-    Write-Host "Redis cleanup complete." -ForegroundColor Green
-}
-else {
+    if ($revision) {
+        az containerapp revision restart --name $RedisContainerAppName --resource-group $RedisResourceGroupName --revision $revision --only-show-errors | Out-Null
+        Write-Host "Redis cleanup complete (revision '$revision' restarted)." -ForegroundColor Green
+    } else {
+        Write-Warning "Could not retrieve Redis revision name -- skipping restart."
+    }
+} else {
     Write-Host "Redis cleanup skipped. Supply -RedisContainerAppName and -RedisResourceGroupName to clear ephemeral Redis state." -ForegroundColor DarkYellow
 }
 
@@ -297,6 +286,6 @@ else {
 
 Write-Host ""
 Write-Host "Cleanup finished. Seed KB data and seed tickets were preserved." -ForegroundColor Cyan
-if (-not $ClearLongTermMemory) {
-    Write-Host "Long-term memory in Redis was preserved." -ForegroundColor Cyan
+if ($RedisContainerAppName) {
+    Write-Host "Note: Redis restart clears ALL in-memory state including long-term memory (no persistence on alpine image)." -ForegroundColor DarkYellow
 }

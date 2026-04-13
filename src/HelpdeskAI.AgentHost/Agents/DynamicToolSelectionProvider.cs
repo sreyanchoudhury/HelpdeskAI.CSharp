@@ -66,6 +66,15 @@ internal sealed class DynamicToolSelectionProvider : AIContextProvider
             _allowedTools is not null ? string.Join(",", _allowedTools) : "ALL",
             toolIndex.Count);
 
+        // Specialist agents have a small, pre-defined tool set — semantic ranking adds noise
+        // and can drop critical tools (e.g. create_ticket ranked below search_tickets).
+        // Always return the full filtered set; skip embedding entirely.
+        if (_allowedTools is not null)
+        {
+            _logger.LogDebug("Specialist agent — returning all {Count} allowed tools without ranking", toolIndex.Count);
+            return new AIContext { Tools = [.. toolIndex.Select(x => x.Tool).Cast<AITool>()] };
+        }
+
         // If the total tool count is at or below topK, ranking adds nothing — skip the
         // embedding API call entirely and return all tools directly.
         if (toolIndex.Count <= _topK)

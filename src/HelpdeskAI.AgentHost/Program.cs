@@ -180,10 +180,14 @@ IChatClient azureClientV2 = string.IsNullOrWhiteSpace(aiSettings.ApiKey)
 // Additional middleware vs v1:
 //   - ThreadIdPreservingChatClient: guards AsyncLocal<ThreadIdContext> across MAF workflow
 //     handoff boundaries so attachment/history providers resolve the correct session.
+// NOTE: UseFunctionInvocation() is intentionally OMITTED from this pipeline.
+// MAF's ChatClientAgent inserts its own handoff-aware FunctionInvokingChatClient when none is
+// present in the IChatClient chain.  If we add UseFunctionInvocation() here it runs INSIDE the
+// pipeline and consumes transfer_to_* function calls before the workflow runtime can intercept
+// them — causing the model to narrate the transfer as plain text instead of executing it.
 builder.Services.AddKeyedSingleton("v2-chat", (services, _) =>
 {
     IChatClient pipeline = new ChatClientBuilder(azureClientV2)
-        .UseFunctionInvocation()
         .Use((inner, svc) => new ContentSafetyGuardChatClient(
             inner,
             svc.GetRequiredService<IRedisService>(),
@@ -258,20 +262,19 @@ var attachmentProvider = new AttachmentContextProvider(
     app.Services.GetRequiredService<IAttachmentStore>(),
     loggerFactory.CreateLogger<AttachmentContextProvider>());
 
-// v2 diagnostic_agent uses a CLEARING provider (LoadAndClearAsync). This is safe because
-// MAF resolves providers per-agent-invocation, and the orchestrator (peek) always runs first
-// in a fresh conversation. In continuation scenarios where diagnostic_agent is already active,
-// it clears the attachment — which is fine because it's already analyzing it.
+// v2 diagnostic_agent: clearing (peek=false) + no render hint (show_attachment_preview not in v2).
 var v2DiagnosticAttachmentProvider = new AttachmentContextProvider(
     app.Services.GetRequiredService<IAttachmentStore>(),
     loggerFactory.CreateLogger<AttachmentContextProvider>(),
-    peek: false);  // clearing — breaks the loop
+    peek: false,
+    suppressRenderHint: true);
 
 // v2 orchestrator uses PEEK (reads without clearing) so it can see the attachment to route.
 var v2OrchestratorAttachmentProvider = new AttachmentContextProvider(
     app.Services.GetRequiredService<IAttachmentStore>(),
     loggerFactory.CreateLogger<AttachmentContextProvider>(),
-    peek: true);
+    peek: true,
+    suppressRenderHint: true);
 
 // Tool index is built AFTER the HTTP server starts (via ApplicationStarted) so the
 // startup health probe passes immediately. Chat turns await this task (60 s guard).
@@ -334,20 +337,14 @@ var incidentToolProvider = new DynamicToolSelectionProvider(
     loggerFactory.CreateLogger<DynamicToolSelectionProvider>(),
     allowedTools: IncidentAgentFactory.AllowedTools);
 
-// Frontend tool forwarding: captures CopilotKit render tools (show_ticket_created, etc.)
-// from the AG-UI request boundary and provides them to ALL workflow agents. Works around the
-// MAF limitation where WorkflowHostAgent passes AgentRunOptions: null to all agents.
-var frontendToolProvider = new FrontendToolForwardingProvider(
-    loggerFactory.CreateLogger<FrontendToolForwardingProvider>());
-
 var chatClientV2 = app.Services.GetRequiredKeyedService<IChatClient>("v2-chat");
 
 var helpdeskWorkflow = HelpdeskWorkflowFactory.BuildWorkflow(
     chatClientV2,
     userProvider, memoryProvider, turnGuardProvider,
-    searchProvider, v2DiagnosticAttachmentProvider,  // diagnostic_agent: CLEAR (breaks loop)
-    v2OrchestratorAttachmentProvider,                // orchestrator: PEEK (sees attachment to route)
-    frontendToolProvider,
+    searchProvider,
+    v2DiagnosticAttachmentProvider,   // diagnostic_agent: CLEAR (breaks loop)
+    v2OrchestratorAttachmentProvider, // orchestrator: PEEK (sees attachment to route)
     ticketToolProvider, kbToolProvider, incidentToolProvider,
     skillsProvider,
     enableSensitiveData: enableSensitiveData,

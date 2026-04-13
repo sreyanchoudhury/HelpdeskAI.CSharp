@@ -1133,6 +1133,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const [page, setPage]       = useState<Page>("chat");
   const [tickets, setTickets]  = useState<Ticket[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [serverTicketCount, setServerTicketCount] = useState(0);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [incidentBannerVisible] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
@@ -1146,7 +1147,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
   const firstName = currentUser.name.split(" ")[0];
   const defaultGreeting = `Hi ${firstName}! What IT issue can I help you with today?`;
   const [chatInitial, setChatInitial] = useState(() => consumePendingChatInitial() ?? defaultGreeting);
-  useCopilotChat();
+  const { isLoading } = useCopilotChat();
 
   useEffect(() => {
     if (chatInitial === defaultGreeting) return;
@@ -1215,6 +1216,16 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
     setTickets(prev => [ticket, ...prev]);
     setRefreshKey(k => k + 1);
   }, []);
+
+  // Keep badge count in sync with server — refresh after each agent response and on mount.
+  // This ensures the count is accurate in v2 (where show_ticket_created is not called).
+  useEffect(() => {
+    if (isLoading) return;
+    fetch(`/api/tickets?requestedBy=${encodeURIComponent(currentUser.email)}`)
+      .then(r => r.ok ? r.json() as Promise<ServerTicket[]> : Promise.resolve([]))
+      .then(data => setServerTicketCount(data.length))
+      .catch(() => {});
+  }, [isLoading, currentUser.email]);
 
   const handleAttachFile = useCallback(async (file: File) => {
     const placeholder: AttachedFile = {
@@ -1406,7 +1417,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
             >
               <span>{item.icon}</span>
               {item.label}
-              {item.id === "tickets" && tickets.length > 0 && (
+              {item.id === "tickets" && Math.max(tickets.length, serverTicketCount) > 0 && (
                 <span style={{
                   marginLeft: "auto",
                   background: "#3d5afe",
@@ -1418,7 +1429,7 @@ export function HelpdeskChat({ currentUser }: { currentUser: CurrentUser }) {
                   minWidth: 18,
                   textAlign: "center",
                 }}>
-                  {tickets.length}
+                  {Math.max(tickets.length, serverTicketCount)}
                 </span>
               )}
             </button>

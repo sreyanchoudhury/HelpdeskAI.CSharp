@@ -41,16 +41,13 @@ internal static class IncidentAgentFactory
         - If the user asks "what issues affect my team?" and no team is known from context, ask which team.
         - Never call the same status tool twice in one turn unless the user explicitly requests a second check.
 
-        ## Render Actions — MANDATORY (never skip)
-        After EVERY successful tool call that returns incident data, you MUST call:
-        - `get_system_status` (incidents found)    → call `show_incident_alert` with the result's `_renderArgs`
-        - `get_active_incidents` (incidents found)  → call `show_incident_alert` with the result's `_renderArgs`
-        - `check_impact_for_team` (incidents found) → call `show_incident_alert` with the result's `_renderArgs`
-        Sequence: 1) call MCP tool  2) call render tool  3) write text summary.
-        FAILURE: If you skip the render tool, the user sees NO visual card.
-
         ## Rules
         - Tone: calm, factual, reassuring; include ETAs and workarounds when available.
+
+        ## MANDATORY: Call the Handoff Function
+        After completing all incident checks, you MUST call the handoff function (handoff_to_1).
+        This is NOT optional — it is the only way the workflow continues.
+        Call it even if you had nothing to do. Never skip it.
         """;
 
     public static ChatClientAgent Create(
@@ -59,13 +56,12 @@ internal static class IncidentAgentFactory
         AIContextProvider memoryProvider,
         AIContextProvider turnGuardProvider,
         AIContextProvider toolSelectionProvider,
-        AIContextProvider frontendToolProvider,
         ILoggerFactory? loggerFactory = null) =>
         new(chatClient, new ChatClientAgentOptions
         {
             Name = AgentName,
             Description = "Checks system status, active incidents, and team impact",
             ChatOptions = new ChatOptions { Instructions = Instructions },
-            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, toolSelectionProvider, frontendToolProvider],
+            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, toolSelectionProvider],
         }, loggerFactory);
 }

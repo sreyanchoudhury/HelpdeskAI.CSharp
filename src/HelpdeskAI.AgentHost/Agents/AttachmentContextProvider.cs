@@ -9,7 +9,8 @@ namespace HelpdeskAI.AgentHost.Agents;
 internal sealed class AttachmentContextProvider(
     IAttachmentStore attachmentStore,
     ILogger<AttachmentContextProvider> log,
-    bool peek = false) : AIContextProvider
+    bool peek = false,
+    bool suppressRenderHint = false) : AIContextProvider
 {
     // 5 000 chars ≈ ~1 100 tokens — covers ~2–3 pages; sufficient for most helpdesk attachments.
     private const int MaxExtractedTextLength = 5_000;
@@ -58,13 +59,13 @@ internal sealed class AttachmentContextProvider(
 
                 var blobArg  = att.BlobUrl is not null ? $", blobUrl=\"{att.BlobUrl}\"" : "";
                 var blobLine = att.BlobUrl is not null ? $"Download URL: {att.BlobUrl}\n" : "";
+                var renderHint = suppressRenderHint ? string.Empty :
+                    $"\n[FIRST ACTION REQUIRED]: call show_attachment_preview(fileName=\"{att.FileName}\", summary=\"<one sentence about the document above>\"{blobArg})";
                 messages.Add(new ChatMessage(ChatRole.System,
                     $"""
                     ## Attached Document: {att.FileName}
                     {blobLine}
-                    {text}
-
-                    [FIRST ACTION REQUIRED]: call show_attachment_preview(fileName="{att.FileName}", summary="<one sentence about the document above>"{blobArg})
+                    {text}{renderHint}
                     """));
 
                 log.LogInformation(

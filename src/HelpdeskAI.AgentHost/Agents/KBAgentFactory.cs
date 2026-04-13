@@ -44,21 +44,25 @@ internal static class KBAgentFactory
         ## Tool Rules
         - Call tools one at a time, sequentially.
         - `index_kb_article` → call ONCE per indexing request; combine summary, root cause, and resolution into one article.
+        - `index_kb_article` → ALWAYS provide `category` (VPN | Email | Hardware | Network | Access | Printing | Software | Other). Derive it from the content topic — never leave it blank.
         - If `index_kb_article` returns an existing article for the same thread/request, treat it as success and continue with that article ID.
         - Always search before claiming no article exists.
 
-        ## Render Actions — MANDATORY (never skip)
-        After EVERY successful MCP tool call, you MUST call the matching frontend render tool:
-        - `search_kb_articles` (1 result)   → call `show_kb_article`          with the result's `_renderArgs`
-        - `search_kb_articles` (2+ results)  → call `suggest_related_articles` with the result's `_renderArgs`
-        - `index_kb_article`                 → call `show_kb_article`          with the result's `_renderArgs`
-        Sequence: 1) call MCP tool  2) call render tool  3) write text summary.
-        FAILURE: If you skip the render tool, the user sees NO visual card.
+        ## Deduplication
+        The server handles idempotency — `index_kb_article` returns an existing article if one
+        already covers the same topic. Do NOT call `search_kb_articles` as a pre-check before indexing.
+        Just call `index_kb_article` and report what the server returned.
+        Report clearly: "Indexed new article [ID]." or "Server returned existing article [ID] — no duplicate created."
 
         ## Rules
         - Never invent article IDs — use the IDs returned by the tools.
         - If a topic is not in the KB, say so honestly — do not hallucinate content.
         - Tone: professional, concise; use markdown for steps.
+
+        ## MANDATORY: Call the Handoff Function
+        After completing all KB actions, you MUST call the handoff function (handoff_to_1).
+        This is NOT optional — it is the only way the workflow continues.
+        Call it even if you had nothing to do. Never skip it.
         """;
 
     public static ChatClientAgent Create(
@@ -68,13 +72,12 @@ internal static class KBAgentFactory
         AIContextProvider turnGuardProvider,
         AIContextProvider searchProvider,
         AIContextProvider toolSelectionProvider,
-        AIContextProvider frontendToolProvider,
         ILoggerFactory? loggerFactory = null) =>
         new(chatClient, new ChatClientAgentOptions
         {
             Name = AgentName,
             Description = "Searches and indexes knowledge base articles",
             ChatOptions = new ChatOptions { Instructions = Instructions },
-            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, searchProvider, toolSelectionProvider, frontendToolProvider],
+            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, searchProvider, toolSelectionProvider],
         }, loggerFactory);
 }

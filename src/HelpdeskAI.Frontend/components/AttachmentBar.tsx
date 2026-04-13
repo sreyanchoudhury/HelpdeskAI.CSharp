@@ -27,7 +27,7 @@ export function AttachmentBar({ attachments, onAdd, onRemove }: Props) {
     }}>
       {/* Paperclip button */}
       <button
-        title="Attach a .txt file"
+        title="Attach a file (.txt, .pdf, .docx, .png, .jpg)"
         onClick={() => inputRef.current?.click()}
         style={{
           background: "none", border: "1px solid #ffffff22",
@@ -51,7 +51,7 @@ export function AttachmentBar({ attachments, onAdd, onRemove }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept=".txt,text/plain"
+        accept=".txt,.pdf,.docx,.png,.jpg,.jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"
         style={{ display: "none" }}
         onChange={e => {
           const f = e.target.files?.[0];

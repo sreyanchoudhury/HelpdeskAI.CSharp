@@ -101,32 +101,38 @@ If you have an attachment prepared, use the attachment workflow. If not, use the
 
 ### Option A - Attachment workflow (preferred)
 
-**Do:** Upload the prepared incident screenshot or file.
+**Do:** Upload the prepared incident document (PDF, DOCX, TXT, or image).
 
-**Do:** Send:
+**Do:** Send (Turn 1 — analysis):
 
 ```text
-What is this incident about? Once you've analyzed it, do the following in order:
-1. summarize the incident
-2. provide a resolution
-3. add to kb, if not already present
-4. show the kb, either new or existing
-5. create a ticket
-6. assign it to me
-7. show me the ticket
-8. re-summarize all actions
+Help me analyze the attached issue document.
 ```
 
 **Say while it runs:**
-> "Now we're seeing why a framework matters. MAF is handling the agent boundary, the workflow path, the handoff model, the context surface, and the streaming contract. The business actions sit on top through MCP, and the attachment path is where Azure Document Intelligence and vision services start adding multimodal capability."
+> "The orchestrator sees the attachment and routes to the diagnostic specialist. Document Intelligence extracts the content; the specialist reasons over it and hands back to the orchestrator."
+
+**Do:** Once the analysis response arrives, send (Turn 2 — actions):
+
+```text
+Now take the necessary actions:
+1. Add the resolution to KB, if not already present
+2. Create a ticket for tracking, if one does not already exist
+3. Assign the ticket to me, if newly created
+4. Re-summarize all actions taken
+Note: ensure no duplication happens.
+```
+
+**Say while it runs:**
+> "Now we're seeing why a framework matters. MAF is handling the agent boundary, the workflow path, the handoff model, the context surface, and the streaming contract. The business actions sit on top through MCP — KB indexing through AI Search, ticket persistence through Cosmos DB."
 
 **Optional follow-up line while the turn is still running:**
 > "This is also where skills matter. If the issue looks like a major incident, a security issue, or an escalation case, the agent can load that behavior progressively instead of hardcoding everything into one prompt."
 
 **Point out while it completes:**
-- KB card
-- ticket card
-- structured artifacts instead of plain text only
+- KB article indexed (article ID in the summary)
+- Ticket created and assigned (ticket ID in the summary)
+- Clean final summary from the orchestrator
 
 **Say:**
 > "The visible result is HelpdeskAI. The important part is the MAF architecture under it: orchestration, tool use, streaming, and traceability."
@@ -265,7 +271,7 @@ The fallback story is still strong if you can show:
 > MCP for tools, AG-UI for streaming, OpenTelemetry for traceability, and Azure services for the operational substrate. MAF is the lead framework, but the surrounding protocols matter a lot.
 
 **Q: Are you using skills, or only prompts and tools?**
-> We are using skills today through `FileAgentSkillsProvider`. They are loaded progressively and help shape behavior for cases like escalation, major incidents, security-sensitive requests, VIP handling, and frustrated users.
+> We are using skills today through `AgentSkillsProvider`. They are loaded progressively and help shape behavior for cases like escalation, major incidents, security-sensitive requests, VIP handling, and frustrated users.
 
 **Q: Is this production-ready?**
 > It is an MVP designed to be production-shaped. It already includes auth, memory, ticket persistence, knowledge indexing, observability, responsive UX, and workflow routing. A real production rollout would still need deeper hardening, governance, and organizational readiness.

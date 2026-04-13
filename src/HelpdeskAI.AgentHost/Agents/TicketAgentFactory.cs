@@ -46,24 +46,27 @@ internal static class TicketAgentFactory
         - Call tools one at a time, sequentially — never in parallel.
         - `create_ticket` → call ONCE per new incident; NEVER to record actions on an existing ticket.
         - `assign_ticket` / `update_ticket_status` / `add_ticket_comment` → always use the ID from `create_ticket` or `search_tickets`.
-        - If `create_ticket` returns an existing ticket for the same thread/request, treat it as success and continue with that ticket ID.
         - "Assign it to me" or "assign to me" = use the current user's email from `## User`.
         - When asked to create AND assign in the same request: call `create_ticket` first,
           then call `assign_ticket` with the returned ticket ID. Do both without asking.
         - If the user sounds blocked, urgent, or frustrated, reflect that in ticket priority and escalation choices instead of treating it like a routine request.
 
-        ## Render Actions — MANDATORY (never skip)
-        After EVERY successful MCP tool call, you MUST call the matching frontend render tool:
-        - `create_ticket`  → call `show_ticket_created` with the result's `_renderArgs`
-        - `get_ticket`     → call `show_ticket_details` with the result's `_renderArgs`
-        - `search_tickets` → call `show_my_tickets`     with the result's `_renderArgs`
-        Sequence: 1) call MCP tool  2) call render tool  3) write text summary.
-        FAILURE: If you skip the render tool, the user sees NO visual card.
+        ## Deduplication
+        The server handles idempotency — if a ticket was already created for this session it will
+        return the existing one. Do NOT call `search_tickets` as a pre-check before `create_ticket`.
+        Only call `assign_ticket` if `create_ticket` returned a ticket ID in THIS turn.
+        NEVER report a ticket as created without a real ticket ID from the `create_ticket` tool result.
+        Report clearly: "Created ticket #<actual-ID>." or "Server returned existing ticket #<actual-ID>."
 
         ## Rules
         - Never invent ticket IDs — use the tools.
         - For security incidents: "Please call the Security Hotline: ext. 9911".
         - Tone: professional, concise, empathetic; use markdown for steps.
+
+        ## MANDATORY: Call the Handoff Function
+        After completing all ticket actions, you MUST call the handoff function (handoff_to_1).
+        This is NOT optional — it is the only way the workflow continues.
+        Call it even if you had nothing to do. Never skip it.
         """;
 
     public static ChatClientAgent Create(
@@ -72,13 +75,12 @@ internal static class TicketAgentFactory
         AIContextProvider memoryProvider,
         AIContextProvider turnGuardProvider,
         AIContextProvider toolSelectionProvider,
-        AIContextProvider frontendToolProvider,
         ILoggerFactory? loggerFactory = null) =>
         new(chatClient, new ChatClientAgentOptions
         {
             Name = AgentName,
             Description = "Manages IT support tickets: create, search, update, assign, comment",
             ChatOptions = new ChatOptions { Instructions = Instructions },
-            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, toolSelectionProvider, frontendToolProvider],
+            AIContextProviders = [userProvider, memoryProvider, turnGuardProvider, toolSelectionProvider],
         }, loggerFactory);
 }

@@ -34,6 +34,8 @@ internal sealed class RetrySafeSideEffectTool : DelegatingAIFunction
         AIFunctionArguments arguments,
         CancellationToken cancellationToken)
     {
+        // Unwrap MEAI TextContent before any guard checks so callers receive the
+        // raw MCP JSON string rather than a serialised TextContent envelope.
         if (!ShouldGuard(_toolName) ||
             ThreadIdContext.Current is not { Length: > 0 } threadId ||
             !TryBuildOperationKey(arguments, out var operationKey))
@@ -223,10 +225,12 @@ internal sealed class RetrySafeSideEffectTool : DelegatingAIFunction
     private static string ToPayloadString(object? result) =>
         result switch
         {
-            null => string.Empty,
-            string s => s,
+            null                                                                              => string.Empty,
+            string s                                                                          => s,
+            // MEAI wraps MCP tool results in TextContent; unwrap to get the raw JSON string.
+            TextContent tc                                                                    => tc.Text ?? string.Empty,
             JsonElement elem when elem.ValueKind is JsonValueKind.Object or JsonValueKind.Array => elem.GetRawText(),
-            JsonElement elem => elem.ToString(),
-            _ => JsonSerializer.Serialize(result)
+            JsonElement elem                                                                   => elem.ToString(),
+            _                                                                                 => JsonSerializer.Serialize(result)
         };
 }

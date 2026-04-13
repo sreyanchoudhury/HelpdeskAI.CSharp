@@ -4,6 +4,22 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
+## [Unreleased] - 2026-04-13 (v2 Multi-Agent Workflow Fixes)
+
+### Fixed
+
+- **v2 handoff function names** — all specialist agents previously referenced `transfer_to_*` names (e.g. `transfer_to_orchestrator`) in their instructions. MAF's `HandoffWorkflowBuilder` injects handoff tools named `handoff_to_<N>` (sequential integers per target list). The mismatch caused agents to narrate the transfer as plain text instead of calling a real function. Removed all `transfer_to_*` references from every specialist and orchestrator instruction set.
+- **Mandatory handoff completion** — MAF's default `HandoffInstructions` say "if appropriate", giving agents permission to skip the handoff after writing their response. Specialists were completing their text output and not calling the handoff function, ending the workflow prematurely. Fixed by overriding `HandoffInstructions` via `.WithHandoffInstructions()` with mandatory language, and updating each specialist to explicitly name `handoff_to_1` as required.
+- **`HandoffToolCallFilteringBehavior.All` stripping domain tool results** — the workflow was configured with `All` filtering, which removed all function-call/tool-result messages (including `create_ticket`, `index_kb_article`) from conversation history before each specialist run. Specialists could not see prior tool outputs, causing duplicate ticket/KB creation on retry. Reverted to the default `HandoffOnly` behavior (strips only the handoff calls, preserves domain tool results).
+- **`UseFunctionInvocation()` intercepting handoff calls** — the v2 `IChatClient` pipeline included `UseFunctionInvocation()`, which consumed `handoff_to_*` function calls before MAF's workflow runtime could intercept and route them, causing the workflow to terminate after the first specialist. Removed from the v2-chat pipeline; `ChatClientAgent` inserts its own handoff-aware function invoker when none is present in the chain. The v1 pipeline is unchanged.
+- **Cleanup script PowerShell 5.1 compatibility** — `infra/cleanup-demo-data.ps1` failed on PowerShell 5.1 due to (a) backtick line-continuation inside an external-command variable assignment losing block context and (b) UTF-8 without BOM encoding causing the PS5.1 parser to misinterpret multi-byte characters and drop closing braces. Fixed by collapsing the backtick chain to single-line calls and saving the file as UTF-8 with BOM.
+
+### Changed
+
+- **v2 workflow two-step interaction pattern** — for the conference demo, the reliable v2 flow is: (1) attach the incident document and ask "help me analyze the attached issue document"; (2) after analysis, send a second prompt listing the remaining actions (add to KB, create ticket, assign, re-summarize). The orchestrator executes the full action chain from step 2. Single-turn all-in-one prompts with attachments are structurally supported but more sensitive to model instruction-following variance.
+
+---
+
 ## [Unreleased] - 2026-04-06 (Model Sync + Wrapper Refactor)
 
 ### Changed
