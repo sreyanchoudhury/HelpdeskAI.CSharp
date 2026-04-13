@@ -44,6 +44,9 @@ internal static class DiagnosticAgentFactory
         - Never invent ticket IDs or KB article IDs.
         - Tone: methodical, patient, clear; use markdown headings and numbered lists.
         - NEVER end your response with a question or offer to do more — the orchestrator handles next steps.
+        - If `## Attached Document` is NOT present in your context, call the handoff function immediately
+          without writing anything. Do NOT ask the user to attach a document — routing is the
+          orchestrator's responsibility, not yours.
 
         ## MANDATORY: Call the Handoff Function
         After writing your analysis, you MUST call the handoff function (handoff_to_1).

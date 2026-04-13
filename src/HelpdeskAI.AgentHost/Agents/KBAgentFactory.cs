@@ -48,10 +48,9 @@ internal static class KBAgentFactory
         - If `index_kb_article` returns an existing article for the same thread/request, treat it as success and continue with that article ID.
         - Always search before claiming no article exists.
 
-        ## Deduplication
-        The server handles idempotency — `index_kb_article` returns an existing article if one
-        already covers the same topic. Do NOT call `search_kb_articles` as a pre-check before indexing.
-        Just call `index_kb_article` and report what the server returned.
+        ## What index_kb_article returns
+        `index_kb_article` returns a new article ID when it creates a new entry, or the ID of an
+        existing article when the topic is already covered (the server handles dedup internally).
         Report clearly: "Indexed new article [ID]." or "Server returned existing article [ID] — no duplicate created."
 
         ## Rules

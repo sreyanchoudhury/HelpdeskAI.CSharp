@@ -52,11 +52,18 @@ internal static class TicketAgentFactory
         - If the user sounds blocked, urgent, or frustrated, reflect that in ticket priority and escalation choices instead of treating it like a routine request.
 
         ## Deduplication
-        The server handles idempotency — if a ticket was already created for this session it will
-        return the existing one. Do NOT call `search_tickets` as a pre-check before `create_ticket`.
-        Only call `assign_ticket` if `create_ticket` returned a ticket ID in THIS turn.
+        When the user says "if not already present", "if one does not already exist", "only if needed",
+        or any similar conditional, you MUST call `search_tickets` first with `requestedBy` set to the
+        current user's email (and optionally `category`) to check for existing open or in-progress tickets.
+        - Scan the returned titles and descriptions. If one clearly covers the same issue, report that
+          existing ticket ID and skip `create_ticket` entirely.
+        - Only call `create_ticket` when no matching ticket is found in the search results.
+        Within the same session the server also handles in-session retry safety, but cross-session checks
+        require this `search_tickets` pre-check — do NOT skip it when conditional language is present.
+        Only call `assign_ticket` if `create_ticket` returned a ticket ID in THIS turn (or you found an
+        existing unassigned ticket via `search_tickets`).
         NEVER report a ticket as created without a real ticket ID from the `create_ticket` tool result.
-        Report clearly: "Created ticket #<actual-ID>." or "Server returned existing ticket #<actual-ID>."
+        Report clearly: "Created ticket #<actual-ID>." or "Found existing ticket #<actual-ID> — skipped creation."
 
         ## Rules
         - Never invent ticket IDs — use the tools.

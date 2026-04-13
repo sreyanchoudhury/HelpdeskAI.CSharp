@@ -4,7 +4,7 @@ All notable changes to HelpdeskAI are recorded here.
 
 ---
 
-## [Unreleased] - 2026-04-13 (v2 Multi-Agent Workflow Fixes)
+## [Unreleased] - 2026-04-13 (Cross-Session Ticket Dedup + v2 Multi-Agent Workflow Fixes)
 
 ### Fixed
 
@@ -13,6 +13,11 @@ All notable changes to HelpdeskAI are recorded here.
 - **`HandoffToolCallFilteringBehavior.All` stripping domain tool results** — the workflow was configured with `All` filtering, which removed all function-call/tool-result messages (including `create_ticket`, `index_kb_article`) from conversation history before each specialist run. Specialists could not see prior tool outputs, causing duplicate ticket/KB creation on retry. Reverted to the default `HandoffOnly` behavior (strips only the handoff calls, preserves domain tool results).
 - **`UseFunctionInvocation()` intercepting handoff calls** — the v2 `IChatClient` pipeline included `UseFunctionInvocation()`, which consumed `handoff_to_*` function calls before MAF's workflow runtime could intercept and route them, causing the workflow to terminate after the first specialist. Removed from the v2-chat pipeline; `ChatClientAgent` inserts its own handoff-aware function invoker when none is present in the chain. The v1 pipeline is unchanged.
 - **Cleanup script PowerShell 5.1 compatibility** — `infra/cleanup-demo-data.ps1` failed on PowerShell 5.1 due to (a) backtick line-continuation inside an external-command variable assignment losing block context and (b) UTF-8 without BOM encoding causing the PS5.1 parser to misinterpret multi-byte characters and drop closing braces. Fixed by collapsing the backtick chain to single-line calls and saving the file as UTF-8 with BOM.
+
+- **Cross-session ticket deduplication** — `RetrySafeSideEffectTool` deduplicates `create_ticket` calls within a session using a `(operationKey, threadId)` key stored in Redis. A new browser session generates a new `threadId`, so the ledger was empty and a ticket was re-created for the same document. Fixed in `TicketAgentFactory` instructions: when the user includes conditional language ("if not already present", "if one does not already exist", etc.) the ticket agent is now required to call `search_tickets` first, scan for an existing open/in-progress ticket covering the same issue, and skip `create_ticket` if one is found. The KB side already handled this correctly via content-based dedup in `KnowledgeBaseService`.
+- **Diagnostic agent asking for attachment when none present** — after the orchestrator re-routed to the diagnostic specialist a second time (attachment already consumed), the agent had no document in context and would ask "Could you please attach the incident document?". Fixed by adding an explicit rule: if `## Attached Document` is absent from context, call the handoff function immediately without writing anything.
+- **Orchestrator skipping queued tasks** — the orchestrator would sometimes write the final summary before all queued specialists had been called, because it was not explicitly re-evaluating the task queue from conversation history after each handoff. Fixed by: (a) requiring a full history-scan after every specialist return to confirm which tasks are complete before deciding to continue vs. summarize; (b) clarifying that the only permitted text output is the final summary — no mid-workflow narration.
+- **KB agent contradictory deduplication instructions** — the `EXECUTE IMMEDIATELY` section instructed the agent to call `search_kb_articles` first on conditional requests, while the `## Deduplication` section said the opposite. The model picked inconsistently between turns. Resolved by removing the contradictory dedup section and replacing it with a factual description of what `index_kb_article` returns (new ID or existing ID), leaving the search-first logic only in the conditional-check block.
 
 ### Changed
 
