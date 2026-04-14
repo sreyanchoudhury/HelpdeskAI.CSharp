@@ -8,15 +8,16 @@
       - KB articles whose IDs are present in infra/seed-data.json
       - Seeded ticket documents whose seq is <= SeedTicketMaxSeq
       - Long-term Redis memory (ltm:*) unless -ClearLongTermMemory is supplied
-      - Recent eval blobs (within BlobAgeDays) and all non-eval blobs
+      - Recent eval blobs (within BlobAgeDays)
 
     It deletes:
       - Agent-indexed or manually added KB documents not present in seed-data.json
       - Cosmos ticket documents above the configured seed threshold
       - Ephemeral Redis state for chat history, attachments, usage snapshots, and retry-safe side-effect ledgers
+      - (-CleanAttachments) All blobs in the helpdesk-attachments container
       - (-CleanBlobs) Eval result blobs in the eval-results container older than BlobAgeDays days
 
-    Switches -CleanBlobs and -ClearLongTermMemory are opt-in and off by default.
+    Switches -CleanAttachments, -CleanBlobs, and -ClearLongTermMemory are opt-in and off by default.
 #>
 
 param(
@@ -32,6 +33,8 @@ param(
     [string]$RedisResourceGroupName,
     [switch]$ClearLongTermMemory,
     # Blob cleanup -- requires -BlobConnectionString (or $env:AZURE_STORAGE_CONNECTION_STRING).
+    [switch]$CleanAttachments,
+    [string]$AttachmentBlobContainer = "helpdesk-attachments",
     [switch]$CleanBlobs,
     [string]$BlobConnectionString,
     [string]$EvalBlobContainer = "eval-results",
@@ -236,6 +239,20 @@ if ($RedisContainerAppName -and $RedisResourceGroupName) {
     }
 } else {
     Write-Host "Redis cleanup skipped. Supply -RedisContainerAppName and -RedisResourceGroupName to clear ephemeral Redis state." -ForegroundColor DarkYellow
+}
+
+Write-Host ""
+if ($CleanAttachments) {
+    $connStr = if ($BlobConnectionString) { $BlobConnectionString } else { $env:AZURE_STORAGE_CONNECTION_STRING }
+    if (-not $connStr) {
+        Write-Warning "Attachment cleanup skipped: provide -BlobConnectionString or set `$env:AZURE_STORAGE_CONNECTION_STRING."
+    } else {
+        Write-Host "Deleting all blobs in '$AttachmentBlobContainer'..." -ForegroundColor Cyan
+        az storage blob delete-batch --source $AttachmentBlobContainer --connection-string $connStr --only-show-errors | Out-Null
+        Write-Host "Attachment cleanup complete." -ForegroundColor Green
+    }
+} else {
+    Write-Host "Attachment cleanup skipped. Pass -CleanAttachments to clear uploaded files." -ForegroundColor DarkYellow
 }
 
 Write-Host ""
