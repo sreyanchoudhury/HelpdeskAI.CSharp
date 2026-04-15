@@ -46,7 +46,7 @@ $ErrorActionPreference = "Stop"
 $searchApiVersion = "2024-07-01"
 $searchBase = $SearchEndpoint.TrimEnd("/")
 $searchHeaders = @{
-    "api-key" = $SearchAdminKey
+    "api-key"      = $SearchAdminKey
     "Content-Type" = "application/json"
 }
 
@@ -72,11 +72,13 @@ $searchBody = @{
 } | ConvertTo-Json
 
 try {
-    $searchResult = Invoke-RestMethod `
-        -Method POST `
-        -Uri "$searchBase/indexes/$SearchIndexName/docs/search?api-version=$searchApiVersion" `
-        -Headers $searchHeaders `
-        -Body $searchBody
+    $listParams = @{
+        Method  = "POST"
+        Uri     = "$searchBase/indexes/$SearchIndexName/docs/search?api-version=$searchApiVersion"
+        Headers = $searchHeaders
+        Body    = $searchBody
+    }
+    $searchResult = Invoke-RestMethod @listParams
 
     $kbDeletes = @()
     foreach ($doc in $searchResult.value) {
@@ -84,7 +86,7 @@ try {
         if (-not $seedKbLookup.ContainsKey($id)) {
             $kbDeletes += @{
                 "@search.action" = "delete"
-                id = $id
+                id               = $id
             }
         }
     }
@@ -95,11 +97,13 @@ try {
     else {
         Write-Host "Deleting $($kbDeletes.Count) non-seed AI Search document(s)..." -ForegroundColor Yellow
         $deleteBody = @{ value = $kbDeletes } | ConvertTo-Json -Depth 6
-        Invoke-RestMethod `
-            -Method POST `
-            -Uri "$searchBase/indexes/$SearchIndexName/docs/index?api-version=$searchApiVersion" `
-            -Headers $searchHeaders `
-            -Body ([System.Text.Encoding]::UTF8.GetBytes($deleteBody)) | Out-Null
+        $deleteParams = @{
+            Method  = "POST"
+            Uri     = "$searchBase/indexes/$SearchIndexName/docs/index?api-version=$searchApiVersion"
+            Headers = $searchHeaders
+            Body    = [System.Text.Encoding]::UTF8.GetBytes($deleteBody)
+        }
+        Invoke-RestMethod @deleteParams | Out-Null
         Write-Host "AI Search cleanup complete." -ForegroundColor Green
     }
 }
@@ -147,7 +151,7 @@ function Invoke-CosmosRest {
     $auth = New-CosmosAuthHeader -Verb $Verb -ResourceType $ResourceType -ResourceLink $ResourceLink -Date $date -Key $Key
 
     $headers = @{
-        "x-ms-date" = $date
+        "x-ms-date"    = $date
         "x-ms-version" = "2018-12-31"
         "authorization" = $auth
     }
@@ -159,13 +163,13 @@ function Invoke-CosmosRest {
     }
 
     $params = @{
-        Method = $Verb
-        Uri = "$($CosmosEndpoint.TrimEnd('/'))/$Path"
+        Method  = $Verb
+        Uri     = "$($CosmosEndpoint.TrimEnd('/'))/$Path"
         Headers = $headers
     }
 
     if ($Body) {
-        $params["Body"] = $Body
+        $params["Body"]        = $Body
         $params["ContentType"] = "application/query+json"
     }
 
@@ -174,10 +178,10 @@ function Invoke-CosmosRest {
 
 $cosmosResourceLink = "dbs/$CosmosDatabaseName/colls/$CosmosContainerName"
 $queryBody = @{
-    query = "SELECT c.id, c.seq FROM c WHERE c.seq > @seedTicketMaxSeq"
+    query      = "SELECT c.id, c.seq FROM c WHERE c.seq > @seedTicketMaxSeq"
     parameters = @(
         @{
-            name = "@seedTicketMaxSeq"
+            name  = "@seedTicketMaxSeq"
             value = $SeedTicketMaxSeq
         }
     )
@@ -185,17 +189,19 @@ $queryBody = @{
 
 Write-Host "Querying Cosmos DB for non-seed tickets (seq > $SeedTicketMaxSeq)..." -ForegroundColor Cyan
 
-$queryResult = Invoke-CosmosRest `
-    -Verb "POST" `
-    -ResourceType "docs" `
-    -ResourceLink $cosmosResourceLink `
-    -Path "$cosmosResourceLink/docs" `
-    -Key $CosmosPrimaryKey `
-    -Body $queryBody `
-    -ExtraHeaders @{
-        "x-ms-documentdb-isquery" = "True"
+$queryParams = @{
+    Verb         = "POST"
+    ResourceType = "docs"
+    ResourceLink = $cosmosResourceLink
+    Path         = "$cosmosResourceLink/docs"
+    Key          = $CosmosPrimaryKey
+    Body         = $queryBody
+    ExtraHeaders = @{
+        "x-ms-documentdb-isquery"                   = "True"
         "x-ms-documentdb-query-enablecrosspartition" = "True"
     }
+}
+$queryResult = Invoke-CosmosRest @queryParams
 
 $docsToDelete = @($queryResult.Documents)
 if ($docsToDelete.Count -eq 0) {
@@ -204,17 +210,19 @@ if ($docsToDelete.Count -eq 0) {
 else {
     Write-Host "Deleting $($docsToDelete.Count) non-seed ticket document(s)..." -ForegroundColor Yellow
     foreach ($doc in $docsToDelete) {
-        $docId = [string]$doc.id
+        $docId   = [string]$doc.id
         $docLink = "$cosmosResourceLink/docs/$docId"
-        Invoke-CosmosRest `
-            -Verb "DELETE" `
-            -ResourceType "docs" `
-            -ResourceLink $docLink `
-            -Path "$docLink" `
-            -Key $CosmosPrimaryKey `
-            -ExtraHeaders @{
+        $deleteDocParams = @{
+            Verb         = "DELETE"
+            ResourceType = "docs"
+            ResourceLink = $docLink
+            Path         = $docLink
+            Key          = $CosmosPrimaryKey
+            ExtraHeaders = @{
                 "x-ms-documentdb-partitionkey" = "[`"$docId`"]"
-            } | Out-Null
+            }
+        }
+        Invoke-CosmosRest @deleteDocParams | Out-Null
     }
     Write-Host "Cosmos cleanup complete." -ForegroundColor Green
 }
@@ -234,10 +242,12 @@ if ($RedisContainerAppName -and $RedisResourceGroupName) {
     if ($revision) {
         az containerapp revision restart --name $RedisContainerAppName --resource-group $RedisResourceGroupName --revision $revision --only-show-errors | Out-Null
         Write-Host "Redis cleanup complete (revision '$revision' restarted)." -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Warning "Could not retrieve Redis revision name -- skipping restart."
     }
-} else {
+}
+else {
     Write-Host "Redis cleanup skipped. Supply -RedisContainerAppName and -RedisResourceGroupName to clear ephemeral Redis state." -ForegroundColor DarkYellow
 }
 
@@ -245,13 +255,15 @@ Write-Host ""
 if ($CleanAttachments) {
     $connStr = if ($BlobConnectionString) { $BlobConnectionString } else { $env:AZURE_STORAGE_CONNECTION_STRING }
     if (-not $connStr) {
-        Write-Warning "Attachment cleanup skipped: provide -BlobConnectionString or set `$env:AZURE_STORAGE_CONNECTION_STRING."
-    } else {
+        Write-Warning "Attachment cleanup skipped: provide -BlobConnectionString or set AZURE_STORAGE_CONNECTION_STRING."
+    }
+    else {
         Write-Host "Deleting all blobs in '$AttachmentBlobContainer'..." -ForegroundColor Cyan
         az storage blob delete-batch --source $AttachmentBlobContainer --connection-string $connStr --only-show-errors | Out-Null
         Write-Host "Attachment cleanup complete." -ForegroundColor Green
     }
-} else {
+}
+else {
     Write-Host "Attachment cleanup skipped. Pass -CleanAttachments to clear uploaded files." -ForegroundColor DarkYellow
 }
 
@@ -259,20 +271,16 @@ Write-Host ""
 if ($CleanBlobs) {
     $connStr = if ($BlobConnectionString) { $BlobConnectionString } else { $env:AZURE_STORAGE_CONNECTION_STRING }
     if (-not $connStr) {
-        Write-Warning "Blob cleanup skipped: provide -BlobConnectionString or set `$env:AZURE_STORAGE_CONNECTION_STRING."
+        Write-Warning "Blob cleanup skipped: provide -BlobConnectionString or set AZURE_STORAGE_CONNECTION_STRING."
     }
     else {
-        $cutoff = (Get-Date).AddDays(-$BlobAgeDays).ToString("o")
+        $cutoff  = (Get-Date).AddDays(-$BlobAgeDays).ToString("o")
         Write-Host "Cleaning eval blobs in '$EvalBlobContainer' older than $BlobAgeDays days (before $cutoff)..." -ForegroundColor Cyan
 
         # List blobs and filter by LastModified < cutoff to avoid the --if-unmodified-since
         # batch quirk that deletes EVERYTHING when the header is mis-formatted.
-        $blobList = az storage blob list `
-            --container-name $EvalBlobContainer `
-            --connection-string $connStr `
-            --query "[].{name:name, modified:properties.lastModified}" `
-            --output json `
-            --only-show-errors 2>$null | ConvertFrom-Json
+        $blobListJson = az storage blob list --container-name $EvalBlobContainer --connection-string $connStr --query "[].{name:name, modified:properties.lastModified}" --output json --only-show-errors 2>$null
+        $blobList = $blobListJson | ConvertFrom-Json
 
         if ($null -eq $blobList -or $blobList.Count -eq 0) {
             Write-Host "Blob cleanup: no blobs found in '$EvalBlobContainer'." -ForegroundColor Green
@@ -285,11 +293,7 @@ if ($CleanBlobs) {
             else {
                 Write-Host "Found $($toDelete.Count) blob(s) to delete. Proceeding..." -ForegroundColor Yellow
                 foreach ($blob in $toDelete) {
-                    az storage blob delete `
-                        --container-name $EvalBlobContainer `
-                        --name $blob.name `
-                        --connection-string $connStr `
-                        --only-show-errors | Out-Null
+                    az storage blob delete --container-name $EvalBlobContainer --name $blob.name --connection-string $connStr --only-show-errors | Out-Null
                     Write-Host "  Deleted: $($blob.name)" -ForegroundColor DarkGray
                 }
                 Write-Host "Blob cleanup complete. $($toDelete.Count) eval blob(s) removed." -ForegroundColor Green
@@ -298,7 +302,7 @@ if ($CleanBlobs) {
     }
 }
 else {
-    Write-Host "Blob cleanup skipped. Pass -CleanBlobs (with -BlobConnectionString or `$env:AZURE_STORAGE_CONNECTION_STRING) to remove old eval results." -ForegroundColor DarkYellow
+    Write-Host "Blob cleanup skipped. Pass -CleanBlobs to remove old eval results." -ForegroundColor DarkYellow
 }
 
 Write-Host ""
